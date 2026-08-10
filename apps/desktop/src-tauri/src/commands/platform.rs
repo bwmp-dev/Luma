@@ -17,6 +17,7 @@ pub struct PlatformFeatures {
     pub local_terminal: bool,
     pub serial: bool,
     pub ssh_config_import: bool,
+    pub putty_import: bool,
     pub sftp: bool,
     pub port_forwarding: bool,
     pub updater: bool,
@@ -41,6 +42,7 @@ pub fn capabilities_for(os: Os) -> PlatformCapabilities {
             local_terminal: false,
             serial: false,
             ssh_config_import: false,
+            putty_import: false,
             sftp: true,
             // Tunnels are pure tokio listeners over the russh session (see
             // ssh/tunnels.rs) with no desktop-only surface, so local, dynamic
@@ -58,6 +60,7 @@ pub fn capabilities_for(os: Os) -> PlatformCapabilities {
             local_terminal: true,
             serial: true,
             ssh_config_import: true,
+            putty_import: true,
             sftp: true,
             port_forwarding: true,
             updater: true,
@@ -107,6 +110,7 @@ mod tests {
                     local_terminal: true,
                     serial: true,
                     ssh_config_import: true,
+                    putty_import: true,
                     sftp: true,
                     port_forwarding: true,
                     updater: true,
@@ -130,6 +134,7 @@ mod tests {
                     local_terminal: false,
                     serial: false,
                     ssh_config_import: false,
+                    putty_import: false,
                     sftp: true,
                     port_forwarding: true,
                     updater: false,
@@ -149,6 +154,7 @@ mod tests {
         assert_eq!(value["isMobile"], true);
         assert_eq!(value["features"]["localTerminal"], false);
         assert_eq!(value["features"]["sshConfigImport"], false);
+        assert_eq!(value["features"]["puttyImport"], false);
         assert_eq!(value["features"]["portForwarding"], true);
         assert_eq!(value["features"]["dragAndDrop"], false);
         assert!(value.get("is_mobile").is_none());

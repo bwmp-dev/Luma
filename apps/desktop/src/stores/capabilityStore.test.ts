@@ -16,6 +16,7 @@ const MOBILE_PAYLOAD: PlatformCapabilities = {
     localTerminal: false,
     serial: false,
     sshConfigImport: false,
+    puttyImport: false,
     sftp: true,
     portForwarding: false,
     updater: false,

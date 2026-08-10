@@ -241,6 +241,9 @@ pub fn run() {
         commands::ssh_config_import,
         commands::import_hosts_preview,
         commands::import_hosts_apply,
+        // Desktop only: both need a .ppk sitting on this machine's disk.
+        commands::putty_key_inspect,
+        commands::putty_key_import,
         commands::snippets_list,
         commands::snippet_create,
         commands::snippet_update,

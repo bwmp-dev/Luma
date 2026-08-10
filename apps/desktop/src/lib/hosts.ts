@@ -410,10 +410,12 @@ export function importSshConfig(
   });
 }
 
-// Third-party host import (Tabby / Electerm) --------------------------------
+// Third-party host import (Tabby / Electerm / PuTTY) ------------------------
 
-/** External clients whose SSH host lists Luma can import. */
-export type ImportSource = "tabby" | "electerm";
+/** External clients whose SSH host lists Luma can import. `putty` reads an
+ * exported putty.reg file; `putty-live` reads this machine's saved sessions
+ * (the Windows registry, or ~/.putty/sessions) and takes no path. */
+export type ImportSource = "tabby" | "electerm" | "putty" | "putty-live";
 
 /** Best-effort authentication method detected for an imported candidate. */
 export type ImportedHostAuthHint =
@@ -423,6 +425,18 @@ export type ImportedHostAuthHint =
   | "keyboard-interactive"
   | "unknown";
 
+/** What sits at a candidate's referenced key path.
+ * - `openssh`: linked by path, as Tabby/Electerm imports always have been.
+ * - `ppk`: converted to OpenSSH and stored in the keystore, no prompt needed.
+ * - `ppk-encrypted`: same, but needs a passphrase first.
+ * - `missing` / `unreadable`: the host imports without a key. */
+export type ImportedKeyStatus =
+  | "openssh"
+  | "ppk"
+  | "ppk-encrypted"
+  | "missing"
+  | "unreadable";
+
 export type ImportedHostCandidate = {
   name: string;
   hostname: string;
@@ -431,20 +445,32 @@ export type ImportedHostCandidate = {
   group: string | null;
   authHint: ImportedHostAuthHint;
   alreadyExists: boolean;
+  /** The key path the source referenced. Also the key a passphrase is supplied
+   * under, so hosts sharing a key are only asked about once. */
+  keyFile: string | null;
+  keyStatus: ImportedKeyStatus | null;
+  keyAlgorithm: string | null;
+  keyComment: string | null;
 };
+
+/** A host imported without the key its session referenced. */
+export type UnlinkedKey = { host: string; path: string; reason: string };
 
 export type ImportedHostsResult = {
   importedHosts: Host[];
   createdGroups: string[];
   skippedExisting: string[];
+  /** Names of key references created from converted .ppk files. */
+  importedKeys: string[];
+  unlinkedKeys: UnlinkedKey[];
 };
 
-/** Preview the SSH hosts contained in a Tabby (.yaml) or Electerm (.json)
- * export at `path`. The frontend passes only the absolute path; the backend
- * reads the file — file contents never enter frontend state. */
+/** Preview the SSH hosts a source offers. For file sources the frontend passes
+ * only the absolute path; the backend reads the file — contents and key
+ * material never enter frontend state. `putty-live` takes no path. */
 export function previewImportHosts(
   source: ImportSource,
-  path: string,
+  path: string | null,
   vaultId?: string,
 ): Promise<ImportedHostCandidate[]> {
   return invoke<ImportedHostCandidate[]>("import_hosts_preview", {
@@ -454,20 +480,51 @@ export function previewImportHosts(
   });
 }
 
-/** Import the selected hosts from a Tabby/Electerm export. `selectedNames`
- * must reference candidates still present in the file (max 500, no dupes);
- * an empty selection imports nothing. */
+/** Import the selected hosts. `selectedNames` must reference candidates the
+ * source still offers (max 500, no dupes); an empty selection imports nothing.
+ * `keyPassphrases` is keyed by candidate `keyFile`; a key left out is imported
+ * without its host link rather than failing the run. */
 export function applyImportHosts(
   source: ImportSource,
-  path: string,
+  path: string | null,
   selectedNames: string[],
+  keyPassphrases: Record<string, string> = {},
   vaultId?: string,
 ): Promise<ImportedHostsResult> {
   return invoke<ImportedHostsResult>("import_hosts_apply", {
     source,
     path,
-    request: { vaultId, selectedNames },
+    request: { vaultId, selectedNames, keyPassphrases },
   });
+}
+
+// PuTTY key import ----------------------------------------------------------
+
+export type PuttyKeyInfo = {
+  version: number;
+  algorithm: string;
+  comment: string;
+  encrypted: boolean;
+  publicKey: string;
+  fingerprint: string;
+};
+
+/** Read a .ppk's headers without decrypting it, so the UI can describe the key
+ * and only ask for a passphrase when one is actually needed. */
+export function inspectPuttyKey(path: string): Promise<PuttyKeyInfo> {
+  return invoke<PuttyKeyInfo>("putty_key_inspect", { path });
+}
+
+/** Convert a .ppk to OpenSSH and store it in the encrypted keystore. The
+ * passphrase is re-applied to the converted key, so it stays as protected as
+ * the original. */
+export function importPuttyKey(input: {
+  path: string;
+  name?: string | null;
+  passphrase?: string | null;
+  vaultId?: string;
+}): Promise<KeyReference> {
+  return invoke<KeyReference>("putty_key_import", { input });
 }
 
 /** Normalize a rejected command error ({ category, message }) into a usable

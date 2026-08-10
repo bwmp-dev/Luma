@@ -527,7 +527,7 @@ function EmptyHosts({
       <Server size={22} className="mx-auto text-muted" />
       <p className="mt-2 text-sm font-medium">No saved hosts</p>
       <p className="mt-1 text-xs text-muted">
-        Add an SSH host or import from your SSH config, Tabby, or Electerm.
+        Add an SSH host or import from your SSH config, PuTTY, Tabby, or Electerm.
       </p>
       <div className="mt-3 flex flex-col gap-1.5">
         <button

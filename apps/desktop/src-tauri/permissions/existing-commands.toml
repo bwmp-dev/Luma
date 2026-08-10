@@ -64,6 +64,8 @@ commands.allow = [
   "ssh_config_import",
   "import_hosts_preview",
   "import_hosts_apply",
+  "putty_key_inspect",
+  "putty_key_import",
   "snippets_list",
   "snippet_create",
   "snippet_update",

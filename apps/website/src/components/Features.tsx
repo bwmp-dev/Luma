@@ -42,7 +42,7 @@ const features: Feature[] = [
       'ProxyJump, keepalive, startup commands',
       'Auto-reconnecting sessions',
       'Explicit unknown-host confirmation',
-      'Import from OpenSSH, Tabby, and Electerm',
+      'Import from PuTTY, OpenSSH, Tabby, and Electerm',
     ],
   },
   {

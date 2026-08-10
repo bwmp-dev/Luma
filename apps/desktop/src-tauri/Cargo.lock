@@ -3186,15 +3186,18 @@ checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 name = "luma"
 version = "0.16.0"
 dependencies = [
+ "aes 0.8.4",
  "aes-gcm 0.10.3",
  "argon2 0.5.3",
  "async-trait",
  "base64 0.22.1",
+ "cbc 0.1.2",
  "chacha20poly1305",
  "chrono",
  "ed25519-dalek 2.2.0",
  "fs2",
  "hkdf 0.12.4",
+ "hmac 0.12.1",
  "keyring",
  "libc",
  "p256 0.13.2",
@@ -3210,6 +3213,7 @@ dependencies = [
  "serde_json",
  "serde_yml",
  "serialport",
+ "sha1 0.10.7",
  "sha2 0.10.9",
  "sqlx",
  "ssh-key 0.6.7",

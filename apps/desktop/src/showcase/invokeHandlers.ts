@@ -97,7 +97,7 @@ export function createInvokeHandler(
           os: "ios",
           isMobile: true,
           features: {
-            localTerminal: false, serial: false, sshConfigImport: false, sftp: true,
+            localTerminal: false, serial: false, sshConfigImport: false, puttyImport: false, sftp: true,
             portForwarding: false, updater: false, biometrics: true,
             windowControls: false, folderSync: false, dragAndDrop: false,
           },
@@ -108,6 +108,7 @@ export function createInvokeHandler(
             localTerminal: true,
             serial: true,
             sshConfigImport: true,
+            puttyImport: true,
             sftp: true,
             portForwarding: true,
             updater: true,
@@ -145,6 +146,14 @@ export function createInvokeHandler(
         return inVault(GROUPS, args);
       case "key_references_list":
         return inVault(KEY_REFERENCES, args);
+      case "import_hosts_preview":
+        return [];
+      case "putty_key_inspect":
+        return {
+          version: 3, algorithm: "ssh-ed25519", comment: "alice@laptop",
+          encrypted: true, publicKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5",
+          fingerprint: "SHA256:8s2Rp1uWnQKcJ0y5vGmT3xLdF7bZaEwHrNqYo4CkVuI",
+        };
       case "identities_list":
         return inVault(IDENTITIES, args);
 

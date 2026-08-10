@@ -11,6 +11,7 @@ import { KeystoreGate } from "../keystore/KeystoreGate";
 import { GenerateKeyDialog } from "./GenerateKeyDialog";
 import { InstallKeyDialog } from "./InstallKeyDialog";
 import { AgentKeyDialog } from "./AgentKeyDialog";
+import { PuttyKeyDialog } from "./PuttyKeyDialog";
 import { UploadCloud } from "lucide-react";
 import { useCapabilityStore } from "../../stores/capabilityStore";
 
@@ -33,6 +34,7 @@ export function KeychainScreen() {
   const [keystoreStatus, setKeystoreStatus] = useState<KeystoreStatus | null>(null);
   const [generateOpen, setGenerateOpen] = useState(false);
   const [agentImportOpen, setAgentImportOpen] = useState(false);
+  const [puttyImportOpen, setPuttyImportOpen] = useState(false);
   const [installKey, setInstallKey] = useState<{ id: string; name: string } | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -44,6 +46,9 @@ export function KeychainScreen() {
   useEffect(() => { void getKeystoreStatus().then(setKeystoreStatus); }, []);
   const invalidate = useInvalidateHosts();
   const isMobile = useCapabilityStore((state) => state.capabilities.isMobile);
+  // Converting a .ppk needs the file on this device and a file picker, so the
+  // entry follows the platform capability rather than a user-agent check.
+  const puttyImport = useCapabilityStore((state) => state.capabilities.features.puttyImport);
   // publicKey/fingerprint are intentionally sent as null: the backend derives
   // them authoritatively from privateKey on save, so the frontend must never
   // send a free-text public key that could mismatch the stored private key.
@@ -60,7 +65,7 @@ export function KeychainScreen() {
         {query && <button type="button" aria-label="Clear search" onClick={() => setQuery("")} className="rounded p-1 text-muted active:text-foreground"><X size={14} /></button>}
       </div>
       <div className="keychain-toolbar mx-auto flex max-w-375 items-center gap-2 md:border-b md:border-border md:pb-4">
-      <div className="flex overflow-hidden rounded-lg bg-accent text-accent-foreground"><button onClick={() => { setIdentityDraft(null); setDraft(blankKey(creationVaultId)); }} className="flex items-center gap-2 px-4 py-2 text-sm font-medium"><Plus size={15}/> New key</button><DropdownMenu.Root><DropdownMenu.Trigger asChild><button aria-label="New key options" className="border-l border-white/20 px-2 hover:bg-white/10"><ChevronDown size={14}/></button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content align="start" sideOffset={5} className="z-50 min-w-48 rounded-lg border border-border bg-raised p-1 text-sm shadow-glow"><DropdownMenu.Item onSelect={() => { setDraft(null); setIdentityDraft(null); setGenerateOpen(true); }} className="cursor-default rounded-md px-3 py-2 outline-none data-highlighted:bg-surface data-highlighted:text-accent">Generate key</DropdownMenu.Item>{!isMobile&&<DropdownMenu.Item onSelect={() => { setDraft(null); setIdentityDraft(null); setAgentImportOpen(true); }} className="cursor-default rounded-md px-3 py-2 outline-none data-highlighted:bg-surface data-highlighted:text-accent">Import from SSH agent…</DropdownMenu.Item>}<DropdownMenu.Item onSelect={() => { setDraft(null); setIdentityDraft(blankIdentity(creationVaultId)); }} className="cursor-default rounded-md px-3 py-2 outline-none data-highlighted:bg-surface data-highlighted:text-accent">Add new identity</DropdownMenu.Item></DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root></div>
+      <div className="flex overflow-hidden rounded-lg bg-accent text-accent-foreground"><button onClick={() => { setIdentityDraft(null); setDraft(blankKey(creationVaultId)); }} className="flex items-center gap-2 px-4 py-2 text-sm font-medium"><Plus size={15}/> New key</button><DropdownMenu.Root><DropdownMenu.Trigger asChild><button aria-label="New key options" className="border-l border-white/20 px-2 hover:bg-white/10"><ChevronDown size={14}/></button></DropdownMenu.Trigger><DropdownMenu.Portal><DropdownMenu.Content align="start" sideOffset={5} className="z-50 min-w-48 rounded-lg border border-border bg-raised p-1 text-sm shadow-glow"><DropdownMenu.Item onSelect={() => { setDraft(null); setIdentityDraft(null); setGenerateOpen(true); }} className="cursor-default rounded-md px-3 py-2 outline-none data-highlighted:bg-surface data-highlighted:text-accent">Generate key</DropdownMenu.Item>{!isMobile&&<DropdownMenu.Item onSelect={() => { setDraft(null); setIdentityDraft(null); setAgentImportOpen(true); }} className="cursor-default rounded-md px-3 py-2 outline-none data-highlighted:bg-surface data-highlighted:text-accent">Import from SSH agent…</DropdownMenu.Item>}{puttyImport&&<DropdownMenu.Item onSelect={() => { setDraft(null); setIdentityDraft(null); setPuttyImportOpen(true); }} className="cursor-default rounded-md px-3 py-2 outline-none data-highlighted:bg-surface data-highlighted:text-accent">Import PuTTY key…</DropdownMenu.Item>}<DropdownMenu.Item onSelect={() => { setDraft(null); setIdentityDraft(blankIdentity(creationVaultId)); }} className="cursor-default rounded-md px-3 py-2 outline-none data-highlighted:bg-surface data-highlighted:text-accent">Add new identity</DropdownMenu.Item></DropdownMenu.Content></DropdownMenu.Portal></DropdownMenu.Root></div>
       <div className="flex-1"/>{searchOpen ? <div className="flex items-center gap-1 rounded-lg border border-border bg-background px-2 focus-within:border-accent"><Search size={15} className="text-muted"/><input autoFocus aria-label="Search keychain" value={query} onChange={e => setQuery(e.target.value)} onKeyDown={e => { if (e.key === "Escape") closeSearch(); }} placeholder="Search…" className="w-44 bg-transparent py-1.5 text-xs text-foreground outline-none placeholder:text-muted"/><button aria-label="Clear search" onClick={closeSearch} className="rounded p-0.5 text-muted hover:text-foreground"><X size={14}/></button></div> : <button aria-label="Search keychain" onClick={() => setSearchOpen(true)} className="rounded-lg p-2 text-muted hover:bg-raised hover:text-foreground"><Search size={17}/></button>}<button aria-label={viewMode === "grid" ? "Switch to list view" : "Switch to grid view"} onClick={() => setViewMode(m => m === "grid" ? "list" : "grid")} className="rounded-lg bg-raised p-2">{viewMode === "grid" ? <List size={17}/> : <Grid2X2 size={17}/>}</button>
       {keystoreStatus && <button onClick={() => void setKeystorePolicy(!keystoreStatus.rememberOnDevice).then(() => getKeystoreStatus()).then(setKeystoreStatus)} className="rounded-lg px-3 py-2 text-xs text-muted hover:bg-raised hover:text-foreground">{keystoreStatus.rememberOnDevice ? "Remembered on device" : "Lock on close"}</button>}
       </div>
@@ -76,6 +81,7 @@ export function KeychainScreen() {
   {identityDraft && <IdentityInspector draft={identityDraft} setDraft={setIdentityDraft} keys={keys.filter(key => key.vaultId === identityDraft.vaultId)} onClose={() => { saveIdentity.reset(); setIdentityDraft(null); }} onSave={() => saveIdentity.mutate(identityDraft)} busy={saveIdentity.isPending} error={saveIdentity.isError ? parseLumaError(saveIdentity.error).message : null} />}
   <GenerateKeyDialog open={generateOpen} onOpenChange={setGenerateOpen} vaultId={creationVaultId} />
   <AgentKeyDialog open={agentImportOpen} onOpenChange={setAgentImportOpen} onImported={invalidate} />
+  <PuttyKeyDialog open={puttyImportOpen} onOpenChange={setPuttyImportOpen} onImported={invalidate} vaultId={creationVaultId} />
   <InstallKeyDialog open={installKey !== null} keyReferenceId={installKey?.id ?? null} keyName={installKey?.name ?? ""} onOpenChange={(open) => { if (!open) setInstallKey(null); }} />
   </div>;
 }

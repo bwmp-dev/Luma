@@ -14,6 +14,26 @@ static WORKER_GUARD: OnceLock<WorkerGuard> = OnceLock::new();
 static REDACTIONS: LazyLock<Vec<(Regex, &'static str)>> = LazyLock::new(|| {
     vec![
         (
+            // A PuTTY .ppk body is not PEM, so the private-key rule below never
+            // matches it. Redactions are applied in order, so this has to come
+            // first or the generic `Comment:`/`Encryption:` lines get chewed up
+            // by the key/value rule before the whole block is removed.
+            Regex::new(
+                r"(?is)PuTTY-User-Key-File-\d+:.*?(Private-MAC:[ \t]*[0-9a-fA-F]+|$)",
+            )
+            .unwrap(),
+            "[REDACTED PRIVATE KEY]",
+        ),
+        (
+            // The private half on its own, for a fragment that never carried
+            // the header. `regex` has no look-around, so the terminator is
+            // consumed rather than matched ahead of; losing the MAC from a log
+            // line costs nothing.
+            Regex::new(r"(?is)Private-Lines:[ \t]*\d+\s*\n.*?(Private-MAC:[ \t]*[0-9a-fA-F]+|$)")
+                .unwrap(),
+            "[REDACTED PRIVATE KEY]",
+        ),
+        (
             Regex::new(
                 r"(?is)-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?(-----END [A-Z0-9 ]*PRIVATE KEY-----|$)",
             )
@@ -137,6 +157,39 @@ mod tests {
     fn redacts_truncated_private_key() {
         let input = "-----BEGIN RSA PRIVATE KEY-----\nAAAA (log cut off";
         assert!(!redact(input).contains("AAAA"));
+    }
+
+    #[test]
+    fn redacts_putty_private_keys() {
+        // A .ppk is not PEM, so it needs its own rule.
+        let input = concat!(
+            "before\n",
+            "PuTTY-User-Key-File-3: ssh-ed25519\n",
+            "Encryption: aes256-cbc\n",
+            "Comment: alice@laptop\n",
+            "Public-Lines: 2\n",
+            "PUBLICAAAA\n",
+            "PUBLICBBBB\n",
+            "Private-Lines: 1\n",
+            "SECRETMATERIAL\n",
+            "Private-MAC: 5f9295e0397e0133\n",
+            "after"
+        );
+        let output = redact(input);
+        assert!(!output.contains("SECRETMATERIAL"));
+        assert!(output.contains("[REDACTED PRIVATE KEY]"));
+        assert!(output.contains("before"));
+        assert!(output.contains("after"));
+    }
+
+    #[test]
+    fn redacts_truncated_putty_private_key() {
+        let input = "PuTTY-User-Key-File-2: ssh-rsa\nPrivate-Lines: 4\nSECRETMATERIAL (log cut off";
+        assert!(!redact(input).contains("SECRETMATERIAL"));
+
+        // A fragment that lost its header still has its private half removed.
+        let fragment = "Private-Lines: 1\nSECRETMATERIAL\nPrivate-MAC: abcd";
+        assert!(!redact(fragment).contains("SECRETMATERIAL"));
     }
 
     #[test]

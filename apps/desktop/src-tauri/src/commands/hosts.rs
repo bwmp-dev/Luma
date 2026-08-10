@@ -15,7 +15,7 @@ use ssh_key::{Algorithm, LineEnding, PrivateKey};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use zeroize::Zeroizing;
+use zeroize::{Zeroize, Zeroizing};
 
 /// `vaultId` is optional everywhere it appears: omitting it lists across every
 /// vault, which is what the command palette and the vault overview want.
@@ -304,6 +304,137 @@ pub async fn key_reference_create(
         &state.pool,
         &keystore_state,
         input,
+        AtomicWriteFailure::None,
+    )
+    .await
+}
+
+/// Read a `.ppk` file, bounded, for inspection or conversion.
+fn read_ppk_file(path: &str) -> Result<Vec<u8>> {
+    let path = crate::import::validate_import_path(path)?;
+    if std::fs::metadata(&path)?.len() > crate::import::ppk::MAX_PPK_FILE_BYTES as u64 {
+        return Err(crate::errors::LumaError::InvalidInput(
+            "the PuTTY key file is too large".into(),
+        ));
+    }
+    Ok(std::fs::read(path)?)
+}
+
+/// Header metadata for a `.ppk`, so the keychain can show what a key is before
+/// deciding whether to ask for a passphrase.
+#[tauri::command]
+pub async fn putty_key_inspect(path: String) -> Result<crate::import::ppk::PpkInfo> {
+    let bytes = read_ppk_file(&path)?;
+    tokio::task::spawn_blocking(move || crate::import::ppk::inspect(&bytes))
+        .await
+        .map_err(|_| {
+            crate::errors::LumaError::InvalidInput(
+                "the key inspection task did not complete".into(),
+            )
+        })?
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PuttyKeyImportInput {
+    #[serde(default = "crate::storage::vaults::default_id")]
+    pub vault_id: String,
+    pub path: String,
+    /// Defaults to the key's own comment, then to the file name.
+    pub name: Option<String>,
+    pub passphrase: Option<String>,
+}
+
+impl Drop for PuttyKeyImportInput {
+    fn drop(&mut self) {
+        if let Some(passphrase) = &mut self.passphrase {
+            passphrase.zeroize();
+        }
+    }
+}
+
+/// Convert a `.ppk` to OpenSSH and store it in the encrypted keystore.
+///
+/// The conversion happens here rather than at connect time because `russh`
+/// cannot read PuTTY's container: storing the `.ppk` itself would produce a key
+/// that looks fine in the keychain and fails on first use.
+#[tauri::command]
+pub async fn putty_key_import(
+    state: State<'_, AppState>,
+    keystore_state: State<'_, KeystoreState>,
+    input: PuttyKeyImportInput,
+) -> Result<KeyReference> {
+    let bytes = read_ppk_file(&input.path)?;
+    let fallback_name = Path::new(&input.path)
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "PuTTY key".to_string());
+    let requested_name = input
+        .name
+        .as_deref()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(str::to_string);
+    let passphrase = input
+        .passphrase
+        .clone()
+        .map(Zeroizing::new)
+        .filter(|passphrase| !passphrase.is_empty());
+
+    // Argon2 for a v3 key is deliberately slow; keep it off the async workers.
+    let converted = {
+        let passphrase = passphrase.clone();
+        tokio::task::spawn_blocking(move || {
+            let converted = crate::import::ppk::convert(
+                &bytes,
+                passphrase.as_ref().map(|passphrase| passphrase.as_str()),
+            )?;
+            // Re-apply the original passphrase so the key is no less protected
+            // than the .ppk was.
+            let openssh = crate::import::ppk::to_openssh(
+                &converted.key,
+                passphrase.as_ref().map(|passphrase| passphrase.as_str()),
+            )?;
+            Ok::<_, crate::errors::LumaError>((
+                openssh,
+                converted.comment,
+                converted.public_key,
+                converted.fingerprint,
+            ))
+        })
+        .await
+        .map_err(|_| {
+            crate::errors::LumaError::InvalidInput(
+                "the key conversion task did not complete".into(),
+            )
+        })??
+    };
+    let (openssh, comment, public_key, fingerprint) = converted;
+
+    let mut name = requested_name.unwrap_or_else(|| {
+        let comment = comment.trim();
+        if comment.is_empty() {
+            fallback_name
+        } else {
+            comment.to_string()
+        }
+    });
+    name.truncate(name.floor_char_boundary(128));
+
+    create_key_reference(
+        &state.pool,
+        &keystore_state,
+        KeyReferenceInput {
+            vault_id: input.vault_id.clone(),
+            name,
+            public_key: Some(public_key),
+            storage_mode: "encrypted-vault".into(),
+            local_path: None,
+            fingerprint: Some(fingerprint),
+            certificate: None,
+            private_key: Some(openssh.to_string()),
+            passphrase: passphrase.map(|passphrase| passphrase.to_string()),
+        },
         AtomicWriteFailure::None,
     )
     .await

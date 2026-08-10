@@ -7,6 +7,7 @@ import {
   FileText,
   FileWarning,
   FolderOpen,
+  KeyRound,
   Loader2,
 } from "lucide-react";
 import { Modal } from "../../components/Modal";
@@ -17,29 +18,41 @@ import {
   previewImportHosts,
   previewSshConfig,
   type ImportedHostAuthHint,
+  type ImportedKeyStatus,
+  type ImportSource,
+  type UnlinkedKey,
 } from "../../lib/hosts";
 import { useInvalidateHosts } from "../../hooks/useHosts";
 import { useCapabilityStore } from "../../stores/capabilityStore";
 import { cn } from "../../lib/utils";
 
 /*
- * Preview and import SSH hosts from an external source. Three sources are
+ * Preview and import SSH hosts from an external source. Four sources are
  * supported:
  *   - "ssh-config": reads ~/.ssh/config in place (no file picker).
  *   - "tabby":      a Tabby config the user selects (.yaml / .yml).
  *   - "electerm":   an Electerm export the user selects (.json).
+ *   - "putty":      this machine's saved PuTTY sessions, or an exported
+ *                   putty.reg from another machine.
  * The backend never modifies the source; this dialog only previews candidates
  * and imports the selection. For file sources the frontend passes the absolute
- * path only — it never reads file contents, and no credentials enter state.
+ * path only — it never reads file contents, and no credentials enter state
+ * beyond the .ppk passphrases the user types, which live in local state for the
+ * duration of the import and are cleared when it finishes.
  */
 
-type ImportKind = "ssh-config" | "tabby" | "electerm";
+type ImportKind = "ssh-config" | "tabby" | "electerm" | "putty";
 
 const SOURCES: { id: ImportKind; label: string }[] = [
   { id: "ssh-config", label: "SSH config" },
+  { id: "putty", label: "PuTTY" },
   { id: "tabby", label: "Tabby" },
   { id: "electerm", label: "Electerm" },
 ];
+
+/** PuTTY keeps sessions in the registry, so "detect" reads machine state while
+ * "file" reads a regedit export from somewhere else. */
+type PuttyMode = "detect" | "file";
 
 // A source-agnostic candidate used for rendering the selection table.
 type NormalizedCandidate = {
@@ -50,6 +63,8 @@ type NormalizedCandidate = {
   group: string | null;
   authHint: ImportedHostAuthHint | null;
   alreadyExists: boolean;
+  keyFile: string | null;
+  keyStatus: ImportedKeyStatus | null;
 };
 
 // A source-agnostic result summary.
@@ -57,6 +72,8 @@ type NormalizedResult = {
   importedCount: number;
   createdGroups: string[];
   skippedExisting: string[];
+  importedKeys: string[];
+  unlinkedKeys: UnlinkedKey[];
 };
 
 const AUTH_LABELS: Record<ImportedHostAuthHint, string> = {
@@ -67,10 +84,20 @@ const AUTH_LABELS: Record<ImportedHostAuthHint, string> = {
   unknown: "Unknown",
 };
 
+/** An OpenSSH key needs no explanation — it is linked by path as always. The
+ * other states change what import will do, so they are called out. */
+const KEY_STATUS_LABELS: Record<ImportedKeyStatus, string | null> = {
+  openssh: null,
+  ppk: "PuTTY key",
+  "ppk-encrypted": "PuTTY key · locked",
+  missing: "Key not found",
+  unreadable: "Key unreadable",
+};
+
 function fileFilters(kind: Exclude<ImportKind, "ssh-config">) {
-  return kind === "tabby"
-    ? [{ name: "Tabby config", extensions: ["yaml", "yml"] }]
-    : [{ name: "Electerm export", extensions: ["json"] }];
+  if (kind === "tabby") return [{ name: "Tabby config", extensions: ["yaml", "yml"] }];
+  if (kind === "electerm") return [{ name: "Electerm export", extensions: ["json"] }];
+  return [{ name: "PuTTY registry export", extensions: ["reg"] }];
 }
 
 function basename(path: string): string {
@@ -95,39 +122,71 @@ export function ImportDialog({
   // mobile that source is hidden entirely so the user can never trigger a
   // failing command; the file-picker sources (Tabby / Electerm) remain available.
   const sshConfigImport = useCapabilityStore((s) => s.capabilities.features.sshConfigImport);
+  // PuTTY import needs a local .ppk to convert and a file picker, so it is
+  // desktop-only for the same reason.
+  const puttyImport = useCapabilityStore((s) => s.capabilities.features.puttyImport);
   const sources = useMemo(
-    () => (sshConfigImport ? SOURCES : SOURCES.filter((s) => s.id !== "ssh-config")),
-    [sshConfigImport],
+    () =>
+      SOURCES.filter(
+        (s) =>
+          (s.id !== "ssh-config" || sshConfigImport) && (s.id !== "putty" || puttyImport),
+      ),
+    [sshConfigImport, puttyImport],
   );
-  const defaultSource: ImportKind = sshConfigImport ? "ssh-config" : "tabby";
+  const defaultSource: ImportKind = sshConfigImport
+    ? "ssh-config"
+    : puttyImport
+      ? "putty"
+      : "tabby";
 
   const [source, setSource] = useState<ImportKind>(defaultSource);
+  const [puttyMode, setPuttyMode] = useState<PuttyMode>("detect");
   const [filePath, setFilePath] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [result, setResult] = useState<NormalizedResult | null>(null);
   const [pickError, setPickError] = useState<string | null>(null);
+  // Collected in a second step, keyed by the candidate's keyFile so two hosts
+  // sharing a key are only asked once.
+  const [passphrases, setPassphrases] = useState<Record<string, string>>({});
+  const [askingPassphrases, setAskingPassphrases] = useState(false);
+
+  const resetTransient = () => {
+    setFilePath(null);
+    setSelected(new Set());
+    setResult(null);
+    setPickError(null);
+    setPassphrases({});
+    setAskingPassphrases(false);
+  };
 
   // Reset transient state each time the dialog opens.
   useEffect(() => {
     if (open) {
       setSource(defaultSource);
-      setFilePath(null);
-      setSelected(new Set());
-      setResult(null);
-      setPickError(null);
+      setPuttyMode("detect");
+      resetTransient();
     }
   }, [open, defaultSource]);
 
-  const needsFile = source !== "ssh-config";
-  const previewReady = source === "ssh-config" || filePath !== null;
+  const usesFilePicker = source === "tabby" || source === "electerm" || (source === "putty" && puttyMode === "file");
+  const previewReady = usesFilePicker ? filePath !== null : true;
+  // "putty-live" reads this machine's sessions and takes no path.
+  const backendSource: ImportSource | null =
+    source === "ssh-config"
+      ? null
+      : source === "putty"
+        ? puttyMode === "file"
+          ? "putty"
+          : "putty-live"
+        : source;
 
   const preview = useQuery({
-    queryKey: ["host-import-preview", source, filePath, vaultId],
+    queryKey: ["host-import-preview", source, puttyMode, filePath, vaultId],
     enabled: open && previewReady,
     staleTime: 0,
     gcTime: 0,
     queryFn: async (): Promise<NormalizedCandidate[]> => {
-      if (source === "ssh-config") {
+      if (backendSource === null) {
         const rows = await previewSshConfig(vaultId);
         return rows.map((c) => ({
           name: c.name,
@@ -137,9 +196,11 @@ export function ImportDialog({
           group: null,
           authHint: null,
           alreadyExists: c.alreadyExists,
+          keyFile: null,
+          keyStatus: null,
         }));
       }
-      const rows = await previewImportHosts(source, filePath as string, vaultId);
+      const rows = await previewImportHosts(backendSource, filePath, vaultId);
       return rows.map((c) => ({
         name: c.name,
         hostname: c.hostname,
@@ -148,6 +209,8 @@ export function ImportDialog({
         group: c.group,
         authHint: c.authHint,
         alreadyExists: c.alreadyExists,
+        keyFile: c.keyFile,
+        keyStatus: c.keyStatus,
       }));
     },
   });
@@ -161,17 +224,33 @@ export function ImportDialog({
     importable.length > 0 && selected.size === importable.length;
   const hasGroups = candidates.some((c) => c.group);
 
+  /** Distinct locked .ppk files among the selected hosts. */
+  const lockedKeys = useMemo(() => {
+    const paths = new Set<string>();
+    for (const candidate of candidates) {
+      if (selected.has(candidate.name) && candidate.keyStatus === "ppk-encrypted" && candidate.keyFile) {
+        paths.add(candidate.keyFile);
+      }
+    }
+    return [...paths];
+  }, [candidates, selected]);
+
   const changeSource = (next: ImportKind) => {
     if (next === source) return;
     setSource(next);
-    setFilePath(null);
-    setSelected(new Set());
-    setResult(null);
-    setPickError(null);
+    setPuttyMode("detect");
+    resetTransient();
+  };
+
+  const changePuttyMode = (next: PuttyMode) => {
+    if (next === puttyMode) return;
+    setPuttyMode(next);
+    resetTransient();
   };
 
   const pickFile = async () => {
-    if (source === "ssh-config") return;
+    // `usesFilePicker` already excludes the sources with no file to pick.
+    if (!usesFilePicker) return;
     setPickError(null);
     try {
       const picked = await openFileDialog({
@@ -204,26 +283,49 @@ export function ImportDialog({
 
   const runImport = useMutation({
     mutationFn: async (names: string[]): Promise<NormalizedResult> => {
-      if (source === "ssh-config") {
+      if (backendSource === null) {
         const res = await importSshConfig(names, vaultId);
         return {
           importedCount: res.importedHosts.length,
           createdGroups: [],
           skippedExisting: res.skippedExisting,
+          importedKeys: [],
+          unlinkedKeys: [],
         };
       }
-      const res = await applyImportHosts(source, filePath as string, names, vaultId);
+      // Blank entries mean "skip this key": the host still imports, just
+      // without its key linked.
+      const supplied = Object.fromEntries(
+        Object.entries(passphrases).filter(([, value]) => value.length > 0),
+      );
+      const res = await applyImportHosts(backendSource, filePath, names, supplied, vaultId);
       return {
         importedCount: res.importedHosts.length,
         createdGroups: res.createdGroups,
         skippedExisting: res.skippedExisting,
+        importedKeys: res.importedKeys,
+        unlinkedKeys: res.unlinkedKeys,
       };
     },
     onSuccess: (res) => {
       setResult(res);
       invalidate();
     },
+    onSettled: () => {
+      // Passphrases have done their job; do not keep them around.
+      setPassphrases({});
+      setAskingPassphrases(false);
+    },
   });
+
+  const submit = () => {
+    // Ask for locked .ppk passphrases once, just before importing.
+    if (!askingPassphrases && lockedKeys.length > 0) {
+      setAskingPassphrases(true);
+      return;
+    }
+    runImport.mutate([...selected]);
+  };
 
   const previewError = preview.isError ? parseLumaError(preview.error) : null;
   const importError = runImport.isError ? parseLumaError(runImport.error) : null;
@@ -234,7 +336,9 @@ export function ImportDialog({
       ? "Reads ~/.ssh/config without modifying it. Select which hosts to add."
       : source === "tabby"
         ? "Import SSH hosts from a Tabby config file (.yaml). The file is never modified."
-        : "Import SSH hosts from an Electerm export (.json). The file is never modified.";
+        : source === "electerm"
+          ? "Import SSH hosts from an Electerm export (.json). The file is never modified."
+          : "Import saved PuTTY sessions. Referenced .ppk keys are converted to OpenSSH and stored in your keychain; PuTTY's own settings are never modified.";
 
   return (
     <Modal
@@ -256,14 +360,16 @@ export function ImportDialog({
           <>
             <button
               type="button"
-              onClick={() => onOpenChange(false)}
+              onClick={() =>
+                askingPassphrases ? setAskingPassphrases(false) : onOpenChange(false)
+              }
               className="rounded-md border border-border px-3 py-1.5 text-sm text-muted hover:text-foreground"
             >
-              Cancel
+              {askingPassphrases ? "Back" : "Cancel"}
             </button>
             <button
               type="button"
-              onClick={() => runImport.mutate([...selected])}
+              onClick={submit}
               disabled={selected.size === 0 || preview.isFetching || busy}
               className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground disabled:opacity-50"
             >
@@ -272,7 +378,9 @@ export function ImportDialog({
               ) : (
                 <DownloadCloud size={14} />
               )}
-              Import {selected.size > 0 ? `(${selected.size})` : ""}
+              {askingPassphrases || lockedKeys.length === 0
+                ? `Import ${selected.size > 0 ? `(${selected.size})` : ""}`
+                : "Continue"}
             </button>
           </>
         )
@@ -285,6 +393,8 @@ export function ImportDialog({
             <span>
               Imported {result.importedCount}{" "}
               {result.importedCount === 1 ? "host" : "hosts"}
+              {result.importedKeys.length > 0 &&
+                ` and ${result.importedKeys.length} ${result.importedKeys.length === 1 ? "key" : "keys"}`}
               {result.skippedExisting.length > 0 &&
                 `, skipped ${result.skippedExisting.length} already present`}
               .
@@ -300,6 +410,66 @@ export function ImportDialog({
           {result.skippedExisting.length > 0 && (
             <p className="text-xs text-muted">
               Skipped: {result.skippedExisting.join(", ")}
+            </p>
+          )}
+          {result.unlinkedKeys.length > 0 && (
+            <div className="space-y-1 rounded-md border border-danger/40 bg-danger/10 px-3 py-2">
+              <p className="text-xs font-medium">
+                {result.unlinkedKeys.length}{" "}
+                {result.unlinkedKeys.length === 1 ? "host was" : "hosts were"} imported
+                without a key:
+              </p>
+              <ul className="space-y-0.5 text-xs text-muted">
+                {result.unlinkedKeys.map((entry) => (
+                  <li key={`${entry.host}:${entry.path}`}>
+                    <span className="font-medium text-foreground">{entry.host}</span> —{" "}
+                    {entry.reason}
+                  </li>
+                ))}
+              </ul>
+              <p className="text-[11px] text-muted">
+                Add the key from the keychain, then set it on the host.
+              </p>
+            </div>
+          )}
+        </div>
+      ) : askingPassphrases ? (
+        /* Passphrase step ---------------------------------------------- */
+        <div className="space-y-3">
+          <p className="text-sm text-muted">
+            {lockedKeys.length === 1
+              ? "One selected host uses a passphrase-protected PuTTY key."
+              : `${lockedKeys.length} selected hosts use passphrase-protected PuTTY keys.`}{" "}
+            Enter the passphrase to convert and store the key. Leave it blank to
+            import the host without its key.
+          </p>
+          <ul className="space-y-3">
+            {lockedKeys.map((path) => (
+              <li key={path} className="space-y-1">
+                <label className="flex items-center gap-2 text-xs text-muted">
+                  <KeyRound size={13} className="shrink-0 text-accent" />
+                  <span className="truncate font-mono" title={path}>
+                    {basename(path)}
+                  </span>
+                </label>
+                <input
+                  type="password"
+                  autoComplete="off"
+                  value={passphrases[path] ?? ""}
+                  onChange={(event) =>
+                    setPassphrases((prev) => ({ ...prev, [path]: event.target.value }))
+                  }
+                  placeholder="Passphrase"
+                  className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm outline-none focus:border-accent"
+                />
+              </li>
+            ))}
+          </ul>
+          {importError && (
+            <p className="text-xs text-danger">
+              {importError.category === "keystore-locked"
+                ? "Unlock your keychain before importing PuTTY keys."
+                : `Import failed: ${importError.message}`}
             </p>
           )}
         </div>
@@ -330,8 +500,40 @@ export function ImportDialog({
             ))}
           </div>
 
-          {/* File picker (Tabby / Electerm) ----------------------------- */}
-          {needsFile && (
+          {/* PuTTY: detect installed sessions, or read an export --------- */}
+          {source === "putty" && (
+            <div
+              role="radiogroup"
+              aria-label="PuTTY session source"
+              className="flex gap-2"
+            >
+              {(
+                [
+                  { id: "detect", label: "Detect installed sessions" },
+                  { id: "file", label: "Choose a putty.reg export" },
+                ] as { id: PuttyMode; label: string }[]
+              ).map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={puttyMode === option.id}
+                  onClick={() => changePuttyMode(option.id)}
+                  className={cn(
+                    "flex-1 rounded-md border px-3 py-1.5 text-xs transition-colors",
+                    puttyMode === option.id
+                      ? "border-accent text-foreground"
+                      : "border-border text-muted hover:text-foreground",
+                  )}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* File picker ------------------------------------------------ */}
+          {usesFilePicker && (
             <div className="space-y-2">
               <button
                 type="button"
@@ -358,10 +560,14 @@ export function ImportDialog({
           )}
 
           {/* Preview states --------------------------------------------- */}
-          {needsFile && !filePath ? (
+          {usesFilePicker && !filePath ? (
             <p className="rounded-md border border-dashed border-border px-3 py-6 text-center text-sm text-muted">
               Choose a{" "}
-              {source === "tabby" ? "Tabby config (.yaml)" : "Electerm export (.json)"}{" "}
+              {source === "tabby"
+                ? "Tabby config (.yaml)"
+                : source === "electerm"
+                  ? "Electerm export (.json)"
+                  : "PuTTY export (.reg)"}{" "}
               file to preview its hosts.
             </p>
           ) : preview.isLoading ? (
@@ -369,7 +575,9 @@ export function ImportDialog({
               <Loader2 size={14} className="animate-spin" />
               {source === "ssh-config"
                 ? "Reading SSH config…"
-                : "Reading file…"}
+                : source === "putty" && puttyMode === "detect"
+                  ? "Looking for saved PuTTY sessions…"
+                  : "Reading file…"}
             </p>
           ) : previewError ? (
             <div className="flex items-start gap-2 rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
@@ -377,7 +585,9 @@ export function ImportDialog({
               <span>
                 {source === "ssh-config"
                   ? "Could not read SSH config: "
-                  : "Could not read file: "}
+                  : source === "putty" && puttyMode === "detect"
+                    ? "Could not read PuTTY sessions: "
+                    : "Could not read file: "}
                 {previewError.message}
               </span>
             </div>
@@ -385,7 +595,9 @@ export function ImportDialog({
             <p className="rounded-md border border-dashed border-border px-3 py-6 text-center text-sm text-muted">
               {source === "ssh-config"
                 ? "No hosts found in ~/.ssh/config."
-                : "No SSH hosts found in this file."}
+                : source === "putty" && puttyMode === "detect"
+                  ? "No saved PuTTY sessions found on this device."
+                  : "No SSH hosts found in this file."}
             </p>
           ) : (
             <div className="space-y-2">
@@ -407,6 +619,9 @@ export function ImportDialog({
               <ul className="divide-y divide-border rounded-md border border-border">
                 {candidates.map((c) => {
                   const disabled = c.alreadyExists;
+                  const keyLabel = c.keyStatus ? KEY_STATUS_LABELS[c.keyStatus] : null;
+                  const keyMissing =
+                    c.keyStatus === "missing" || c.keyStatus === "unreadable";
                   return (
                     <li key={c.name}>
                       <label
@@ -438,6 +653,18 @@ export function ImportDialog({
                             {c.hostname}:{c.port}
                           </p>
                         </div>
+                        {keyLabel && (
+                          <span
+                            className={cn(
+                              "shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium",
+                              keyMissing
+                                ? "bg-danger/15 text-danger"
+                                : "bg-raised text-muted",
+                            )}
+                          >
+                            {keyLabel}
+                          </span>
+                        )}
                         {c.authHint && (
                           <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[11px] font-medium text-accent">
                             {AUTH_LABELS[c.authHint]}
@@ -460,7 +687,9 @@ export function ImportDialog({
               )}
               {importError && (
                 <p className="text-xs text-danger">
-                  Import failed: {importError.message}
+                  {importError.category === "keystore-locked"
+                    ? "Unlock your keychain before importing PuTTY keys."
+                    : `Import failed: ${importError.message}`}
                 </p>
               )}
             </div>

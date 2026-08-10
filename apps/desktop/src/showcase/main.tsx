@@ -40,6 +40,7 @@ const IOS_CAPABILITIES: PlatformCapabilities = {
     localTerminal: false,
     serial: false,
     sshConfigImport: false,
+    puttyImport: false,
     sftp: true,
     portForwarding: true,
     updater: false,

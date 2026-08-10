@@ -44,7 +44,7 @@ Cloud sync.
 - ProxyJump, keepalive, startup commands, working directories, and per-host
   environment variables
 - Explicit unknown-host confirmation and changed-host-key warnings
-- Import from OpenSSH config, Tabby, and Electerm
+- Import hosts and keys from PuTTY, and hosts from OpenSSH config, Tabby, and Electerm
 - Parsed connection errors with reconnect support
 
 ### SFTP and productivity
