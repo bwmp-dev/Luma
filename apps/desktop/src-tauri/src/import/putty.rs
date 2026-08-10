@@ -14,8 +14,6 @@ use std::path::PathBuf;
 use super::{auth_hint, concrete_identity_path, push_candidate, trimmed, ParsedCandidate};
 use crate::platform::home_dir;
 
-/// PuTTY's own limit on a registry key name, and a sane ceiling for a value.
-const MAX_VALUE_BYTES: u32 = 4096;
 const MAX_SESSION_FILE_BYTES: u64 = 64 * 1024;
 /// PuTTY's template for new sessions, not a real host.
 const DEFAULT_SETTINGS: &str = "Default Settings";
@@ -113,7 +111,7 @@ pub(crate) fn unmunge(name: &str) -> String {
 
 #[cfg(windows)]
 mod registry {
-    use super::{PuttySession, RegValue, DEFAULT_SETTINGS, MAX_VALUE_BYTES};
+    use super::{PuttySession, RegValue, DEFAULT_SETTINGS};
     use std::ptr;
     use windows_sys::Win32::Foundation::{ERROR_MORE_DATA, ERROR_SUCCESS};
     use windows_sys::Win32::System::Registry::{
@@ -124,6 +122,8 @@ mod registry {
     const SESSIONS_PATH: &str = r"Software\SimonTatham\PuTTY\Sessions";
     /// The documented maximum length of a registry key name.
     const MAX_KEY_NAME_CHARS: usize = 256;
+    /// A sane ceiling for a single value; a hostname is never this long.
+    const MAX_VALUE_BYTES: u32 = 4096;
 
     /// Closes its key on drop so an early return cannot leak a handle.
     struct RegKey(HKEY);

@@ -309,7 +309,11 @@ pub async fn key_reference_create(
     .await
 }
 
+// These four serve the desktop-only PuTTY key commands, which are absent from
+// the mobile handler list — without the same gate they are dead code in a
+// mobile build.
 /// Read a `.ppk` file, bounded, for inspection or conversion.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn read_ppk_file(path: &str) -> Result<Vec<u8>> {
     let path = crate::import::validate_import_path(path)?;
     if std::fs::metadata(&path)?.len() > crate::import::ppk::MAX_PPK_FILE_BYTES as u64 {
@@ -322,6 +326,7 @@ fn read_ppk_file(path: &str) -> Result<Vec<u8>> {
 
 /// Header metadata for a `.ppk`, so the keychain can show what a key is before
 /// deciding whether to ask for a passphrase.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
 pub async fn putty_key_inspect(path: String) -> Result<crate::import::ppk::PpkInfo> {
     let bytes = read_ppk_file(&path)?;
@@ -334,6 +339,7 @@ pub async fn putty_key_inspect(path: String) -> Result<crate::import::ppk::PpkIn
         })?
 }
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PuttyKeyImportInput {
@@ -345,6 +351,7 @@ pub struct PuttyKeyImportInput {
     pub passphrase: Option<String>,
 }
 
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 impl Drop for PuttyKeyImportInput {
     fn drop(&mut self) {
         if let Some(passphrase) = &mut self.passphrase {
@@ -358,6 +365,7 @@ impl Drop for PuttyKeyImportInput {
 /// The conversion happens here rather than at connect time because `russh`
 /// cannot read PuTTY's container: storing the `.ppk` itself would produce a key
 /// that looks fine in the keychain and fails on first use.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tauri::command]
 pub async fn putty_key_import(
     state: State<'_, AppState>,
