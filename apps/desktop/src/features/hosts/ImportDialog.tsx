@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import {
@@ -149,6 +149,8 @@ export function ImportDialog({
   // sharing a key are only asked once.
   const [passphrases, setPassphrases] = useState<Record<string, string>>({});
   const [askingPassphrases, setAskingPassphrases] = useState(false);
+  /** Which preview the default selection has already been applied for. */
+  const autoSelected = useRef<string | null>(null);
 
   const resetTransient = () => {
     setFilePath(null);
@@ -157,6 +159,7 @@ export function ImportDialog({
     setPickError(null);
     setPassphrases({});
     setAskingPassphrases(false);
+    autoSelected.current = null;
   };
 
   // Reset transient state each time the dialog opens.
@@ -220,6 +223,17 @@ export function ImportDialog({
     () => candidates.filter((c) => !c.alreadyExists),
     [candidates],
   );
+
+  // Pre-select everything importable the first time a preview arrives. Landing
+  // on a fully unchecked list means the Import button is disabled, so clicking
+  // it does nothing at all and reads as a broken feature. Keyed on the preview's
+  // identity so a background refetch cannot undo the user's own deselections.
+  const previewIdentity = `${source}:${puttyMode}:${filePath ?? ""}`;
+  useEffect(() => {
+    if (!preview.isSuccess || autoSelected.current === previewIdentity) return;
+    autoSelected.current = previewIdentity;
+    setSelected(new Set(importable.map((candidate) => candidate.name)));
+  }, [preview.isSuccess, previewIdentity, importable]);
   const allSelected =
     importable.length > 0 && selected.size === importable.length;
   const hasGroups = candidates.some((c) => c.group);
@@ -465,13 +479,7 @@ export function ImportDialog({
               </li>
             ))}
           </ul>
-          {importError && (
-            <p className="text-xs text-danger">
-              {importError.category === "keystore-locked"
-                ? "Unlock your keychain before importing PuTTY keys."
-                : `Import failed: ${importError.message}`}
-            </p>
-          )}
+          {importError && <ImportErrorBanner error={importError} />}
         </div>
       ) : (
         <div className="space-y-4">
@@ -592,13 +600,41 @@ export function ImportDialog({
               </span>
             </div>
           ) : candidates.length === 0 ? (
-            <p className="rounded-md border border-dashed border-border px-3 py-6 text-center text-sm text-muted">
-              {source === "ssh-config"
-                ? "No hosts found in ~/.ssh/config."
-                : source === "putty" && puttyMode === "detect"
-                  ? "No saved PuTTY sessions found on this device."
+            source === "putty" ? (
+              /* An empty PuTTY result is usually not a fault: PuTTY writes a
+                 session only when one is explicitly saved, so a heavy user who
+                 always types the hostname has none at all. Saying just "none
+                 found" reads like the feature is broken. */
+              <div className="space-y-2 rounded-md border border-dashed border-border px-4 py-6 text-center">
+                <p className="text-sm">
+                  {puttyMode === "detect"
+                    ? "No saved PuTTY sessions on this device."
+                    : "No PuTTY sessions in this file."}
+                </p>
+                <p className="text-xs text-muted">
+                  {puttyMode === "detect"
+                    ? "PuTTY only stores a session when you save one in its configuration window — connecting by typing a hostname does not create one."
+                    : "The export needs to include HKEY_CURRENT_USER\\Software\\SimonTatham\\PuTTY."}
+                </p>
+                <button
+                  type="button"
+                  onClick={() =>
+                    changePuttyMode(puttyMode === "detect" ? "file" : "detect")
+                  }
+                  className="text-xs font-medium text-accent hover:underline"
+                >
+                  {puttyMode === "detect"
+                    ? "Import a putty.reg export instead"
+                    : "Look for sessions on this device instead"}
+                </button>
+              </div>
+            ) : (
+              <p className="rounded-md border border-dashed border-border px-3 py-6 text-center text-sm text-muted">
+                {source === "ssh-config"
+                  ? "No hosts found in ~/.ssh/config."
                   : "No SSH hosts found in this file."}
-            </p>
+              </p>
+            )
           ) : (
             <div className="space-y-2">
               <div className="flex items-center justify-between px-1">
@@ -685,17 +721,36 @@ export function ImportDialog({
                   Groups shown as badges are created automatically on import.
                 </p>
               )}
-              {importError && (
-                <p className="text-xs text-danger">
-                  {importError.category === "keystore-locked"
-                    ? "Unlock your keychain before importing PuTTY keys."
-                    : `Import failed: ${importError.message}`}
-                </p>
-              )}
             </div>
           )}
+
+          {/* Pinned above the footer rather than appended to the list: the
+              Import button lives in the fixed footer, so an error tacked onto
+              the end of a long scrolling list is off-screen at the moment it
+              appears — the import looks like it silently did nothing. */}
+          {importError && <ImportErrorBanner error={importError} />}
         </div>
       )}
     </Modal>
+  );
+}
+
+function ImportErrorBanner({
+  error,
+}: {
+  error: { category: string; message: string };
+}) {
+  return (
+    <div
+      role="alert"
+      className="sticky bottom-0 flex items-start gap-2 rounded-md border border-danger/40 bg-surface px-3 py-2 text-xs text-danger shadow-lg"
+    >
+      <FileWarning size={14} className="mt-px shrink-0" />
+      <span>
+        {error.category === "keystore-locked"
+          ? "Unlock your keychain before importing PuTTY keys."
+          : `Import failed: ${error.message}`}
+      </span>
+    </div>
   );
 }

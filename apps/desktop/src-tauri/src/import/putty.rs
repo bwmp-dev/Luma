@@ -113,7 +113,9 @@ pub(crate) fn unmunge(name: &str) -> String {
 mod registry {
     use super::{PuttySession, RegValue, DEFAULT_SETTINGS};
     use std::ptr;
-    use windows_sys::Win32::Foundation::{ERROR_MORE_DATA, ERROR_SUCCESS};
+    use windows_sys::Win32::Foundation::{
+        ERROR_FILE_NOT_FOUND, ERROR_MORE_DATA, ERROR_NO_MORE_ITEMS, ERROR_SUCCESS,
+    };
     use windows_sys::Win32::System::Registry::{
         RegCloseKey, RegEnumKeyExW, RegOpenKeyExW, RegQueryValueExW, HKEY, HKEY_CURRENT_USER,
         KEY_READ, REG_DWORD, REG_EXPAND_SZ, REG_SZ,
@@ -146,7 +148,17 @@ mod registry {
         // local the callee only writes on success. Read-only access is requested.
         let status =
             unsafe { RegOpenKeyExW(parent, path.as_ptr(), 0, KEY_READ, &mut handle as *mut HKEY) };
-        (status == ERROR_SUCCESS).then_some(RegKey(handle))
+        if status == ERROR_SUCCESS {
+            return Some(RegKey(handle));
+        }
+        // "Not found" is the ordinary case for someone without PuTTY. Anything
+        // else means we were stopped rather than told there is nothing there,
+        // and returning an empty list for that is indistinguishable from "no
+        // sessions" — so leave a trace in the log.
+        if status != ERROR_FILE_NOT_FOUND {
+            tracing::warn!(status, "could not open PuTTY registry key");
+        }
+        None
     }
 
     fn query_value(key: HKEY, name: &str) -> Option<RegValue> {
@@ -244,10 +256,16 @@ mod registry {
                     ptr::null_mut(),
                 )
             };
-            if status != ERROR_SUCCESS {
-                // ERROR_NO_MORE_ITEMS, or anything unexpected: stop cleanly
-                // rather than fail the whole import.
+            if status == ERROR_NO_MORE_ITEMS {
                 break;
+            }
+            if status != ERROR_SUCCESS {
+                // Skip this one rather than stopping: bailing out here would
+                // silently truncate the list at the first awkward key — a name
+                // longer than the buffer, say — and hide every session after
+                // it. The index still advances, so this cannot loop forever.
+                tracing::warn!(index, status, "skipping unreadable PuTTY session key");
+                continue;
             }
             let length = (length as usize).min(name.len());
             let munged = String::from_utf16_lossy(&name[..length]);
@@ -261,6 +279,7 @@ mod registry {
             // `name` is still NUL-terminated from the enumeration, so it can be
             // handed straight back as a subkey path.
             let Some(subkey) = open(root.0, &name[..=length]) else {
+                tracing::warn!(session = %session_name, "could not open PuTTY session key");
                 continue;
             };
             let mut session = PuttySession::new(session_name);
@@ -594,16 +613,29 @@ pub(crate) fn reg_export_sessions(text: &str) -> Vec<PuttySession> {
 // ---------------------------------------------------------------------------
 
 pub(crate) fn live_sessions(limit: usize) -> Vec<PuttySession> {
-    let mut sessions = registry::sessions(limit);
+    let from_registry = registry::sessions(limit);
+    let registry_count = from_registry.len();
+    let mut sessions = from_registry;
     let mut seen: HashSet<String> = sessions
         .iter()
         .map(|session| session.name.to_ascii_lowercase())
         .collect();
+    let mut file_count = 0usize;
     for session in file_sessions(limit) {
         if seen.insert(session.name.to_ascii_lowercase()) {
             sessions.push(session);
+            file_count += 1;
         }
     }
+    // Finding nothing is a legitimate outcome, but it is also what every
+    // failure looks like from the outside. Record the tally either way so a
+    // report of "the import did nothing" can be answered from the log rather
+    // than guessed at. Session names are user data, so only counts are logged.
+    tracing::info!(
+        registry_sessions = registry_count,
+        file_sessions = file_count,
+        "scanned for saved PuTTY sessions"
+    );
     sessions
 }
 
