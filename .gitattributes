@@ -7,3 +7,7 @@ scripts/luma-hook text eol=lf
 *.plist text eol=lf
 *.entitlements text eol=lf
 *.xcprivacy text eol=lf
+# Cryptographic test vectors produced by puttygen and ssh-keygen. They are
+# compared byte for byte, so a CRLF checkout on Windows would rewrite the
+# very thing under test.
+apps/desktop/src-tauri/tests/fixtures/ppk/* text eol=lf

@@ -1264,9 +1264,18 @@ mod tests {
         );
     }
 
+    /// `.gitattributes` pins the fixtures to LF, but a stray checkout setting or
+    /// an editor can still hand a test CRLF. Every test that rewrites fixture
+    /// text starts from a known baseline rather than trusting what is on disk.
+    fn lf(text: &str) -> String {
+        text.replace("\r\n", "\n")
+    }
+
     #[test]
     fn rejects_unsupported_encryption_and_corrupt_files() {
-        let plain = include_str!("../../tests/fixtures/ppk/ed25519_v2_plain.ppk");
+        let plain = lf(include_str!(
+            "../../tests/fixtures/ppk/ed25519_v2_plain.ppk"
+        ));
 
         let blowfish = plain.replace("Encryption: none", "Encryption: blowfish-cbc");
         assert_eq!(
@@ -1279,17 +1288,24 @@ mod tests {
             .lines()
             .find(|line| line.starts_with("Private-MAC: "))
             .unwrap();
-        let broken_mac = format!(
-            "Private-MAC: {}0",
-            &mac_line["Private-MAC: ".len()..mac_line.len() - 1]
-        );
+        let digits = &mac_line["Private-MAC: ".len()..];
+        // Swap the final digit for a different one; appending a fixed digit
+        // would silently do nothing whenever the MAC already ended in it.
+        let last = digits.chars().next_back().unwrap();
+        let replacement = if last == '0' { '1' } else { '0' };
+        let broken_mac = format!("Private-MAC: {}{replacement}", &digits[..digits.len() - 1]);
         let corrupt = plain.replace(mac_line, &broken_mac);
+        assert_ne!(corrupt, plain, "the MAC must actually have changed");
         assert_eq!(
             convert(corrupt.as_bytes(), None).unwrap_err().to_string(),
             "invalid input: the PuTTY key failed its integrity check; the file is corrupt"
         );
 
         let truncated = plain.replace("Private-Lines: 1\n", "Private-Lines: 9\n");
+        assert_ne!(
+            truncated, plain,
+            "the line count must actually have changed"
+        );
         assert_eq!(
             convert(truncated.as_bytes(), None).unwrap_err().to_string(),
             "invalid input: the PuTTY .ppk file is malformed and could not be read"
@@ -1300,8 +1316,11 @@ mod tests {
     fn accepts_crlf_line_endings() {
         // PuTTY on Windows writes CRLF; the parser has to see through that or
         // every key saved on Windows fails its MAC.
-        let plain = include_str!("../../tests/fixtures/ppk/ed25519_v3_plain.ppk");
+        let plain = lf(include_str!(
+            "../../tests/fixtures/ppk/ed25519_v3_plain.ppk"
+        ));
         let crlf = plain.replace('\n', "\r\n");
+        assert!(!crlf.contains("\r\r"), "the fixture must start out as LF");
         let converted = convert(crlf.as_bytes(), None).expect("CRLF should parse");
         let expected = PrivateKey::from_openssh(include_str!(
             "../../tests/fixtures/ppk/ed25519_v3_plain.openssh"
