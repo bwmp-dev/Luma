@@ -107,6 +107,8 @@ pub fn run() {
         }
         let keystore_state = keystore::KeystoreState::new(&app_data_dir);
         app.manage(AppState { pool, app_data_dir });
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        app.manage(commands::UpdaterState::default());
         tauri::async_runtime::block_on(keystore::try_device_unlock(
             &app.state::<AppState>().pool,
             &keystore_state,
@@ -182,6 +184,8 @@ pub fn run() {
         commands::settings_get_all,
         commands::settings_set,
         commands::settings_delete,
+        commands::updater_check,
+        commands::updater_download_and_install,
         commands::analytics_config,
         commands::analytics_set_enabled,
         commands::shells_detect,

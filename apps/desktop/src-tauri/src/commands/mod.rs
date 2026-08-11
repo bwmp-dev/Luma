@@ -46,6 +46,8 @@ mod sftp;
 mod snippets;
 mod ssh;
 mod sync;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+mod updater;
 mod vaults;
 mod voice;
 mod web_preview;
@@ -75,6 +77,8 @@ pub use sftp::*;
 pub use snippets::*;
 pub use ssh::*;
 pub use sync::*;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub use updater::*;
 pub use vaults::*;
 pub use voice::*;
 pub use web_preview::*;

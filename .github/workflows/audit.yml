@@ -33,6 +33,7 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: apps/desktop/src-tauri
+          cache-all-crates: true
 
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked

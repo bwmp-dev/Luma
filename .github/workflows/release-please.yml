@@ -66,6 +66,8 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: apps/desktop/src-tauri
+          shared-key: desktop-${{ matrix.platform }}
+          save-if: false
 
       - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile

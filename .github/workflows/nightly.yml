@@ -1,0 +1,299 @@
+name: Nightly release
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SOURCE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+jobs:
+  prepare:
+    name: Prepare nightly release
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: blacksmith-4vcpu-ubuntu-2204
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+
+      - name: Calculate the next nightly version
+        id: version
+        shell: bash
+        run: |
+          version="$(node -e '
+            const config = require("./apps/desktop/src-tauri/tauri.conf.json");
+            const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(config.version);
+            if (!match) throw new Error(`Expected a stable semver, received ${config.version}`);
+            process.stdout.write(`${match[1]}.${match[2]}.${Number(match[3]) + 1}-nightly.${process.env.GITHUB_RUN_NUMBER}`);
+          ')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=nightly-v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Create the immutable nightly release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NIGHTLY_VERSION: ${{ steps.version.outputs.version }}
+          NIGHTLY_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh release create "$NIGHTLY_TAG" \
+            --target "$SOURCE_SHA" \
+            --draft \
+            --prerelease \
+            --title "Luma $NIGHTLY_VERSION" \
+            --notes "Automated nightly build of ${SOURCE_SHA}. This build may be unstable."
+
+  build:
+    name: Build nightly (${{ matrix.platform }})
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            os: blacksmith-4vcpu-windows-2025
+          - platform: macos
+            os: macos-latest
+          - platform: linux
+            os: blacksmith-4vcpu-ubuntu-2204
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libudev-dev pkg-config
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          shared-key: desktop-${{ matrix.platform }}
+          save-if: false
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Import Apple Developer ID certificate
+        if: matrix.platform == 'macos'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+        shell: bash
+        run: |
+          certificate_path="$RUNNER_TEMP/developer-id.p12"
+          keychain_path="$RUNNER_TEMP/luma-signing.keychain-db"
+
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > "$certificate_path"
+
+          security create-keychain -p "$APPLE_KEYCHAIN_PASSWORD" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$APPLE_KEYCHAIN_PASSWORD" "$keychain_path"
+          security import "$certificate_path" \
+            -k "$keychain_path" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/productbuild
+          security list-keychains -d user -s "$keychain_path" login.keychain-db
+          security default-keychain -d user -s "$keychain_path"
+          security set-key-partition-list \
+            -S apple-tool:,apple:,codesign: \
+            -s \
+            -k "$APPLE_KEYCHAIN_PASSWORD" \
+            "$keychain_path"
+
+          signing_identity="$(
+            security find-identity -v -p codesigning "$keychain_path" |
+              sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' |
+              head -n 1
+          )"
+
+          if [ -z "$signing_identity" ]; then
+            echo "Developer ID Application identity was not found"
+            exit 1
+          fi
+
+          echo "APPLE_SIGNING_IDENTITY=$signing_identity" >> "$GITHUB_ENV"
+
+      - name: Prepare Apple notarization credentials
+        if: matrix.platform == 'macos'
+        env:
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        shell: bash
+        run: |
+          api_key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
+          printf '%s' "$APPLE_API_KEY_P8" > "$api_key_path"
+          chmod 600 "$api_key_path"
+
+          echo "APPLE_API_KEY=$APPLE_API_KEY_ID" >> "$GITHUB_ENV"
+          echo "APPLE_API_ISSUER=$APPLE_API_ISSUER" >> "$GITHUB_ENV"
+          echo "APPLE_API_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
+
+      - name: Inject nightly version and updater key
+        env:
+          NIGHTLY_VERSION: ${{ needs.prepare.outputs.version }}
+          TAURI_UPDATER_PUBLIC_KEY: ${{ vars.TAURI_UPDATER_PUBLIC_KEY }}
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = 'apps/desktop/src-tauri/tauri.conf.json';
+          const config = JSON.parse(fs.readFileSync(path, 'utf8'));
+          if (!process.env.TAURI_UPDATER_PUBLIC_KEY) {
+            throw new Error('TAURI_UPDATER_PUBLIC_KEY repository variable is required');
+          }
+          config.version = process.env.NIGHTLY_VERSION;
+          config.plugins.updater.pubkey = process.env.TAURI_UPDATER_PUBLIC_KEY;
+          fs.writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
+          NODE
+
+      - name: Build and upload signed nightly artifacts
+        uses: tauri-apps/tauri-action@v1
+        timeout-minutes: 45
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          LUMA_ANALYTICS_HOST: ${{ vars.LUMA_ANALYTICS_HOST }}
+          LUMA_ANALYTICS_KEY: ${{ vars.LUMA_ANALYTICS_KEY }}
+        with:
+          projectPath: apps/desktop
+          tagName: ${{ needs.prepare.outputs.tag }}
+          releaseDraft: true
+          prerelease: true
+          retryAttempts: 2
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true
+          args: --verbose
+
+      - name: Notarize and staple macOS DMG
+        if: matrix.platform == 'macos'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NIGHTLY_TAG: ${{ needs.prepare.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          dmg_path="$(find apps/desktop/src-tauri/target/release/bundle/dmg -maxdepth 1 -name '*.dmg' -print -quit)"
+          if [ -z "$dmg_path" ]; then
+            echo "Expected macOS DMG artifact was not found"
+            exit 1
+          fi
+
+          xcrun notarytool submit "$dmg_path" \
+            --key "$APPLE_API_KEY_PATH" \
+            --key-id "$APPLE_API_KEY" \
+            --issuer "$APPLE_API_ISSUER" \
+            --wait
+          xcrun stapler staple "$dmg_path"
+          xcrun stapler validate "$dmg_path"
+          gh release upload "$NIGHTLY_TAG" "$dmg_path" --clobber
+
+  publish:
+    name: Publish nightly channel
+    needs: [prepare, build]
+    runs-on: blacksmith-4vcpu-ubuntu-2204
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      NIGHTLY_TAG: ${{ needs.prepare.outputs.tag }}
+      NIGHTLY_VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - name: Download and verify release assets
+        shell: bash
+        run: |
+          mkdir release-assets
+          gh release download "$NIGHTLY_TAG" --repo "$GITHUB_REPOSITORY" --dir release-assets
+          test -f release-assets/latest.json
+          compgen -G 'release-assets/*.sig' > /dev/null
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const manifest = JSON.parse(fs.readFileSync('release-assets/latest.json', 'utf8'));
+          const targets = Object.keys(manifest.platforms ?? {});
+          for (const os of ['windows-', 'darwin-', 'linux-']) {
+            if (!targets.some((target) => target.startsWith(os))) {
+              throw new Error(`Nightly manifest is missing a ${os.slice(0, -1)} target`);
+            }
+          }
+          NODE
+
+      - name: Generate SHA-256 checksums
+        shell: bash
+        run: |
+          (
+            cd release-assets
+            for artifact in *; do
+              if [ -f "$artifact" ]; then
+                sha256sum "$artifact"
+              fi
+            done
+          ) > SHA256SUMS
+          gh release upload "$NIGHTLY_TAG" SHA256SUMS --clobber
+          gh release edit "$NIGHTLY_TAG" --draft=false --prerelease
+
+      - name: Promote the signed manifest to the nightly channel
+        shell: bash
+        run: |
+          mkdir current-channel
+          if gh release download nightly \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern latest.json \
+            --dir current-channel 2>/dev/null; then
+            current_run="$(node -e '
+              const manifest = require("./current-channel/latest.json");
+              const match = /-nightly\.(\d+)$/.exec(manifest.version);
+              process.stdout.write(match?.[1] ?? "0");
+            ')"
+            candidate_run="${NIGHTLY_VERSION##*.}"
+            if [ "$current_run" -ge "$candidate_run" ]; then
+              echo "Nightly channel already points to build $current_run; leaving it unchanged."
+              exit 0
+            fi
+          fi
+
+          if ! gh release view nightly --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create nightly \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$SOURCE_SHA" \
+              --prerelease \
+              --title "Luma Nightly channel" \
+              --notes "Updater pointer for the latest successful nightly build."
+          fi
+          gh release upload nightly release-assets/latest.json --repo "$GITHUB_REPOSITORY" --clobber
+          gh release edit nightly \
+            --repo "$GITHUB_REPOSITORY" \
+            --prerelease \
+            --title "Luma Nightly channel" \
+            --notes "Latest successful build: [$NIGHTLY_VERSION](https://github.com/$GITHUB_REPOSITORY/releases/tag/$NIGHTLY_TAG)."

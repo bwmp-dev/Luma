@@ -6,13 +6,49 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  check:
-    name: Check (${{ matrix.platform }})
+  frontend:
+    name: Frontend and workspace checks
+    runs-on: blacksmith-4vcpu-ubuntu-2204
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint frontend
+        run: pnpm lint
+
+      - name: Typecheck and build frontend
+        run: pnpm build
+
+      - name: Frontend tests
+        run: pnpm test
+
+      - name: Workspace typechecks
+        run: pnpm workspace:typecheck
+
+      - name: Workspace tests
+        run: pnpm workspace:test
+
+  rust:
+    name: Rust (${{ matrix.platform }})
     strategy:
       fail-fast: false
       matrix:
@@ -33,15 +69,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libudev-dev pkg-config
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
@@ -49,26 +76,10 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: apps/desktop/src-tauri
-
-      - name: Install frontend dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Lint frontend
-        run: pnpm lint
-
-      - name: Typecheck and build frontend
-        run: pnpm build
-
-      - name: Frontend tests
-        run: pnpm test
-
-      - name: Workspace typechecks
-        run: pnpm workspace:typecheck
-
-      - name: Workspace tests
-        run: pnpm workspace:test
+          shared-key: desktop-${{ matrix.platform }}
 
       - name: Rustfmt
+        if: matrix.platform == 'linux'
         run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml --check
 
       - name: Clippy
@@ -76,62 +87,3 @@ jobs:
 
       - name: Rust tests
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
-
-  bundle:
-    name: Bundle (${{ matrix.platform }})
-    needs: check
-    if: github.event_name == 'push'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: windows
-            os: blacksmith-4vcpu-windows-2025
-          - platform: macos
-            os: macos-latest
-          - platform: linux
-            os: ubuntu-22.04
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Linux system dependencies
-        if: matrix.platform == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libudev-dev pkg-config
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 11
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: apps/desktop/src-tauri
-
-      - name: Install frontend dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build Tauri bundles
-        # Release builds use release.yml to inject the updater key and sign artifacts.
-        run: pnpm --dir apps/desktop tauri build --config src-tauri/tauri.ci.conf.json
-
-      - name: Upload installer artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: luma-${{ matrix.platform }}
-          path: |
-            apps/desktop/src-tauri/target/release/bundle/**/*.msi
-            apps/desktop/src-tauri/target/release/bundle/**/*.exe
-            apps/desktop/src-tauri/target/release/bundle/**/*.dmg
-            apps/desktop/src-tauri/target/release/bundle/**/*.AppImage
-            apps/desktop/src-tauri/target/release/bundle/**/*.deb
-            apps/desktop/src-tauri/target/release/bundle/**/*.rpm
-          if-no-files-found: warn

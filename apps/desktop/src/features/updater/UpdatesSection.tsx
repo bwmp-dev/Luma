@@ -17,7 +17,7 @@ import { cn } from "../../lib/utils";
 /**
  * Settings "Updates" section: current version, a manual check with inline
  * states (checking / up-to-date / available / error), install progress, a
- * relative last-checked status, and the launch auto-check toggle.
+ * relative last-checked status, channel selection, and the launch auto-check toggle.
  */
 export function UpdatesSection() {
   const [appVersion, setAppVersion] = useState<string | null>(null);
@@ -38,6 +38,8 @@ export function UpdatesSection() {
   const { data: settings } = useSettings();
   const setSetting = useSetSetting();
   const checkOnLaunch = settings?.[SETTING_KEYS.checkOnLaunch] !== false; // default on
+  const updateChannel =
+    settings?.[SETTING_KEYS.updateChannel] === "nightly" ? "nightly" : "stable";
 
   const status = useUpdaterStore((s) => s.status);
   const info = useUpdaterStore((s) => s.info);
@@ -48,6 +50,7 @@ export function UpdatesSection() {
   const check = useUpdaterStore((s) => s.check);
   const install = useUpdaterStore((s) => s.install);
   const restart = useUpdaterStore((s) => s.restart);
+  const reset = useUpdaterStore((s) => s.reset);
 
   const checking = status === "checking";
   const downloading = status === "downloading";
@@ -71,7 +74,7 @@ export function UpdatesSection() {
         </div>
         <button
           type="button"
-          onClick={() => void check({ silent: false })}
+          onClick={() => void check({ silent: false, channel: updateChannel })}
           disabled={checking || downloading}
           className="flex shrink-0 items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm text-muted hover:text-foreground disabled:opacity-60"
         >
@@ -195,6 +198,47 @@ export function UpdatesSection() {
             <Loader2 size={13} className="animate-spin" /> Checking for updates…
           </div>
         )}
+      </div>
+
+      <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-background p-3">
+        <div className="min-w-0">
+          <p className="text-sm font-medium">Update channel</p>
+          <p className="text-xs text-muted">
+            {updateChannel === "nightly"
+              ? "Nightly receives every successful main-branch build and may be unstable."
+              : "Stable receives tested, published releases."}
+          </p>
+        </div>
+        <div
+          role="group"
+          aria-label="Update channel"
+          className="flex shrink-0 overflow-hidden rounded-md border border-border"
+        >
+          {(["stable", "nightly"] as const).map((channel) => (
+            <button
+              key={channel}
+              type="button"
+              aria-pressed={updateChannel === channel}
+              disabled={setSetting.isPending || checking || downloading}
+              onClick={() => {
+                if (channel === updateChannel) return;
+                reset();
+                setSetting.mutate({
+                  key: SETTING_KEYS.updateChannel,
+                  value: channel,
+                });
+              }}
+              className={cn(
+                "px-3 py-1.5 text-xs capitalize transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-accent",
+                updateChannel === channel
+                  ? "bg-accent text-accent-foreground"
+                  : "bg-surface text-muted hover:text-foreground",
+              )}
+            >
+              {channel}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Auto-check toggle -------------------------------------------------- */}

@@ -26,6 +26,10 @@ pub enum LumaError {
     #[error("serial error: {0}")]
     Serial(String),
 
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    #[error("the update service is unavailable")]
+    UpdateUnavailable,
+
     #[error("{message}")]
     SshConnection {
         category: &'static str,
@@ -67,6 +71,8 @@ impl LumaError {
             LumaError::Pty(_) => "pty",
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
             LumaError::Serial(_) => "serial",
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            LumaError::UpdateUnavailable => "update-unavailable",
             LumaError::SshConnection { category, .. } => category,
             LumaError::SftpFailed(_) => "sftp-failed",
             LumaError::KeyUnavailable(_) => "key-unavailable",

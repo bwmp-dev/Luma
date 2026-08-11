@@ -224,8 +224,9 @@ export function useAppInit(): void {
     if (!updaterAvailable) return;
     if (settings[SETTING_KEYS.checkOnLaunch] === false) return; // default on
     if (useUpdaterStore.getState().autoChecked) return;
+    const channel = settings[SETTING_KEYS.updateChannel] === "nightly" ? "nightly" : "stable";
     const timer = setTimeout(() => {
-      void useUpdaterStore.getState().autoCheck();
+      void useUpdaterStore.getState().autoCheck(channel);
     }, 4000);
     return () => clearTimeout(timer);
   }, [settings, updaterAvailable]);

@@ -1,6 +1,11 @@
 import { create } from "zustand";
-import type { Update } from "@tauri-apps/plugin-updater";
-import { checkForUpdate, relaunchApp, type UpdateInfo } from "../lib/updater";
+import {
+  checkForUpdate,
+  relaunchApp,
+  type UpdateChannel,
+  type UpdateHandle,
+  type UpdateInfo,
+} from "../lib/updater";
 
 /**
  * Shared updater state for the launch banner, the Settings "Updates" section,
@@ -36,7 +41,7 @@ type UpdaterState = {
   /** Metadata for the available update, when one was found. */
   info: UpdateInfo | null;
   /** Handle used to download + install; held between check and install. */
-  update: Update | null;
+  update: UpdateHandle | null;
   /** Unix seconds of the last completed check (success or handled failure). */
   lastCheckedAt: number | null;
   /** User-facing error for the manual flow. */
@@ -53,7 +58,7 @@ type UpdaterState = {
   relaunching: boolean;
 
   /** Manual/automatic check. `silent` = automatic launch check. */
-  check: (options?: { silent?: boolean }) => Promise<void>;
+  check: (options?: { silent?: boolean; channel?: UpdateChannel }) => Promise<void>;
   /** Download + install the found update, then auto-relaunch to apply it. */
   install: () => Promise<void>;
   /**
@@ -63,7 +68,9 @@ type UpdaterState = {
    */
   restart: () => Promise<void>;
   /** Run the single silent launch check (idempotent per launch). */
-  autoCheck: () => Promise<void>;
+  autoCheck: (channel?: UpdateChannel) => Promise<void>;
+  /** Clear a result obtained from a channel the user has left. */
+  reset: () => void;
   /** Hide the launch banner without touching the underlying update. */
   dismissNotification: () => void;
 };
@@ -82,12 +89,12 @@ export const useUpdaterStore = create<UpdaterState>((set, get) => ({
   autoChecked: false,
   relaunching: false,
 
-  check: async ({ silent = false } = {}) => {
+  check: async ({ silent = false, channel = "stable" } = {}) => {
     const status = get().status;
     if (status === "checking" || status === "downloading") return;
     set({ status: "checking", errorMessage: null });
     try {
-      const found = await checkForUpdate();
+      const found = await checkForUpdate(channel);
       if (found) {
         set({
           status: "available",
@@ -190,11 +197,22 @@ export const useUpdaterStore = create<UpdaterState>((set, get) => ({
     }
   },
 
-  autoCheck: async () => {
+  autoCheck: async (channel = "stable") => {
     if (get().autoChecked) return;
     set({ autoChecked: true });
-    await get().check({ silent: true });
+    await get().check({ silent: true, channel });
   },
+
+  reset: () =>
+    set({
+      status: "idle",
+      info: null,
+      update: null,
+      errorMessage: null,
+      downloadedBytes: 0,
+      totalBytes: null,
+      notificationVisible: false,
+    }),
 
   dismissNotification: () => set({ notificationVisible: false }),
 }));

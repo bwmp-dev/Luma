@@ -171,6 +171,8 @@ export const SETTING_KEYS = {
   restoreSessions: "workspace.restoreSessions",
   /** Device-local toggle: check for app updates on launch. Never synced. */
   checkOnLaunch: "updates.checkOnLaunch",
+  /** Device-local desktop update channel. Stable unless explicitly set to nightly. */
+  updateChannel: "updates.channel",
   /** Serialized keymap: actionId -> chord string. Merged with defaults on load
    * (unknown actions dropped, missing actions get their default chord). */
   keymap: "keybindings.map",
