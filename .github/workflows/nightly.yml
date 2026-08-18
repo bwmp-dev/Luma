@@ -63,10 +63,16 @@ jobs:
         include:
           - platform: windows
             os: blacksmith-4vcpu-windows-2025
+            # The nightly version carries a non-numeric pre-release identifier
+            # (`-nightly.<run>`), which the MSI bundler rejects. NSIS accepts it
+            # and is what `updaterJsonPreferNsis` publishes anyway.
+            bundles: --bundles nsis
           - platform: macos
             os: macos-latest
+            bundles: ''
           - platform: linux
             os: blacksmith-4vcpu-ubuntu-2204
+            bundles: ''
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
@@ -194,7 +200,7 @@ jobs:
           retryAttempts: 2
           uploadUpdaterJson: true
           updaterJsonPreferNsis: true
-          args: --verbose
+          args: --verbose ${{ matrix.bundles }}
 
       - name: Notarize and staple macOS DMG
         if: matrix.platform == 'macos'
