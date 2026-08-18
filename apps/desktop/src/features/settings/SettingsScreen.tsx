@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   // lucide dropped brand marks in v1, so GitHub gets the generic code glyph.
+  Bot,
   Code,
   Download,
   ExternalLink,
@@ -29,6 +30,7 @@ import { KeymapSection } from "./KeymapSection";
 import { AccountSection } from "../account/AccountSection";
 import { CollaborationSection } from "../collaboration/CollaborationSection";
 import { VaultsSection } from "../vaults/VaultsSection";
+import { McpSection } from "../mcp/McpSection";
 import { UpdatesSection } from "../updater/UpdatesSection";
 import { AnalyticsDisclosure } from "../privacy/AnalyticsDisclosure";
 import { useAnalyticsConsent } from "../privacy/useAnalyticsConsent";
@@ -40,6 +42,7 @@ type CategoryId =
   | "shortcuts"
   | "account"
   | "vaults"
+  | "agents"
   | "privacy"
   | "updates"
   | "about";
@@ -50,6 +53,7 @@ const CATEGORIES: { id: CategoryId; label: string; icon: LucideIcon }[] = [
   { id: "shortcuts", label: "Keyboard shortcuts", icon: Keyboard },
   { id: "account", label: "Account", icon: UserRound },
   { id: "vaults", label: "Vaults & Sync", icon: VaultIcon },
+  { id: "agents", label: "Agents", icon: Bot },
   { id: "privacy", label: "Privacy", icon: ShieldCheck },
   { id: "updates", label: "Updates", icon: Download },
   { id: "about", label: "About", icon: Info },
@@ -247,6 +251,8 @@ export function SettingsScreen() {
         );
       case "vaults":
         return <VaultsSection />;
+      case "agents":
+        return <McpSection />;
       case "privacy":
         return (
           <div className="space-y-6">

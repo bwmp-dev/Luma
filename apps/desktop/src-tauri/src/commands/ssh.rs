@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use tauri::ipc::{Channel, InvokeResponseBody};
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::errors::{LumaError, Result};
 use crate::keystore::KeystoreState;
@@ -367,14 +367,24 @@ async fn ssh_spawn_impl(
     let app_for_remote_os = app.clone();
     let pool_for_remote_os = state.pool.clone();
     let host_id_for_remote_os = request.host_id.clone();
+    let tap = app
+        .state::<crate::mcp::McpState>()
+        .new_tap_ssh(&request.host_id);
+    let tap_for_data = tap.clone();
+    let tap_for_exit = tap.clone();
     let agent_sink = crate::agent_events::AgentEventSink::new(app.clone());
     let agent_sink_for_data = agent_sink.clone();
     let mut agent_scanner = crate::agent_events::AgentEventScanner::new();
     let data_callback = Box::new(move |bytes: &[u8]| {
         agent_sink_for_data.publish(agent_scanner.scan(bytes));
+        tap_for_data.push(bytes);
         let _ = on_data.send(InvokeResponseBody::Raw(bytes.to_vec()));
     });
     let exit_callback = Box::new(move |exit| {
+        // `finish_session` runs this on every SSH termination path — auth
+        // abort, shell-open failure, normal exit — so the tap needs no hook
+        // inside the transport layer.
+        tap_for_exit.detach();
         let _ = on_exit.send(exit);
     });
     let remote_os_callback = Box::new(move |metadata: SshRemoteOs| {
@@ -410,6 +420,7 @@ async fn ssh_spawn_impl(
         .await?;
 
     agent_sink.attach(&session_id);
+    tap.attach(&session_id, &title);
 
     {
         pending_remote_os.lock().unwrap().session_id = Some(session_id.clone());

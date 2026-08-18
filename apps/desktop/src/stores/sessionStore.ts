@@ -71,7 +71,12 @@ type SessionState = {
     /** Land the new session inside a tmux/zellij workspace. Omitted connects
      * fall back to the host's saved "resume on connect" workspace, if any. */
     multiplexer?: MultiplexerAttach,
-  ) => Promise<void>;
+    /** Add the tab without focusing it or leaving the current view. For
+     * sessions the user did not just ask for — an agent opening one to run a
+     * command — which must be visible without interrupting. Returns the new
+     * session id so the caller can follow its progress. */
+    options?: { background?: boolean },
+  ) => Promise<string>;
   openSerialSession: (config: SerialConfig, title?: string) => Promise<void>;
   /** Restart a session's backend. `reconnect` marks an auto-reconnect attempt:
    * it preserves the terminal buffer and keeps the reconnect attempt counter,
@@ -686,22 +691,33 @@ function waitForPaneLayout(): Promise<void> {
   return new Promise((resolve) => requestAnimationFrame(() => resolve()));
 }
 
-/** Open a new session (local or SSH) in a fresh tab and connect it. */
+/** Open a new session (local or SSH) in a fresh tab and connect it.
+ *
+ * `background` adds the tab without focusing it or leaving whatever view the
+ * user is on. Used for sessions the user did not ask for right now — an agent
+ * opening one to run a command — which must be visible but must not interrupt. */
 async function openInNewTab(
   set: SetFn,
   get: () => SessionState,
   session: TerminalSession,
   descriptor: SpawnDescriptor,
   title: string | undefined,
+  options?: { background?: boolean },
 ): Promise<void> {
   const tab = newTab(session.id);
-  useUiStore.getState().closeNewTab();
-  useUiStore.getState().showTerminal();
+  const background = options?.background === true;
+  if (!background) {
+    useUiStore.getState().closeNewTab();
+    useUiStore.getState().showTerminal();
+  }
   set((state) => ({
     sessions: [...state.sessions, session],
     tabs: [...state.tabs, tab],
-    activeTabId: tab.id,
-    activeSessionId: session.id,
+    // A background tab must not steal focus, but it still needs to be the
+    // active tab when it is the only one — otherwise nothing is selected.
+    activeTabId: background && state.activeTabId ? state.activeTabId : tab.id,
+    activeSessionId:
+      background && state.activeTabId ? state.activeSessionId : session.id,
   }));
   await waitForPaneLayout();
   await launch(set, get, session.id, descriptor, title);
@@ -819,7 +835,15 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     await openInNewTab(set, get, session, { kind: "local", ref }, title);
   },
 
-  openSshSession: async (hostId, title, hostname, ephemeral, tabColor, multiplexer) => {
+  openSshSession: async (
+    hostId,
+    title,
+    hostname,
+    ephemeral,
+    tabColor,
+    multiplexer,
+    options,
+  ) => {
     const id = crypto.randomUUID();
     // An explicit workspace wins; otherwise the host may have one saved to
     // resume. Either way the title carries the workspace it landed in.
@@ -851,7 +875,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       session,
       { kind: "ssh", hostId, multiplexer: attach },
       displayTitle,
+      options,
     );
+    return id;
   },
 
   openSerialSession: async (config, title) => {

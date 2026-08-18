@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use tauri::ipc::{Channel, InvokeResponseBody};
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+use tauri::Manager;
 use tauri::State;
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -31,6 +33,8 @@ mod keystore;
 mod known_hosts;
 #[cfg(any(target_os = "android", target_os = "ios"))]
 mod live_activity;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+mod mcp;
 #[cfg(any(target_os = "android", target_os = "ios"))]
 mod menu;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -62,6 +66,8 @@ pub use keystore::*;
 pub use known_hosts::*;
 #[cfg(any(target_os = "android", target_os = "ios"))]
 pub use live_activity::*;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub use mcp::*;
 #[cfg(any(target_os = "android", target_os = "ios"))]
 pub use menu::*;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -98,6 +104,27 @@ pub async fn settings_set(state: State<'_, AppState>, key: String, value: Value)
 #[tauri::command]
 pub async fn settings_delete(state: State<'_, AppState>, key: String) -> Result<()> {
     settings::delete(&state.pool, &key).await
+}
+
+/// Route input to a terminal session, whichever layer owns it.
+///
+/// A session id is either a local PTY or an embedded SSH session, and callers
+/// should not have to know which. Shared so the MCP pane tools resolve sessions
+/// exactly as `pty_write` does.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub(crate) fn write_terminal_session(
+    pty: &PtyManager,
+    embedded: &crate::ssh::EmbeddedSshManager,
+    session_id: &str,
+    data: String,
+) -> Result<()> {
+    if pty.write_if_present(session_id, data.as_bytes())? {
+        return Ok(());
+    }
+    if embedded.write(session_id, data)? {
+        return Ok(());
+    }
+    Err(LumaError::InvalidInput("unknown terminal session".into()))
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -203,6 +230,9 @@ mod desktop_terminal_commands {
             )
         };
 
+        let tap = app.state::<crate::mcp::McpState>().new_tap_local();
+        let tap_for_data = tap.clone();
+        let tap_for_exit = tap.clone();
         let agent_sink = crate::agent_events::AgentEventSink::new(app);
         let agent_sink_for_data = agent_sink.clone();
         let mut agent_scanner = crate::agent_events::AgentEventScanner::new();
@@ -212,13 +242,18 @@ mod desktop_terminal_commands {
             request.rows,
             move |bytes| {
                 agent_sink_for_data.publish(agent_scanner.scan(bytes));
+                tap_for_data.push(bytes);
                 let _ = on_data.send(InvokeResponseBody::Raw(bytes.to_vec()));
             },
             move |code| {
+                // The reader thread guarantees this runs exactly once, on every
+                // exit path, so the tap needs no hook inside PtyManager.
+                tap_for_exit.detach();
                 let _ = on_exit.send(code);
             },
         )?;
         agent_sink.attach(&session_id);
+        tap.attach(&session_id, &shell_name);
 
         Ok(SpawnResponse {
             session_id,
@@ -233,13 +268,7 @@ mod desktop_terminal_commands {
         session_id: String,
         data: String,
     ) -> Result<()> {
-        if pty.write_if_present(&session_id, data.as_bytes())? {
-            return Ok(());
-        }
-        if embedded.write(&session_id, data)? {
-            return Ok(());
-        }
-        Err(LumaError::InvalidInput("unknown terminal session".into()))
+        write_terminal_session(&pty, &embedded, &session_id, data)
     }
 
     #[tauri::command]

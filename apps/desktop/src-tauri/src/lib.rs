@@ -7,6 +7,8 @@ mod errors;
 mod import;
 mod keystore;
 mod logging;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub mod mcp;
 mod mosh;
 mod multiplexer;
 mod platform;
@@ -165,6 +167,23 @@ pub fn run() {
         // host/port → tunnel mapping so re-opening a preview reuses it.
         app.manage(WebPreviewManager::default());
         app.manage(SnippetRunManager::default());
+        // MCP taps are created for every terminal session, so the state has to
+        // exist before any spawn can happen. The listener itself only starts if
+        // a grant exists — see `sync_lifecycle`.
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        {
+            app.manage(mcp::McpState::default());
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(error) = handle
+                    .state::<mcp::McpState>()
+                    .sync_lifecycle(&handle)
+                    .await
+                {
+                    tracing::warn!(%error, "MCP: could not start the endpoint");
+                }
+            });
+        }
 
         // Lets native menu Swift callbacks emit into the frontend.
         #[cfg(any(target_os = "android", target_os = "ios"))]
@@ -254,6 +273,20 @@ pub fn run() {
         commands::snippet_delete,
         commands::snippet_run_hosts,
         commands::snippet_run_cancel,
+        // Desktop only: the listener has no purpose on mobile, and the mobile
+        // shell cannot keep one alive in the background anyway.
+        commands::mcp_status,
+        commands::mcp_grants_list,
+        commands::mcp_grant_create,
+        commands::mcp_grant_update,
+        commands::mcp_grant_delete,
+        commands::mcp_shared_panes,
+        commands::mcp_pane_share,
+        commands::mcp_pane_unshare,
+        commands::mcp_approval_resolve,
+        commands::mcp_session_ready,
+        commands::mcp_activity_list,
+        commands::mcp_executable_path,
         commands::port_forwards_list,
         commands::port_forward_create,
         commands::port_forward_update,
@@ -513,6 +546,11 @@ pub fn run() {
             app_handle.state::<DockerManager>().kill_all();
             app_handle.state::<ShellCompletionsManager>().kill_all();
             app_handle.state::<SnippetRunManager>().kill_all();
+            // Before the SSH sessions it hands out: stopping the listener
+            // denies any prompt still on screen rather than leaving an agent
+            // waiting on a window that is going away.
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            app_handle.state::<mcp::McpState>().kill_all();
             app_handle.state::<EmbeddedSshManager>().kill_all();
             app_handle.state::<TunnelManager>().kill_all();
             #[cfg(not(any(target_os = "android", target_os = "ios")))]

@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { emitTo, listen } from "@tauri-apps/api/event";
 import {
+  Bot,
   Cable,
   Columns2,
   Combine,
@@ -25,6 +26,8 @@ import { useSessionStore } from "../../stores/sessionStore";
 import { useUiStore } from "../../stores/uiStore";
 import { useSessionLogStore } from "../../stores/sessionLogStore";
 import { useProfiles, useShells } from "../../hooks/useShells";
+import { usePaneShareMutations, useSharedPanes } from "../../hooks/useMcp";
+import { useMcpShareStore } from "../../stores/mcpStore";
 import { terminalManager } from "./terminalManager";
 import { collectLeaves, findLeaf } from "./paneTree";
 import { cn } from "../../lib/utils";
@@ -100,6 +103,11 @@ function workspaceActions(deps: {
   onSaveHost?: () => void;
   /** Merge this tab into the previous tab (tab context menu only). */
   onMergeIntoPrevious?: () => void;
+  /** Share this tab's active session with an MCP agent, or stop sharing it.
+   * Omitted when there is no session to share. */
+  onToggleAgentShare?: () => void;
+  /** Whether that session is already shared, which flips the label. */
+  sharedWithAgent?: boolean;
 }): MenuAction[] {
   const actions: MenuAction[] = [
     {
@@ -138,6 +146,16 @@ function workspaceActions(deps: {
       icon: <X size={15} />,
       hint: "Ctrl+Shift+W",
       onSelect: () => deps.closeActivePane(),
+    });
+  }
+  if (deps.onToggleAgentShare) {
+    actions.push({ separator: true });
+    actions.push({
+      label: deps.sharedWithAgent
+        ? "Stop sharing with agent"
+        : "Share with agent…",
+      icon: <Bot size={15} />,
+      onSelect: deps.onToggleAgentShare,
     });
   }
   if (deps.onSaveHost) {
@@ -186,6 +204,21 @@ function workspaceActions(deps: {
 
 export function TabBar() {
   const tabListRef = useRef<HTMLDivElement>(null);
+  const { data: agentSharedPanes } = useSharedPanes();
+  const { unshare } = usePaneShareMutations();
+  const openAgentShare = useMcpShareStore((s) => s.open);
+  const sharedSessionIds = new Set(
+    (agentSharedPanes ?? []).map((pane) => pane.sessionId),
+  );
+  // Sharing needs a grant chosen, so it opens the picker; unsharing is
+  // unambiguous and happens directly.
+  const toggleAgentShare = (sessionId: string, title: string) => {
+    if (sharedSessionIds.has(sessionId)) {
+      unshare.mutate(sessionId);
+    } else {
+      openAgentShare({ sessionId, title });
+    }
+  };
   const sessions = useSessionStore((s) => s.sessions);
   const tabs = useSessionStore((s) => s.tabs);
   useSyncExternalStore(subscribeDetachedTabs, detachedTabsVersion, detachedTabsVersion);
@@ -733,6 +766,12 @@ export function TabBar() {
               index > 0
                 ? () => mergeTabs(tab.id, visibleTabs[index - 1].id)
                 : undefined,
+            onToggleAgentShare: session
+              ? () => toggleAgentShare(session.id, title)
+              : undefined,
+            sharedWithAgent: session
+              ? sharedSessionIds.has(session.id)
+              : false,
           });
           return (
             <ContextMenu
@@ -814,6 +853,15 @@ export function TabBar() {
                     title="Session logging active"
                     className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-danger"
                   />
+                )}
+                {session && sharedSessionIds.has(session.id) && (
+                  <span
+                    aria-label="Shared with an agent"
+                    title="Shared with an agent"
+                    className="shrink-0 text-accent"
+                  >
+                    <Bot size={12} />
+                  </span>
                 )}
                 {isDropTarget && (
                   <span className="flex shrink-0 items-center gap-1 rounded bg-accent px-1.5 text-[10px] font-semibold leading-4 text-white shadow-sm">

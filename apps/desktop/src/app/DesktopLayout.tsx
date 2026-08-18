@@ -8,6 +8,8 @@ import { SectionScreen } from "../features/workspace/SectionScreen";
 import { SnippetsScreen } from "../features/snippets/SnippetsScreen";
 import { SnippetRunner } from "../features/snippets/SnippetRunner";
 import { MultiHostRunDialog } from "../features/snippets/MultiHostRunDialog";
+import { McpApprovalDialog } from "../features/mcp/McpApprovalDialog";
+import { ShareWithAgentDialog } from "../features/mcp/ShareWithAgentDialog";
 import { AnalyticsConsentDialog } from "../features/privacy/AnalyticsConsentDialog";
 import { CommandPalette } from "../features/palette/CommandPalette";
 import { SerialConnectDialog } from "../features/terminal/SerialConnectDialog";
@@ -187,6 +189,10 @@ export function DesktopLayout() {
       />
       <SnippetRunner />
       <MultiHostRunDialog />
+      {/* Eager: an agent's call is blocked waiting on this prompt, so it must
+          not sit behind a lazy chunk. */}
+      <McpApprovalDialog />
+      <ShareWithAgentDialog />
       {/* Eager, not lazy: the first-run consent prompt must paint on the first
           frame rather than after a chunk loads. */}
       <AnalyticsConsentDialog />

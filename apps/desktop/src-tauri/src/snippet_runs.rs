@@ -2,9 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use russh::ChannelMsg;
 use serde::Serialize;
-use sqlx::Row;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Manager};
 use tokio::sync::{watch, Semaphore};
@@ -12,6 +10,7 @@ use tokio::sync::{watch, Semaphore};
 use crate::errors::{LumaError, Result};
 use crate::keystore::KeystoreState;
 use crate::ssh;
+use crate::ssh::exec::{self, ExecMessages, ExecRequest, ExecStream};
 use crate::AppState;
 
 const DEFAULT_TIMEOUT_SECS: u64 = 60;
@@ -20,8 +19,12 @@ const MAX_HOSTS: usize = 50;
 const MAX_COMMAND_BYTES: usize = 64 * 1024;
 const MAX_OUTPUT_BYTES_PER_HOST: usize = 1024 * 1024;
 const MAX_PARALLEL_HOSTS: usize = 4;
-const EPHEMERAL_MAX_AGE_SECS: i64 = 7 * 24 * 60 * 60;
-const OUTPUT_TRUNCATED_MARKER: &str = "\n[output truncated after 1048576 bytes]\n";
+
+const EXEC_MESSAGES: ExecMessages = ExecMessages {
+    timed_out: "Snippet execution timed out",
+    cancelled: "Snippet run cancelled",
+    channel_open_timed_out: "SSH snippet channel open timed out",
+};
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -137,7 +140,7 @@ pub async fn start(
     on_event: Channel<SnippetRunEvent>,
 ) -> Result<SnippetRunStartResponse> {
     let timeout_secs = validate_request(&snippet_command, &host_ids, timeout_secs)?;
-    validate_hosts(&app.state::<AppState>().pool, &host_ids).await?;
+    exec::validate_hosts(&app.state::<AppState>().pool, &host_ids).await?;
 
     let run_id = uuid::Uuid::new_v4().to_string();
     let (cancel, cancel_rx) = watch::channel(false);
@@ -223,118 +226,42 @@ fn validate_request(command: &str, host_ids: &[String], timeout_secs: Option<u64
     Ok(timeout_secs)
 }
 
-async fn validate_hosts(pool: &sqlx::SqlitePool, host_ids: &[String]) -> Result<()> {
-    for host_id in host_ids {
-        let row = sqlx::query("SELECT is_ephemeral, created_at FROM hosts WHERE id = ?1")
-            .bind(host_id)
-            .fetch_optional(pool)
-            .await?
-            .ok_or_else(|| LumaError::InvalidInput(format!("unknown hostId: {host_id}")))?;
-        let is_ephemeral = row.get::<i64, _>("is_ephemeral") != 0;
-        let created_at: i64 = row.get("created_at");
-        if is_ephemeral
-            && created_at
-                < chrono::Utc::now()
-                    .timestamp()
-                    .saturating_sub(EPHEMERAL_MAX_AGE_SECS)
-        {
-            return Err(LumaError::InvalidInput(format!(
-                "ephemeral host has expired: {host_id}"
-            )));
-        }
-    }
-    Ok(())
-}
-
 async fn run_host(
     app: AppHandle,
     run_id: &str,
     host_id: &str,
     command: &str,
     timeout: Duration,
-    mut cancel: watch::Receiver<bool>,
+    cancel: watch::Receiver<bool>,
     on_event: Channel<SnippetRunEvent>,
 ) {
-    let operation = async {
-        let state = app.state::<AppState>();
-        let keystore_state = app.state::<KeystoreState>();
-        let (mut config, _) = ssh::connection_config(&state.pool, &keystore_state, host_id).await?;
-        config.startup_command = None;
-        let handle = ssh::authenticated_handle(&config).await?;
-        let mut channel =
-            tokio::time::timeout(Duration::from_secs(15), handle.channel_open_session())
-                .await
-                .map_err(|_| LumaError::SshConnection {
-                    category: "timeout",
-                    message: "SSH snippet channel open timed out".into(),
-                })?
-                .map_err(ssh::embedded_connect_error)?;
-        channel
-            .exec(true, command.as_bytes())
-            .await
-            .map_err(ssh::embedded_connect_error)?;
-
-        let mut output_cap = OutputCap::new(MAX_OUTPUT_BYTES_PER_HOST);
-        let mut exit_code = None;
-        let mut disappeared = false;
-        loop {
-            let Some(message) = channel.wait().await else {
-                disappeared = true;
-                break;
+    let state = app.state::<AppState>();
+    let keystore_state = app.state::<KeystoreState>();
+    let result = exec::run_command_on_host(
+        &state.pool,
+        &keystore_state,
+        host_id,
+        ExecRequest {
+            command,
+            timeout,
+            max_output_bytes: MAX_OUTPUT_BYTES_PER_HOST,
+            messages: EXEC_MESSAGES,
+        },
+        Some(cancel),
+        |stream, bytes| {
+            let kind = match stream {
+                ExecStream::Stdout => SnippetRunEventKind::Stdout,
+                ExecStream::Stderr => SnippetRunEventKind::Stderr,
             };
-            match message {
-                ChannelMsg::Data { data } => emit_capped_output(
-                    &on_event,
-                    run_id,
-                    host_id,
-                    SnippetRunEventKind::Stdout,
-                    &data,
-                    &mut output_cap,
-                ),
-                ChannelMsg::ExtendedData { data, .. } => emit_capped_output(
-                    &on_event,
-                    run_id,
-                    host_id,
-                    SnippetRunEventKind::Stderr,
-                    &data,
-                    &mut output_cap,
-                ),
-                ChannelMsg::ExitStatus { exit_status } => exit_code = Some(exit_status),
-                ChannelMsg::Eof | ChannelMsg::Close => break,
-                _ => {}
-            }
-        }
-        if handle.is_closed() && exit_code.is_none() {
-            disappeared = true;
-        }
-        if disappeared {
-            Err(LumaError::SshConnection {
-                category: "connection-lost",
-                message: "The SSH transport closed before the remote command finished".into(),
-            })
-        } else {
-            Ok(exit_code)
-        }
-    };
-
-    tokio::pin!(operation);
-    let timeout_sleep = tokio::time::sleep(timeout);
-    tokio::pin!(timeout_sleep);
-    let result = tokio::select! {
-        biased;
-        changed = cancel.changed() => {
-            if changed.is_ok() && *cancel.borrow() {
-                Err(LumaError::SshConnection {
-                    category: "connection-lost",
-                    message: "Snippet run cancelled".into(),
-                })
-            } else {
-                operation.await
-            }
-        }
-        result = &mut operation => result,
-        _ = &mut timeout_sleep => Err(timeout_error(timeout)),
-    };
+            let _ = on_event.send(SnippetRunEvent::output(
+                run_id,
+                host_id,
+                kind,
+                String::from_utf8_lossy(bytes).into_owned(),
+            ));
+        },
+    )
+    .await;
 
     match result {
         Ok(exit_code) => {
@@ -344,16 +271,6 @@ async fn run_host(
             let (category, message) = event_error(&error);
             send_failed(&on_event, run_id, host_id, category, &message);
         }
-    }
-}
-
-fn timeout_error(timeout: Duration) -> LumaError {
-    LumaError::SshConnection {
-        category: "timeout",
-        message: format!(
-            "Snippet execution timed out after {} seconds",
-            timeout.as_secs()
-        ),
     }
 }
 
@@ -384,66 +301,6 @@ fn send_failed(
         category,
         message.to_string(),
     ));
-}
-
-fn emit_capped_output(
-    channel: &Channel<SnippetRunEvent>,
-    run_id: &str,
-    host_id: &str,
-    kind: SnippetRunEventKind,
-    data: &[u8],
-    cap: &mut OutputCap,
-) {
-    let accepted = cap.accept(data);
-    if !accepted.bytes.is_empty() {
-        let _ = channel.send(SnippetRunEvent::output(
-            run_id,
-            host_id,
-            kind,
-            String::from_utf8_lossy(accepted.bytes).into_owned(),
-        ));
-    }
-    if accepted.emit_marker {
-        let _ = channel.send(SnippetRunEvent::output(
-            run_id,
-            host_id,
-            kind,
-            OUTPUT_TRUNCATED_MARKER.into(),
-        ));
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-struct AcceptedOutput<'a> {
-    bytes: &'a [u8],
-    emit_marker: bool,
-}
-
-#[derive(Debug)]
-struct OutputCap {
-    remaining: usize,
-    marker_emitted: bool,
-}
-
-impl OutputCap {
-    fn new(limit: usize) -> Self {
-        Self {
-            remaining: limit,
-            marker_emitted: false,
-        }
-    }
-
-    fn accept<'a>(&mut self, data: &'a [u8]) -> AcceptedOutput<'a> {
-        let accepted = data.len().min(self.remaining);
-        self.remaining -= accepted;
-        let truncated = accepted < data.len();
-        let emit_marker = truncated && !self.marker_emitted;
-        self.marker_emitted |= truncated;
-        AcceptedOutput {
-            bytes: &data[..accepted],
-            emit_marker,
-        }
-    }
 }
 
 #[cfg(test)]
@@ -499,32 +356,6 @@ mod tests {
                 "errorCategory":"timeout",
                 "errorMessage":"timed out"
             })
-        );
-    }
-
-    #[test]
-    fn output_cap_truncates_once_across_streams() {
-        let mut cap = OutputCap::new(5);
-        assert_eq!(
-            cap.accept(b"abc"),
-            AcceptedOutput {
-                bytes: b"abc",
-                emit_marker: false,
-            }
-        );
-        assert_eq!(
-            cap.accept(b"def"),
-            AcceptedOutput {
-                bytes: b"de",
-                emit_marker: true,
-            }
-        );
-        assert_eq!(
-            cap.accept(b"more"),
-            AcceptedOutput {
-                bytes: b"",
-                emit_marker: false,
-            }
         );
     }
 }

@@ -25,6 +25,7 @@ import { useUpdaterStore } from "../stores/updaterStore";
 import { useCapabilityStore } from "../stores/capabilityStore";
 import { useCollabStore } from "../stores/collabStore";
 import { startAgentInboxListener } from "../stores/agentInboxStore";
+import { startAgentSessionListener } from "../features/mcp/agentSessions";
 import {
   collabGetConfig,
   parseCollaborationError,
@@ -184,6 +185,10 @@ export function useAppInit(): void {
   // Subscribe once to backend `agent-event` notifications (Agent Inbox),
   // mirroring the `deep-link`/`ssh-remote-os` listener wiring.
   useEffect(() => startAgentInboxListener(), []);
+
+  // Open terminal tabs when an MCP agent asks for one. Inert where the MCP
+  // server is not compiled in (mobile): the event simply never fires.
+  useEffect(() => startAgentSessionListener(), []);
 
   // Reflect any tunnels the backend already has running. Skipped on platforms
   // without the port-forwarding feature (mobile): its `tunnels_list` command is

@@ -36,9 +36,23 @@ pub(super) enum Control {
     Disconnect,
 }
 
+/// A live session's control channel plus whether it has reached a usable shell.
+///
+/// The session is registered before authentication starts, and during that
+/// window `Control::Write` is consumed by the interactive auth prompt rather
+/// than by a shell. Anything writing on behalf of something other than the user
+/// at the keyboard must check `authenticated` first, or it risks typing into a
+/// password prompt.
+struct SessionHandle {
+    control: mpsc::UnboundedSender<Control>,
+    authenticated: Arc<AtomicBool>,
+}
+
+type SessionMap = Arc<Mutex<HashMap<String, SessionHandle>>>;
+
 #[derive(Default)]
 pub struct EmbeddedSshManager {
-    sessions: Arc<Mutex<HashMap<String, mpsc::UnboundedSender<Control>>>>,
+    sessions: SessionMap,
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     logs: SessionLogManager,
 }
@@ -191,7 +205,14 @@ impl EmbeddedSshManager {
 
         let (control_tx, control_rx) = mpsc::unbounded_channel();
         let id = uuid::Uuid::new_v4().to_string();
-        self.sessions.lock().unwrap().insert(id.clone(), control_tx);
+        let authenticated = Arc::new(AtomicBool::new(false));
+        self.sessions.lock().unwrap().insert(
+            id.clone(),
+            SessionHandle {
+                control: control_tx,
+                authenticated: Arc::clone(&authenticated),
+            },
+        );
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
         self.logs.register(&id, cols, rows);
         let sessions = Arc::clone(&self.sessions);
@@ -297,6 +318,10 @@ impl EmbeddedSshManager {
                     return;
                 }
             };
+
+            // Only now is a write guaranteed to reach a shell rather than the
+            // auth prompt or the `exec` of a startup command.
+            authenticated.store(true, Ordering::Release);
 
             let remote_os_handle = Arc::clone(&handle);
             tauri::async_runtime::spawn(async move {
@@ -478,8 +503,7 @@ impl EmbeddedSshManager {
     }
 
     pub async fn ping(&self, session_id: &str) -> Result<Option<u64>> {
-        let sender = self.sessions.lock().unwrap().get(session_id).cloned();
-        let Some(sender) = sender else {
+        let Some(sender) = self.control_sender(session_id) else {
             return Ok(None);
         };
         let (reply, receiver) = oneshot::channel();
@@ -525,8 +549,7 @@ impl EmbeddedSshManager {
     }
 
     pub async fn enable_agent_forwarding(&self, session_id: &str) -> Result<bool> {
-        let sender = self.sessions.lock().unwrap().get(session_id).cloned();
-        let Some(sender) = sender else {
+        let Some(sender) = self.control_sender(session_id) else {
             return Ok(false);
         };
         let (reply, response) = oneshot::channel();
@@ -540,9 +563,26 @@ impl EmbeddedSshManager {
         Ok(true)
     }
 
+    fn control_sender(&self, session_id: &str) -> Option<mpsc::UnboundedSender<Control>> {
+        self.sessions
+            .lock()
+            .unwrap()
+            .get(session_id)
+            .map(|handle| handle.control.clone())
+    }
+
+    /// Whether this session has an open shell channel. False while it is still
+    /// connecting or authenticating, and false for an unknown session.
+    pub fn is_authenticated(&self, session_id: &str) -> bool {
+        self.sessions
+            .lock()
+            .unwrap()
+            .get(session_id)
+            .is_some_and(|handle| handle.authenticated.load(Ordering::Acquire))
+    }
+
     fn send(&self, session_id: &str, control: Control) -> Result<bool> {
-        let sender = self.sessions.lock().unwrap().get(session_id).cloned();
-        let Some(sender) = sender else {
+        let Some(sender) = self.control_sender(session_id) else {
             return Ok(false);
         };
         sender
@@ -557,7 +597,7 @@ impl EmbeddedSshManager {
             .lock()
             .unwrap()
             .drain()
-            .map(|(_, tx)| tx)
+            .map(|(_, handle)| handle.control)
             .collect();
         for sender in senders {
             let _ = sender.send(Control::Disconnect);
@@ -566,7 +606,7 @@ impl EmbeddedSshManager {
 }
 
 fn finish_session(
-    sessions: &Arc<Mutex<HashMap<String, mpsc::UnboundedSender<Control>>>>,
+    sessions: &SessionMap,
     #[cfg(not(any(target_os = "android", target_os = "ios")))] logs: &SessionLogManager,
     session_id: &str,
     on_exit: ExitCallback,

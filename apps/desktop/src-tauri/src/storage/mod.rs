@@ -14,6 +14,8 @@ pub mod identities;
 #[path = "identities_mobile.rs"]
 pub mod identities_mobile;
 pub mod key_references;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub mod mcp_grants;
 pub mod port_forwards;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub mod profiles;
@@ -58,6 +60,7 @@ const LEGACY_CRLF_CHECKSUMS: &[(i64, &str)] = &[
     (17, "4cd77c6b15dc828c48b3fe025e428c0e5fffe6a918748f9ad74267b69439591a05fdb0eb312c349379381592a96cf789"),
     (18, "d820264a06f025a1c64ae6d5e68218540d50ae0324d007183d310bcb79cd21df4e6fa8cc18270dfedd923fd97ad33e02"),
     (19, "7818f963c2f18cbc28fd821a466b0cb9cb7de8a96ee874951cd3820d8c6c78cbe1f48eae49b674733bc20f245f116439"),
+    (20, "15988679df03f819c03896892da24a5a159e446bcb8f947fa88d00377f67fbfe5602a6be0f4a3f6e72da0e55165dc258"),
 ];
 
 fn is_allowlisted_legacy_checksum(version: i64, recorded: &[u8]) -> bool {

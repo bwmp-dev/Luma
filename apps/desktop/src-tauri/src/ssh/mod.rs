@@ -3,6 +3,7 @@ pub(crate) mod agent;
 mod config;
 mod embedded;
 mod embedded_auth;
+pub(crate) mod exec;
 mod known_hosts;
 mod remote_os;
 // Tunnels (and the SOCKS proxy that backs dynamic forwards) are plain tokio
@@ -410,6 +411,23 @@ pub(crate) async fn host_key_connection_config(
         resolve_host_connection_config(pool, keystore_state, route.host, known_hosts_file).await?;
     config.startup_command = None;
     config.proxy_jumps = proxy_jumps;
+    Ok(config)
+}
+
+/// Connection config for a command run on an exec channel rather than a shell.
+///
+/// `startup_command` is a PTY concept — `open_shell_channel` runs it *instead
+/// of* the login shell — so on a channel with no PTY a `tmux attach` startup
+/// command either fails with "not a terminal" or swallows the exec slot the
+/// caller wanted. `connection_config` clears it on proxy jumps but deliberately
+/// keeps it on the target, so non-interactive callers must go through here.
+pub(crate) async fn non_interactive_config(
+    pool: &SqlitePool,
+    keystore_state: &KeystoreState,
+    host_id: &str,
+) -> Result<SshConnectionConfig> {
+    let (mut config, _) = connection_config(pool, keystore_state, host_id).await?;
+    config.startup_command = None;
     Ok(config)
 }
 
