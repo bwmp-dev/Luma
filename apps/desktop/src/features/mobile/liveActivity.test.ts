@@ -32,6 +32,8 @@ function transfer(overrides: Partial<TransferRecord> = {}): TransferRecord {
     errorMessage: null,
     aggregate: null,
     entries: [],
+    skippedOutcomes: 0,
+    failedOutcomes: 0,
     resumedFrom: null,
     startedAt: 0,
     lastTickAt: 0,

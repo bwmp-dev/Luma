@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { open } from "@tauri-apps/plugin-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
@@ -59,7 +59,14 @@ import { ContextMenu, type MenuAction } from "../../components/ContextMenu";
 import { NameDialog } from "../sftp/NameDialog";
 import { HostPicker } from "../sftp/HostPicker";
 import { TransferQueue } from "../sftp/TransferQueue";
+import { NO_ENTRIES, useVirtualRows } from "../sftp/useVirtualRows";
 import { cn } from "../../lib/utils";
+
+/** Row height in px (including the 1px bottom border), applied inline so layout
+ * and the windowing arithmetic cannot drift apart. Matches what the row's
+ * padding and its tallest child (the 44px touch-target row menu) produced
+ * before it was pinned. */
+const ROW_HEIGHT = 65;
 
 /*
  * Mobile SFTP: a single-pane REMOTE-ONLY file browser. Mobile has no local pane
@@ -211,7 +218,7 @@ function ConnectedView({
   );
   const otherLabel = otherHost?.name ?? "the other host";
 
-  const entries = listing.data?.entries ?? [];
+  const entries = listing.data?.entries ?? NO_ENTRIES;
   // Sort and hidden-file filtering are presentation over the same cached
   // listing, so changing either re-renders rather than re-fetching.
   const ordered = useMemo(
@@ -228,6 +235,16 @@ function ConnectedView({
       ? ordered.filter((e) => e.name.toLowerCase().includes(needle))
       : ordered;
   }, [ordered, filter]);
+
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const rowWindow = useVirtualRows(visible.length, ROW_HEIGHT, listRef);
+
+  // A windowed list derives what it renders from scrollTop, so a new folder (or
+  // a filter that shrank the list) has to start at the top — otherwise the
+  // window points past the end of the shorter list and the pane looks empty.
+  useEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = 0;
+  }, [remotePath, filter]);
 
   const canPaste = selectCanPaste(
     clipboard,
@@ -472,7 +489,7 @@ function ConnectedView({
       )}
 
       {/* List */}
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto">
         {listing.isLoading ? (
           <Message>Loading…</Message>
         ) : listing.isError ? (
@@ -489,7 +506,12 @@ function ConnectedView({
           </Message>
         ) : (
           <ul role="list">
-            {visible.map((entry) => {
+            {/* Spacers stand in for the rows outside the window so the
+                scrollbar reflects the whole folder. */}
+            {rowWindow.padTop > 0 && (
+              <li aria-hidden style={{ height: rowWindow.padTop }} />
+            )}
+            {visible.slice(rowWindow.start, rowWindow.end).map((entry) => {
               const rowActions: MenuAction[] = [
                 {
                   // Long-press → Copy, then Paste from the toolbar menu in
@@ -539,7 +561,10 @@ function ConnectedView({
               ];
               return (
                 <ContextMenu key={entry.path} actions={rowActions} minWidth="min-w-44">
-                  <li className="flex items-center gap-3 border-b border-border/50 px-3 py-2.5">
+                  <li
+                    style={{ height: ROW_HEIGHT }}
+                    className="flex items-center gap-3 border-b border-border/50 px-3"
+                  >
                     <button
                       type="button"
                       onClick={() => {
@@ -560,6 +585,9 @@ function ConnectedView({
                 </ContextMenu>
               );
             })}
+            {rowWindow.padBottom > 0 && (
+              <li aria-hidden style={{ height: rowWindow.padBottom }} />
+            )}
           </ul>
         )}
       </div>

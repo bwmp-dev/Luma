@@ -123,9 +123,12 @@ function TransferRow({
   const remotePartialLeftBehind =
     record.destSessionId !== null &&
     (record.state === "failed" || record.state === "cancelled");
-  const hasEntries = record.entries.length > 0;
-  const failedEntries = record.entries.filter((e) => e.state === "failed").length;
-  const skippedEntries = record.entries.length - failedEntries;
+  // Counted from the exact totals, not the retained list — a job over a tree
+  // with thousands of unreadable files keeps only the first MAX_ENTRY_OUTCOMES.
+  const failedEntries = record.failedOutcomes;
+  const skippedEntries = record.skippedOutcomes;
+  const hasEntries = failedEntries + skippedEntries > 0;
+  const omitted = failedEntries + skippedEntries - record.entries.length;
   const resumed = record.resumedFrom != null && record.resumedFrom > 0;
   // Backend-known transfers resume their incomplete entries via sftp_retry;
   // synthetic pre-start failures ("failed-…") re-run the whole job instead.
@@ -309,6 +312,11 @@ function TransferRow({
               </div>
             </li>
           ))}
+          {omitted > 0 && (
+            <li className="text-[10px] text-muted">
+              …and {omitted.toLocaleString()} more
+            </li>
+          )}
         </ul>
       )}
     </li>

@@ -326,6 +326,41 @@ describe("SFTP transfer queue transitions", () => {
     expect(record?.entries).toHaveLength(2);
   });
 
+  it("caps retained entry outcomes but keeps the counts exact", async () => {
+    let channel: unknown;
+    setInvoke((cmd, args) => {
+      if (cmd === "sftp_upload") {
+        channel = args.onProgress;
+        return { transferId: "dir-cap" };
+      }
+      throw new Error(`unexpected ${cmd}`);
+    });
+
+    upload([{ ...file("folder"), kind: "dir" }]);
+    await flush();
+
+    // A tree with far more unreadable files than the queue will ever show.
+    for (let i = 0; i < 600; i += 1) {
+      fire(channel, {
+        transferId: "dir-cap",
+        transferred: 0,
+        total: null,
+        state: i % 2 === 0 ? "failed" : "skipped",
+        errorMessage: i % 2 === 0 ? "permission denied" : null,
+        progressKind: "entry",
+        filePath: `sub/f${i}`,
+      });
+    }
+
+    const record = transfers().find((t) => t.transferId === "dir-cap");
+    // The retained list stops growing, so a pathological job cannot exhaust
+    // the webview's memory...
+    expect(record?.entries).toHaveLength(500);
+    // ...while the counts the row reports stay exact.
+    expect(record?.failedOutcomes).toBe(300);
+    expect(record?.skippedOutcomes).toBe(300);
+  });
+
   it("retries a directory job via sftp_retry, rebinding to the new id", async () => {
     let uploadChannel: unknown;
     let retryChannel: unknown;
@@ -455,6 +490,8 @@ describe("SFTP transfer queue transitions", () => {
           errorMessage: null,
           aggregate: null,
           entries: [],
+          skippedOutcomes: 0,
+          failedOutcomes: 0,
           resumedFrom: null,
           startedAt: now,
           lastTickAt: now,
@@ -542,6 +579,8 @@ describe("SFTP transfer queue transitions", () => {
           errorMessage: null,
           aggregate: null,
           entries: [],
+          skippedOutcomes: 0,
+          failedOutcomes: 0,
           resumedFrom: null,
           startedAt: now,
           lastTickAt: now,

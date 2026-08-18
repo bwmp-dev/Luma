@@ -61,9 +61,17 @@ import {
   type ViewPrefs,
 } from "./viewPrefs";
 import { MENU_CONTENT_CLASS, ViewMenuItems } from "./ViewMenu";
+import {
+  NO_ENTRIES,
+  rowsInBand,
+  scrollRowIntoView,
+  useVirtualRows,
+} from "./useVirtualRows";
 
-/** Cap on rendered rows to keep very large directories cheap. */
-const RENDER_CAP = 1000;
+/** Row height in px, applied inline so layout and the windowing arithmetic
+ * cannot drift apart. Matches what the row's padding and its tallest child (the
+ * 24px row-menu button) produced before it was pinned. */
+const ROW_HEIGHT = 36;
 
 /** Where a lasso began, plus the selection it builds on when shift / ctrl was
  * held. Fixed for the lifetime of one drag. */
@@ -140,6 +148,9 @@ export function FilePane({
 
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const rowRefs = useRef(new Map<number, HTMLLIElement>());
+  /** A row that keyboard navigation scrolled to but that was not mounted at the
+   * time; focused once the window renders it. */
+  const pendingFocus = useRef<number | null>(null);
   /** Where the lasso began and what it started from; stable for its lifetime. */
   const lasso = useRef<LassoOrigin | null>(null);
   const pointerY = useRef(0);
@@ -188,7 +199,7 @@ export function FilePane({
     void loadViewPrefs();
   }, [loadViewPrefs]);
 
-  const entries = listing.data?.entries ?? [];
+  const entries = listing.data?.entries ?? NO_ENTRIES;
   // Sort + hidden filtering are presentation over the cached listing, so
   // changing either re-renders without re-fetching.
   const ordered = useMemo(
@@ -206,11 +217,13 @@ export function FilePane({
       : ordered;
     return filtered;
   }, [ordered, filter]);
-  const capped = useMemo(() => visible.slice(0, RENDER_CAP), [visible]);
-  const overflow = visible.length - capped.length;
+  const rowWindow = useVirtualRows(visible.length, ROW_HEIGHT, bodyRef);
 
+  // Selection is keyed by path, so a Set lookup keeps this O(n) rather than
+  // scanning the selection for every entry — a large folder makes the
+  // difference visible on every click.
   const selectedEntries = useMemo(
-    () => entries.filter((e) => selected.has(e.path)),
+    () => (selected.size === 0 ? [] : entries.filter((e) => selected.has(e.path))),
     [entries, selected],
   );
   // Files AND directories can be transferred (the backend recurses folders).
@@ -225,29 +238,55 @@ export function FilePane({
   const selectRange = (from: number, to: number, base?: Set<string>) => {
     const [a, b] = from <= to ? [from, to] : [to, from];
     const next = new Set(base ?? []);
-    for (const entry of capped.slice(a, b + 1)) next.add(entry.path);
+    for (const entry of visible.slice(a, b + 1)) next.add(entry.path);
     setSelected(next);
   };
 
+  /** Focus a row, scrolling it into view first — a windowed row may not be
+   * mounted yet, in which case the scroll mounts it and the effect below
+   * focuses it once React has committed. */
   const focusRow = (index: number) => {
-    rowRefs.current.get(index)?.focus();
-    rowRefs.current.get(index)?.scrollIntoView({ block: "nearest" });
+    const body = bodyRef.current;
+    if (body) scrollRowIntoView(body, index, ROW_HEIGHT);
+    const row = rowRefs.current.get(index);
+    if (row) row.focus();
+    else pendingFocus.current = index;
   };
 
   /** Arrow-key navigation; shift extends the selection from the anchor. */
   const moveFocus = (delta: number, extend: boolean) => {
-    if (capped.length === 0) return;
-    const current = anchorIndex.current ?? (delta > 0 ? -1 : capped.length);
-    const next = Math.min(capped.length - 1, Math.max(0, current + delta));
+    if (visible.length === 0) return;
+    const current = anchorIndex.current ?? (delta > 0 ? -1 : visible.length);
+    const next = Math.min(visible.length - 1, Math.max(0, current + delta));
     if (extend && anchorIndex.current !== null) {
       // The anchor stays put so the range grows and shrinks around it.
       selectRange(anchorIndex.current, next);
     } else {
-      setSelected(new Set([capped[next].path]));
+      setSelected(new Set([visible[next].path]));
       anchorIndex.current = next;
     }
     focusRow(next);
   };
+
+  // Focus a row the keyboard reached while it was outside the window; the
+  // scroll in focusRow mounts it, and this runs on the resulting render.
+  useEffect(() => {
+    const index = pendingFocus.current;
+    if (index === null) return;
+    const row = rowRefs.current.get(index);
+    if (row) {
+      pendingFocus.current = null;
+      row.focus();
+    }
+  });
+
+  // A windowed list derives what it renders from scrollTop, so a new folder (or
+  // a filter that shrank the list) has to start at the top — otherwise the
+  // window points past the end of the shorter list and the pane looks empty.
+  useEffect(() => {
+    pendingFocus.current = null;
+    if (bodyRef.current) bodyRef.current.scrollTop = 0;
+  }, [path, sessionId, filter]);
 
   const canPaste = selectCanPaste(clipboard, endpoint, path);
 
@@ -271,8 +310,8 @@ export function FilePane({
     const mod = event.ctrlKey || event.metaKey;
     if (mod && event.key.toLowerCase() === "a") {
       event.preventDefault();
-      setSelected(new Set(capped.map((entry) => entry.path)));
-      if (anchorIndex.current === null && capped.length > 0) {
+      setSelected(new Set(visible.map((entry) => entry.path)));
+      if (anchorIndex.current === null && visible.length > 0) {
         anchorIndex.current = 0;
       }
       return;
@@ -302,7 +341,7 @@ export function FilePane({
     // The lasso's mousedown suppresses native focus, so take it back here —
     // the pane's keyboard shortcuts depend on focus living inside it.
     rowRefs.current.get(index)?.focus();
-    const paths = capped.map((e) => e.path);
+    const paths = visible.map((e) => e.path);
     if (event.shiftKey && anchorIndex.current !== null) {
       const [a, b] = [anchorIndex.current, index].sort((x, y) => x - y);
       setSelected(new Set(paths.slice(a, b + 1)));
@@ -433,21 +472,32 @@ export function FilePane({
         height: bottom - top,
       });
       const next = new Set(origin.base);
-      for (const [index, row] of rowRefs.current) {
-        const entry = capped[index];
-        if (!entry) continue;
-        const rowTop = row.offsetTop;
-        // Rows span the pane, so vertical overlap is the whole test.
-        if (rowTop + row.offsetHeight > top && rowTop < bottom) {
-          next.add(entry.path);
-        }
+      // Rows span the pane and are a fixed height, so the covered range is
+      // arithmetic — which is also what lets the lasso reach rows the window
+      // has not mounted.
+      const { from, to } = rowsInBand(top, bottom, ROW_HEIGHT, visible.length);
+      for (let index = from; index <= to; index += 1) {
+        const entry = visible[index];
+        if (entry) next.add(entry.path);
       }
       setSelected(next);
     };
 
+    // Mousemove fires far faster than the selection can usefully change, and
+    // each paint builds a Set of every covered path — coalesce to one per frame.
+    let paintFrame = 0;
+    const schedulePaint = () => {
+      if (paintFrame === 0) {
+        paintFrame = requestAnimationFrame(() => {
+          paintFrame = 0;
+          paint();
+        });
+      }
+    };
+
     const onMove = (event: MouseEvent) => {
       pointerY.current = event.clientY;
-      paint();
+      schedulePaint();
     };
 
     // Keep extending the lasso past the rows currently in view.
@@ -461,7 +511,7 @@ export function FilePane({
       if (delta !== 0) {
         const before = body.scrollTop;
         body.scrollTop += delta;
-        if (body.scrollTop !== before) paint();
+        if (body.scrollTop !== before) schedulePaint();
       }
       frame = requestAnimationFrame(autoScroll);
     };
@@ -479,8 +529,9 @@ export function FilePane({
       window.removeEventListener("mousemove", onMove);
       window.removeEventListener("mouseup", onUp);
       cancelAnimationFrame(frame);
+      if (paintFrame !== 0) cancelAnimationFrame(paintFrame);
     };
-  }, [lassoing, capped]);
+  }, [lassoing, visible]);
 
   // Drag & drop between panes -------------------------------------------------
   const onRowDragStart = (event: React.DragEvent, entry: SftpEntry) => {
@@ -737,7 +788,7 @@ export function FilePane({
               Retry
             </button>
           </PaneMessage>
-        ) : capped.length === 0 ? (
+        ) : visible.length === 0 ? (
           <PaneMessage>
             {filter
               ? "No matching entries."
@@ -749,7 +800,13 @@ export function FilePane({
           </PaneMessage>
         ) : (
           <ul role="list">
-            {capped.map((entry, index) => {
+            {/* Spacers stand in for the rows outside the window so the
+                scrollbar reflects the whole folder. */}
+            {rowWindow.padTop > 0 && (
+              <li aria-hidden style={{ height: rowWindow.padTop }} />
+            )}
+            {visible.slice(rowWindow.start, rowWindow.end).map((entry, offset) => {
+              const index = rowWindow.start + offset;
               const isSelected = selected.has(entry.path);
               // Files and directories alike can be transferred.
               const canRowTransfer = canTransfer;
@@ -855,8 +912,9 @@ export function FilePane({
                       anchorIndex.current = index;
                     }
                   }}
+                  style={{ height: ROW_HEIGHT }}
                   className={cn(
-                    "flex cursor-default items-center gap-2 px-3 py-1.5 text-xs outline-none",
+                    "flex cursor-default items-center gap-2 px-3 text-xs outline-none",
                     isSelected
                       ? "bg-accent/15 text-foreground"
                       : "text-foreground/90 hover:bg-raised focus-visible:bg-raised",
@@ -886,13 +944,10 @@ export function FilePane({
                 </ContextMenu>
               );
             })}
+            {rowWindow.padBottom > 0 && (
+              <li aria-hidden style={{ height: rowWindow.padBottom }} />
+            )}
           </ul>
-        )}
-        {overflow > 0 && (
-          <p className="px-3 py-2 text-center text-[11px] text-muted">
-            Showing first {RENDER_CAP.toLocaleString()} of {visible.length.toLocaleString()} —
-            refine with the filter or path bar.
-          </p>
         )}
       </div>
       </ContextMenu>

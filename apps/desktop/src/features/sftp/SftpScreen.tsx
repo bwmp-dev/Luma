@@ -65,7 +65,6 @@ export function SftpScreen() {
 
   const panes = useSftpStore((s) => s.panes);
   const sessions = useSftpStore((s) => s.sessions);
-  const transfers = useSftpStore((s) => s.transfers);
   const localPath = useSftpStore((s) => s.localPath);
   const initPanes = useSftpStore((s) => s.initPanes);
   const setLocalPath = useSftpStore((s) => s.setLocalPath);
@@ -222,9 +221,15 @@ export function SftpScreen() {
 
   const requestDisconnect = (side: PaneSide) => {
     const endpoint = panes[side];
+    // Read the queue at click time rather than subscribing: a running transfer
+    // emits progress continuously, and a subscription here would re-render both
+    // file panes — and every row in them — on each event.
     const running =
       endpoint.kind === "remote"
-        ? selectRunningForSession(transfers, endpoint.sessionId)
+        ? selectRunningForSession(
+            useSftpStore.getState().transfers,
+            endpoint.sessionId,
+          )
         : 0;
     if (running > 0) {
       setPendingDisconnect({ side, running });

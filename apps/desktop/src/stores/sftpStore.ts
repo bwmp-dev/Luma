@@ -76,6 +76,11 @@ export type TransferEntryOutcome = {
   errorMessage: string | null;
 };
 
+/** Cap on the per-entry outcomes one directory job retains. A job over a tree
+ * with many unreadable files would otherwise grow this list without bound, and
+ * it is rendered in an expandable list — the count below it stays exact. */
+const MAX_ENTRY_OUTCOMES = 500;
+
 export type TransferRecord = {
   transferId: string;
   kind: TransferKind;
@@ -98,8 +103,11 @@ export type TransferRecord = {
   errorMessage: string | null;
   /** Whole-job snapshot for directory transfers (null for single files). */
   aggregate: TransferAggregate | null;
-  /** Skipped / failed per-entry outcomes from a directory job's entry events. */
+  /** Skipped / failed per-entry outcomes from a directory job's entry events,
+   * capped at MAX_ENTRY_OUTCOMES; the counters below stay exact. */
   entries: TransferEntryOutcome[];
+  skippedOutcomes: number;
+  failedOutcomes: number;
   /** Byte offset a resumed transfer started at (from a `resumedFrom` progress
    * event), or null when it started from the beginning. Drives the "resumed" tag. */
   resumedFrom: number | null;
@@ -292,14 +300,23 @@ export const useSftpStore = create<SftpState>((set, get) => {
             ? {
                 ...record,
                 isDirectory: true,
-                entries: [
-                  ...record.entries,
-                  {
-                    path: progress.filePath ?? "",
-                    state: progress.state === "skipped" ? "skipped" : "failed",
-                    errorMessage: progress.errorMessage,
-                  },
-                ],
+                entries:
+                  record.entries.length >= MAX_ENTRY_OUTCOMES
+                    ? record.entries
+                    : [
+                        ...record.entries,
+                        {
+                          path: progress.filePath ?? "",
+                          state:
+                            progress.state === "skipped" ? "skipped" : "failed",
+                          errorMessage: progress.errorMessage,
+                        },
+                      ],
+                skippedOutcomes:
+                  record.skippedOutcomes +
+                  (progress.state === "skipped" ? 1 : 0),
+                failedOutcomes:
+                  record.failedOutcomes + (progress.state === "skipped" ? 0 : 1),
               }
             : record,
         ),
@@ -378,6 +395,8 @@ export const useSftpStore = create<SftpState>((set, get) => {
           errorMessage: progress.errorMessage,
           aggregate,
           entries: [],
+          skippedOutcomes: 0,
+          failedOutcomes: 0,
           resumedFrom: progress.resumedFrom ?? null,
           startedAt: now,
           lastTickAt: now,
@@ -427,6 +446,8 @@ export const useSftpStore = create<SftpState>((set, get) => {
         errorMessage: null,
         aggregate: null,
         entries: [],
+        skippedOutcomes: 0,
+        failedOutcomes: 0,
         resumedFrom: null,
         startedAt: now,
         lastTickAt: now,
@@ -457,6 +478,8 @@ export const useSftpStore = create<SftpState>((set, get) => {
           errorMessage: message,
           aggregate: null,
           entries: [],
+          skippedOutcomes: 0,
+          failedOutcomes: 0,
           resumedFrom: null,
           startedAt: now,
           lastTickAt: now,
@@ -539,6 +562,8 @@ export const useSftpStore = create<SftpState>((set, get) => {
                 errorMessage: null,
                 aggregate: null,
                 entries: [],
+                skippedOutcomes: 0,
+                failedOutcomes: 0,
                 resumedFrom: null,
                 startedAt: now,
                 lastTickAt: now,

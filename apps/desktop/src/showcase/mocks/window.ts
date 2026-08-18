@@ -36,6 +36,10 @@ const fakeWindow = {
   unmaximize: async () => {},
   toggleMaximize: async () => {},
   isMaximized: async () => false,
+  isFocused: async () => true,
+  onFocusChanged: async (_cb: (event: { payload: boolean }) => void) => {
+    return () => {};
+  },
   setTitle: async () => {},
   setFocus: async () => {},
   scaleFactor: async () => 1,
