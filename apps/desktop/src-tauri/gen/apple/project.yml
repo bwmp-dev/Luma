@@ -2,7 +2,7 @@ name: luma
 options:
   bundleIdPrefix: dev.bwmp.luma
   deploymentTarget:
-    iOS: 14.0
+    iOS: 15.0
 fileGroups: [../../src]
 configs:
   debug: debug
@@ -82,7 +82,7 @@ targets:
         ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES: true
         EXCLUDED_ARCHS[sdk=iphoneos*]: x86_64
         SWIFT_VERSION: '5.0'
-        # ActivityKit is iOS 16.1+ and this target deploys to 14.0; without the weak
+        # ActivityKit is iOS 16.1+ and this target deploys to 15.0; without the weak
         # link dyld fails the app at launch on older systems instead of letting the
         # availability guards in LumaLiveActivity.swift take effect.
         OTHER_LDFLAGS: $(inherited) -weak_framework ActivityKit

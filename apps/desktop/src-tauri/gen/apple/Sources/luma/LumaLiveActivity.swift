@@ -8,7 +8,7 @@ import UIKit
  * @_cdecl symbols directly (see src/commands/live_activity.rs) rather than through
  * a Tauri mobile plugin.
  *
- * ActivityKit is iOS 16.1+ while the app deploys to 14.0, so the framework is
+ * ActivityKit is iOS 16.1+ while the app deploys to 15.0, so the framework is
  * weak-linked (OTHER_LDFLAGS in project.yml) and every entry point is availability
  * guarded.
  */
