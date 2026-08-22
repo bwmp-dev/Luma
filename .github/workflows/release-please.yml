@@ -53,8 +53,6 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libudev-dev pkg-config
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: 11
 
       - uses: actions/setup-node@v4
         with:
@@ -341,11 +339,16 @@ jobs:
           mkdir release-assets
           gh release download "${RELEASE_TAG}" --dir release-assets
 
-      - name: Verify updater metadata and signatures
+      - name: Rebuild and verify the updater manifest
         shell: bash
         run: |
-          test -f release-assets/latest.json
           compgen -G 'release-assets/*.sig' > /dev/null
+
+          # Rebuilt from the signatures now that every matrix job has finished,
+          # because the per-job uploads race and drop each other's platforms.
+          node scripts/rebuild-updater-manifest.mjs \
+            "$RELEASE_TAG" "${RELEASE_TAG#v}" release-assets
+          gh release upload "$RELEASE_TAG" release-assets/latest.json --clobber
 
       - name: Generate SHA-256 checksums
         shell: bash

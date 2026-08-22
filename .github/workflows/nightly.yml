@@ -88,8 +88,6 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libudev-dev pkg-config
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: 11
 
       - uses: actions/setup-node@v4
         with:
@@ -237,23 +235,23 @@ jobs:
       NIGHTLY_TAG: ${{ needs.prepare.outputs.tag }}
       NIGHTLY_VERSION: ${{ needs.prepare.outputs.version }}
     steps:
-      - name: Download and verify release assets
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+
+      - name: Download and rebuild release assets
         shell: bash
         run: |
           mkdir release-assets
           gh release download "$NIGHTLY_TAG" --repo "$GITHUB_REPOSITORY" --dir release-assets
-          test -f release-assets/latest.json
           compgen -G 'release-assets/*.sig' > /dev/null
-          node - <<'NODE'
-          const fs = require('node:fs');
-          const manifest = JSON.parse(fs.readFileSync('release-assets/latest.json', 'utf8'));
-          const targets = Object.keys(manifest.platforms ?? {});
-          for (const os of ['windows-', 'darwin-', 'linux-']) {
-            if (!targets.some((target) => target.startsWith(os))) {
-              throw new Error(`Nightly manifest is missing a ${os.slice(0, -1)} target`);
-            }
-          }
-          NODE
+
+          # Rebuilt from the signatures now that every matrix job has finished,
+          # because the per-job uploads race and drop each other's platforms.
+          node scripts/rebuild-updater-manifest.mjs \
+            "$NIGHTLY_TAG" "$NIGHTLY_VERSION" release-assets
+          gh release upload "$NIGHTLY_TAG" release-assets/latest.json \
+            --repo "$GITHUB_REPOSITORY" --clobber
 
       - name: Generate SHA-256 checksums
         shell: bash
