@@ -367,16 +367,20 @@ async fn ssh_spawn_impl(
     let app_for_remote_os = app.clone();
     let pool_for_remote_os = state.pool.clone();
     let host_id_for_remote_os = request.host_id.clone();
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let tap = app
         .state::<crate::mcp::McpState>()
         .new_tap_ssh(&request.host_id);
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let tap_for_data = tap.clone();
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let tap_for_exit = tap.clone();
     let agent_sink = crate::agent_events::AgentEventSink::new(app.clone());
     let agent_sink_for_data = agent_sink.clone();
     let mut agent_scanner = crate::agent_events::AgentEventScanner::new();
     let data_callback = Box::new(move |bytes: &[u8]| {
         agent_sink_for_data.publish(agent_scanner.scan(bytes));
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
         tap_for_data.push(bytes);
         let _ = on_data.send(InvokeResponseBody::Raw(bytes.to_vec()));
     });
@@ -384,6 +388,7 @@ async fn ssh_spawn_impl(
         // `finish_session` runs this on every SSH termination path — auth
         // abort, shell-open failure, normal exit — so the tap needs no hook
         // inside the transport layer.
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
         tap_for_exit.detach();
         let _ = on_exit.send(exit);
     });
@@ -420,6 +425,7 @@ async fn ssh_spawn_impl(
         .await?;
 
     agent_sink.attach(&session_id);
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
     tap.attach(&session_id, &title);
 
     {

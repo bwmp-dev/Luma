@@ -15,7 +15,9 @@ use ssh_key::{Algorithm, LineEnding, PrivateKey};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use zeroize::{Zeroize, Zeroizing};
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+use zeroize::Zeroize;
+use zeroize::Zeroizing;
 
 /// `vaultId` is optional everywhere it appears: omitting it lists across every
 /// vault, which is what the command palette and the vault overview want.
