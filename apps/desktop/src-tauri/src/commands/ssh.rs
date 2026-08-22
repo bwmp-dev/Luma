@@ -3,7 +3,9 @@ use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use tauri::ipc::{Channel, InvokeResponseBody};
-use tauri::{AppHandle, Emitter, Manager, State};
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+use tauri::Manager;
+use tauri::{AppHandle, Emitter, State};
 
 use crate::errors::{LumaError, Result};
 use crate::keystore::KeystoreState;
