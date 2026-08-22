@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.17.0](https://github.com/bwmp-dev/Luma/compare/v0.16.0...v0.17.0) (2026-08-22)
+
+
+### Features
+
+* **account:** add account management link and remove autocomplete ([#24](https://github.com/bwmp-dev/Luma/issues/24)) ([6e8ede6](https://github.com/bwmp-dev/Luma/commit/6e8ede6a41fc5d08e7162d429d97f7f8fae5a4aa))
+* add account deletion and mobile release packaging ([5135613](https://github.com/bwmp-dev/Luma/commit/5135613004d3f02a2e2180a24c8fc7cb32e486ae))
+* **import:** support PuTTY hosts and key conversion ([55d033b](https://github.com/bwmp-dev/Luma/commit/55d033b3181fb0a950005423449679e0fb2f9fda))
+* **mcp:** implement grant management and approval dialogs ([75a83bd](https://github.com/bwmp-dev/Luma/commit/75a83bda90f77dd206103b389cfdff25e7b8b3a7))
+* **release:** publish signed Android bundle ([8b98d75](https://github.com/bwmp-dev/Luma/commit/8b98d7597e901e51d7eb6f6b7ed795888de44e04))
+* **screenshots:** capture App Store shots from the iOS Simulator ([#22](https://github.com/bwmp-dev/Luma/issues/22)) ([cb7b45a](https://github.com/bwmp-dev/Luma/commit/cb7b45a8ae1d87ae8fa84a93046dc586634f565b))
+* **sftp:** implement clipboard functionality for file transfers ([bbbf500](https://github.com/bwmp-dev/Luma/commit/bbbf500b892cb25faddd1cff9697c9e6f8983798))
+* **sftp:** implement virtual row windowing for improved file browsing performance ([0c29d29](https://github.com/bwmp-dev/Luma/commit/0c29d2931292899c21d0a6796890c9811aff565c))
+* **updater:** add nightly release channel and native update flow ([ca19716](https://github.com/bwmp-dev/Luma/commit/ca197169b2cbb7f9ae80550b7e70c14c8dd072dd))
+
+
+### Bug Fixes
+
+* **android:** exclude iOS plugin from Gradle packaging ([b496156](https://github.com/bwmp-dev/Luma/commit/b4961567344e3ef4462f0f765250e0f1faf7e053))
+* **deps:** override vulnerable nanoid and undici versions ([8a28d72](https://github.com/bwmp-dev/Luma/commit/8a28d72d2ace6ff988d268f3899bf167ffdbdc99))
+* gate desktop-only PuTTY commands on mobile ([ccc445f](https://github.com/bwmp-dev/Luma/commit/ccc445f38a5f57ce57db496687280faf873d4f9b))
+* **import:** improve PuTTY discovery and import feedback ([b5157b7](https://github.com/bwmp-dev/Luma/commit/b5157b75d8032d35ba5dccbf9359ef6ff78b780c))
+* **import:** make PPK fixture tests line-ending safe ([cbea92f](https://github.com/bwmp-dev/Luma/commit/cbea92fcebffdad5fdc88ff0664f63038b97240e))
+* **ios:** gate desktop MCP terminal taps ([24810b9](https://github.com/bwmp-dev/Luma/commit/24810b913c2120cce211f3333c50f0fa90513aa9))
+* **ios:** raise minimum deployment target to iOS 15 ([9f4e7b6](https://github.com/bwmp-dev/Luma/commit/9f4e7b656b03b303efb9b38075b6815b1982c472))
+* **nightly:** adjust bundles for MSI and NSIS compatibility in nightly builds ([362e7bb](https://github.com/bwmp-dev/Luma/commit/362e7bb30d8edbae0134c93ba1d1e5eb0887e98e))
+* preserve account component formatting ([7b675de](https://github.com/bwmp-dev/Luma/commit/7b675de2976cd331b22f161f29c7464dedfc8a85))
+* **release:** target repository when publishing nightly ([99f8232](https://github.com/bwmp-dev/Luma/commit/99f823202ae80f2dafab49e8c8e6c5483090145a))
+* **workflows:** remove version specification for pnpm action ([ed1dff4](https://github.com/bwmp-dev/Luma/commit/ed1dff47bb0269119ed8ba3941a30b319f4049e6))
+
 ## [0.16.0](https://github.com/bwmp-dev/Luma/compare/v0.15.0...v0.16.0) (2026-08-02)
 
 
