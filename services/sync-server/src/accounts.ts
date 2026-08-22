@@ -33,20 +33,26 @@ export async function updateUsage(env: Env, subject: string, bytes: number): Pro
     .run();
 }
 
-export async function markDeleted(env: Env, subject: string): Promise<void> {
-  await env.DB.prepare(
-    `UPDATE accounts
-     SET used_bytes = 0, deleted_at = unixepoch(), updated_at = unixepoch()
-     WHERE subject = ?1 AND deleted_at IS NULL`,
-  )
-    .bind(subject)
-    .run();
-}
-
 export function positiveInteger(value: string, name: string): number {
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     throw new Error(`${name} must be a positive integer`);
   }
   return parsed;
+}
+
+/**
+ * Remove the account row outright rather than tombstoning it.
+ *
+ * `getOrCreateAccount` rejects any subject whose `deleted_at` is set, and
+ * nothing ever clears it, so a soft delete would permanently lock out a user
+ * who deleted their Luma data but kept their identity provider account and
+ * later signed in again. Identity provider subjects are not reused, so dropping
+ * the row simply lets a returning subject start fresh. It also means the
+ * subject itself — an account identifier we promise to erase — does not linger.
+ */
+export async function deleteAccountRow(env: Env, subject: string): Promise<void> {
+  await env.DB.prepare(`DELETE FROM accounts WHERE subject = ?1`)
+    .bind(subject)
+    .run();
 }

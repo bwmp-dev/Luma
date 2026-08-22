@@ -1,15 +1,18 @@
 import { useEffect, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { ExternalLink, Loader2, UserRound } from "lucide-react";
+import { ExternalLink, Loader2, Trash2, UserRound } from "lucide-react";
 import {
   collabAuthPoll,
   collabAuthSignOut,
   collabAuthStart,
+  collabDeleteAccount,
   collabGetConfig,
   collabSetServerUrl,
   parseCollaborationError,
+  type AccountDeletionReport,
   type CollabAuthStart,
 } from "../../lib/collab";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useCollabStore } from "../../stores/collabStore";
 
 /*
@@ -36,6 +39,11 @@ export function AccountSection() {
   const [busy, setBusy] = useState(false);
   const [flowError, setFlowError] = useState<string | null>(null);
 
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteReport, setDeleteReport] = useState<AccountDeletionReport | null>(null);
+
   // Load the configured server URL once (and whenever the auth server changes).
   useEffect(() => {
     let cancelled = false;
@@ -55,31 +63,34 @@ export function AccountSection() {
   useEffect(() => {
     if (!device) return;
     let cancelled = false;
-    const timeout = window.setTimeout(async () => {
-      try {
-        const result = await collabAuthPoll();
-        if (cancelled) return;
-        if (result.status === "complete") {
-          setDevice(null);
-          setFlowError(null);
-          await refreshAuthStatus();
-        } else {
-          setDevice((current) =>
-            current
-              ? {
-                  ...current,
-                  interval: result.retryAfterSeconds ?? current.interval,
-                }
-              : null,
-          );
+    const timeout = window.setTimeout(
+      async () => {
+        try {
+          const result = await collabAuthPoll();
+          if (cancelled) return;
+          if (result.status === "complete") {
+            setDevice(null);
+            setFlowError(null);
+            await refreshAuthStatus();
+          } else {
+            setDevice((current) =>
+              current
+                ? {
+                    ...current,
+                    interval: result.retryAfterSeconds ?? current.interval,
+                  }
+                : null,
+            );
+          }
+        } catch (error) {
+          if (!cancelled) {
+            setDevice(null);
+            setFlowError(parseCollaborationError(error).message);
+          }
         }
-      } catch (error) {
-        if (!cancelled) {
-          setDevice(null);
-          setFlowError(parseCollaborationError(error).message);
-        }
-      }
-    }, Math.max(1, device.interval) * 1000);
+      },
+      Math.max(1, device.interval) * 1000,
+    );
     return () => {
       cancelled = true;
       window.clearTimeout(timeout);
@@ -133,8 +144,32 @@ export function AccountSection() {
     }
   };
 
+  const deleteAccount = async () => {
+    if (deleteBusy) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      const report = await collabDeleteAccount();
+      setDeleteReport(report);
+      setConfirmingDelete(false);
+      await refreshAuthStatus();
+      // Deleting the sign-in identity itself is Keycloak's to do, and only
+      // makes sense once the data it authorizes is actually gone.
+      if (report.collaborationDeleted && report.syncDeleted && report.accountConsoleUrl) {
+        await openUrl(report.accountConsoleUrl);
+      }
+    } catch (error) {
+      setConfirmingDelete(false);
+      setDeleteError(parseCollaborationError(error).message);
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
   const signedIn = auth?.status === "signedIn";
-  const accountConsoleUrl = auth?.accountConsoleUrl ?? null;
+  const accountConsoleUrl = deleteReport?.accountConsoleUrl ?? auth?.accountConsoleUrl ?? null;
+  const deletionIncomplete =
+    deleteReport !== null && (!deleteReport.collaborationDeleted || !deleteReport.syncDeleted);
   const statusText =
     auth?.status === "signedIn"
       ? "Signed in. This account authorizes both sync and collaboration."
@@ -205,8 +240,7 @@ export function AccountSection() {
               Manage account <ExternalLink size={12} />
             </button>
             <p className="mt-1 text-xs text-muted">
-              Change your password, review sessions or delete your account in your
-              browser.
+              Change your password, review sessions or delete your account in your browser.
             </p>
           </div>
         )}
@@ -215,15 +249,14 @@ export function AccountSection() {
           <div className="mt-3 border-t border-border pt-3 text-xs text-muted">
             <p className="flex items-center gap-1.5">
               <Loader2 size={12} className="animate-spin text-accent" />
-              Enter code{" "}
-              <strong className="font-mono text-foreground">{device.userCode}</strong> in
+              Enter code <strong className="font-mono text-foreground">
+                {device.userCode}
+              </strong> in
               your browser to finish signing in.
             </p>
             <button
               type="button"
-              onClick={() =>
-                void openUrl(device.verificationUriComplete ?? device.verificationUri)
-              }
+              onClick={() => void openUrl(device.verificationUriComplete ?? device.verificationUri)}
               className="mt-2 text-accent hover:underline"
             >
               Reopen sign-in page
@@ -237,6 +270,118 @@ export function AccountSection() {
           </p>
         )}
       </div>
+
+      {deleteReport && (
+        <div
+          className={
+            deletionIncomplete
+              ? "rounded-lg border border-danger/40 bg-danger/10 p-3"
+              : "rounded-lg border border-border bg-background p-3"
+          }
+        >
+          {deletionIncomplete ? (
+            <div role="alert">
+              <p className="text-sm font-medium text-danger">
+                Your account was only partly deleted.
+              </p>
+              <ul className="mt-1.5 space-y-1 text-xs text-muted">
+                {!deleteReport.collaborationDeleted && (
+                  <li>Collaboration data: {deleteReport.collaborationError}</li>
+                )}
+                {!deleteReport.syncDeleted && <li>Sync data: {deleteReport.syncError}</li>}
+              </ul>
+              <p className="mt-1.5 text-xs text-muted">
+                You are still signed in so you can try again. Whatever was already deleted stays
+                deleted.
+              </p>
+              <button
+                type="button"
+                onClick={() => void deleteAccount()}
+                disabled={deleteBusy}
+                className="mt-2.5 rounded-md border border-danger/50 px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:opacity-50"
+              >
+                {deleteBusy ? "Deleting…" : "Try again"}
+              </button>
+            </div>
+          ) : (
+            <div>
+              <p className="text-sm font-medium">Your Luma data has been deleted.</p>
+              <p className="mt-1 text-xs text-muted">
+                One step is left: delete the sign-in itself on your account page. We opened it in
+                your browser.
+              </p>
+              {accountConsoleUrl && (
+                <button
+                  type="button"
+                  onClick={() => void openUrl(accountConsoleUrl)}
+                  className="mt-2 flex items-center gap-1.5 text-xs text-accent hover:underline"
+                >
+                  Reopen account page <ExternalLink size={12} />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {signedIn && !deleteReport && (
+        <div className="rounded-lg border border-danger/40 bg-danger/5 p-3">
+          <p className="flex items-center gap-1.5 text-sm font-medium text-danger">
+            <Trash2 size={14} /> Delete account
+          </p>
+          <p className="mt-0.5 text-xs text-muted">
+            Permanently erase your Luma Cloud and collaboration data.
+          </p>
+          <button
+            type="button"
+            onClick={() => setConfirmingDelete(true)}
+            disabled={busy || deleteBusy}
+            className="mt-2.5 rounded-md border border-danger/50 px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:opacity-50"
+          >
+            Delete account…
+          </button>
+          {deleteError && (
+            <p role="alert" className="mt-2 text-xs text-danger">
+              {deleteError}
+            </p>
+          )}
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        onOpenChange={(next) => !next && setConfirmingDelete(false)}
+        title="Delete account"
+        destructive
+        busy={deleteBusy}
+        requireTyped="DELETE"
+        confirmLabel={deleteBusy ? "Deleting…" : "Delete account"}
+        onConfirm={() => void deleteAccount()}
+        message={
+          <div className="space-y-2">
+            <p className="font-medium text-foreground">This permanently deletes:</p>
+            <ul className="list-disc space-y-0.5 pl-4">
+              <li>Your encrypted sync data and every stored revision</li>
+              <li>
+                Shared vaults and rooms you own —{" "}
+                <span className="font-medium text-foreground">
+                  including for everyone you shared them with
+                </span>
+              </li>
+              <li>Your devices, memberships and encryption keys on both services</li>
+            </ul>
+            <p className="font-medium text-foreground">This does not delete:</p>
+            <ul className="list-disc space-y-0.5 pl-4">
+              <li>Hosts, keys, identities and snippets stored on this device</li>
+              <li>Vaults owned by other people — you are only removed from them</li>
+            </ul>
+            <p>
+              One last step happens in your browser: we will open your account page so you can
+              delete the sign-in itself. This cannot be undone.
+            </p>
+          </div>
+        }
+      />
     </div>
   );
 }

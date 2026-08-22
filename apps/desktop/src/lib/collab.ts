@@ -4,10 +4,7 @@ import type {
   RoomKeyEnvelope,
   SerializedDevicePrivateKey,
 } from "@luma/collaboration-encryption";
-import type {
-  EncryptedEventMessage,
-  RoomRole,
-} from "@luma/collaboration-protocol";
+import type { EncryptedEventMessage, RoomRole } from "@luma/collaboration-protocol";
 
 /*
  * Typed invoke wrappers for the collaborative-terminals backend. This module is
@@ -90,6 +87,18 @@ export type CollabAuthStatus = {
   serverUrl: string;
   expiresAt: number | null;
   /** Identity provider account console, or null when not signed in. */
+  accountConsoleUrl: string | null;
+};
+
+/**
+ * Per-service outcome of an account deletion. Both services are attempted even
+ * if one fails, so the UI can name what is left to retry.
+ */
+export type AccountDeletionReport = {
+  collaborationDeleted: boolean;
+  syncDeleted: boolean;
+  collaborationError: string | null;
+  syncError: string | null;
   accountConsoleUrl: string | null;
 };
 
@@ -222,6 +231,10 @@ export function collabAuthSignOut(): Promise<null> {
   return invoke<null>("collab_auth_sign_out", {});
 }
 
+export function collabDeleteAccount(): Promise<AccountDeletionReport> {
+  return invoke<AccountDeletionReport>("collab_delete_account", {});
+}
+
 // Device identity ------------------------------------------------------------
 
 export function collabGetDeviceIdentity(): Promise<DeviceIdentity | null> {
@@ -238,10 +251,7 @@ export function collabSetDeviceIdentity(identity: DeviceIdentity): Promise<null>
   });
 }
 
-export function collabRegisterDevice(
-  deviceId: string,
-  publicKey: DevicePublicKey,
-): Promise<null> {
+export function collabRegisterDevice(deviceId: string, publicKey: DevicePublicKey): Promise<null> {
   return invoke<null>("collab_register_device", {
     input: { deviceId, publicKey },
   });
@@ -388,9 +398,7 @@ export function parseJoinToken(token: string): JoinLinkPayload {
   }
   let json: string;
   try {
-    json = new TextDecoder().decode(
-      decodeBase64Url(token.slice(JOIN_TOKEN_PREFIX.length)),
-    );
+    json = new TextDecoder().decode(decodeBase64Url(token.slice(JOIN_TOKEN_PREFIX.length)));
   } catch {
     throw new Error("This join link is malformed.");
   }
@@ -460,8 +468,7 @@ export function parseCollaborationError(error: unknown): CollaborationError {
       return {
         code: record.code as CollaborationErrorCode,
         message: record.message,
-        httpStatus:
-          typeof record.httpStatus === "number" ? record.httpStatus : null,
+        httpStatus: typeof record.httpStatus === "number" ? record.httpStatus : null,
       };
     }
     if (typeof record.message === "string") {

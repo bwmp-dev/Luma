@@ -9,9 +9,15 @@ body {
   overflow: hidden;
 }
 
-/* Headless Chromium reports zero for iOS safe-area env() values. Emulate the
- * iPhone 14/15 Pro Max insets used by the 428 x 926 screenshot viewport. */
+/* Headless Chromium reports zero for safe-area env() values. Emulate the insets
+ * the shell actually gets on device: iPhone 14/15 Pro Max at the 428 x 926
+ * screenshot viewport, and an edge-to-edge Android activity (status bar plus a
+ * gesture-navigation bar) for the Play Store captures. */
 html[data-platform="ios"] {
   --emulated-safe-area-top: 32px;
   --emulated-safe-area-bottom: 34px;
+}
+html[data-platform="android"] {
+  --emulated-safe-area-top: 24px;
+  --emulated-safe-area-bottom: 24px;
 }

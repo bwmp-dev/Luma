@@ -220,6 +220,30 @@ The updater values in the checked-in Tauri configuration are CI placeholders.
 A local production bundle must provide its own valid updater endpoint and
 public key.
 
+Run `pnpm release:check` before merging the Release Please PR. Merging that PR
+is the stable-release switch: GitHub builds and signs the Windows, macOS, and
+Linux packages, notarizes the macOS DMG, verifies updater signatures, writes
+checksums, and publishes the release only after every platform succeeds.
+
+For Google Play, dispatch **Mobile release packages** with the published version.
+It builds and verifies a signed AAB and keeps it as a workflow artifact; enable
+`attach_to_release` to add it to the matching GitHub release. Configure these
+repository secrets once:
+
+- `ANDROID_KEYSTORE_BASE64`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+The keystore value is the base64 encoding of the Play upload keystore. Local
+signed AAB builds use the same four values as `LUMA_ANDROID_KEYSTORE` (a file
+path), `LUMA_ANDROID_KEYSTORE_PASSWORD`, `LUMA_ANDROID_KEY_ALIAS`, and
+`LUMA_ANDROID_KEY_PASSWORD`, then run `pnpm release:android`.
+
+After a stable release is published, dispatch **Distribution packages** with
+the same version to build Flatpak and Snap packages and optionally publish the
+AUR, Homebrew, Snap, and WinGet channels.
+
 ## License
 
 [MIT](LICENSE)

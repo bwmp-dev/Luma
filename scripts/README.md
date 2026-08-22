@@ -93,6 +93,48 @@ captured separately, so the website shows the shipping native UI too:
 pnpm screenshots:website-mobile   # downscales 1284 x 2778 -> 428 x 926 and @2x
 ```
 
+## Play Store assets (Android)
+
+Android does not need a device or a simulator: the mobile shell is pure DOM
+there. The Liquid Glass tab bar is iOS-only — `attachNativeTabBar` returns false
+for any non-iOS platform — so the web capsule Chromium draws is exactly what the
+Android build ships, and the headless capture is faithful.
+
+```sh
+pnpm screenshots:play             # phone + both tablet slots, dark and light
+pnpm screenshots:play --device phone
+pnpm screenshots:play:feature     # 1024 x 500 feature graphic
+```
+
+Output lands in `branding/screenshots/play/<slot>/<theme>/` plus
+`branding/screenshots/play/feature-graphic.png`.
+
+Play accepts 16:9 or 9:16 only, so every geometry divides exactly into 9:16 and
+sits inside the bounds for its slot:
+
+| Slot                | Pixels      | Play requirement          |
+| ------------------- | ----------- | ------------------------- |
+| `phone`             | 1080 x 1920 | sides 320..3840, 2-8 shots |
+| `tablet-7`          | 1152 x 2048 | sides 320..3840           |
+| `tablet-10`         | 1440 x 2560 | sides 1080..7680          |
+| feature graphic     | 1024 x 500  | exact, PNG/JPEG, <= 15 MB  |
+
+Two things the script has to do that are easy to miss:
+
+- **Theme comes from `prefers-color-scheme`, not the seeded setting.**
+  `hooks/useTheme` resolves the appearance from the media query, so the capture
+  calls `page.emulateMedia({ colorScheme })`. Without it every "dark" shot comes
+  back in Chromium's default light appearance — and it still reports success.
+- **The viewport width picks the terminal seed.** At or under 600 CSS px the
+  harness seeds the short-line session; above it, the full-width fetch output
+  (`isNarrowViewport` in `src/showcase/invokeHandlers.ts`). 7-inch is captured at
+  576 CSS px so it stays on the narrow seed — at 603 the wide output wrapped.
+
+The scripts resolve `vite` and `playwright` through `createRequire` anchored at
+`apps/desktop/package.json`. Both are devDependencies of that package, not of the
+workspace root, and pnpm does not hoist them, so a bare `import` would fail from
+`scripts/` whatever the cwd.
+
 Notes:
 
 - `devUrl` must be a **bare origin**. Tauri appends request paths to it as a

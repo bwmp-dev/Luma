@@ -6,6 +6,11 @@ import { useAgentInboxStore } from "../stores/agentInboxStore";
 import { terminalManager } from "../features/terminal/terminalManager";
 import { STATS_HOST } from "./seed";
 
+/* The mobile shell renders the same DOM on both phones; only the tab bar
+ * differs, and on Android that is the web capsule this harness already draws.
+ * So a scene is written once and captured for either platform. */
+export type ShowcasePlatform = "desktop" | "ios" | "android";
+
 export type ShowcaseView =
   | "terminal"
   | "hosts"
@@ -17,7 +22,8 @@ export type ShowcaseView =
   | "vaults"
   | "servers"
   | "agent-inbox"
-  | "sftp";
+  | "sftp"
+  | "delete-account";
 
 export const SHOWCASE_VIEWS: ShowcaseView[] = [
   "terminal",
@@ -29,6 +35,7 @@ export const SHOWCASE_VIEWS: ShowcaseView[] = [
   "servers",
   "agent-inbox",
   "sftp",
+  "delete-account",
 ];
 
 export function isShowcaseView(value: string): value is ShowcaseView {
@@ -194,9 +201,9 @@ async function seedAgentInbox(): Promise<void> {
 
 export async function applyScenario(
   view: ShowcaseView,
-  platform: "desktop" | "ios" = "desktop",
+  platform: ShowcasePlatform = "desktop",
 ): Promise<void> {
-  if (platform === "ios") {
+  if (platform !== "desktop") {
     const nav = useMobileNavStore.getState();
     // A full-screen session replaces the whole shell — including the landmark
     // waitForMobileShell looks for — so step out of it before waiting, whatever
@@ -250,6 +257,17 @@ export async function applyScenario(
         await clickButtonByText(STATS_HOST.name, "contains");
         await waitForText("docker-compose.yml");
       }
+    }
+    else if (view === "delete-account") {
+      // The account screen with the delete confirmation open: the surface App
+      // Review looks for, and the one that can only be checked on a device.
+      nav.navigate("profile", "settings-account");
+      await frame();
+      /* Exact match on the opener's label: the dialog's confirm button reads
+       * "Delete account" without the ellipsis, and a loose match would click
+       * that instead on the replay pass and actually run the deletion. Opening
+       * an already-open dialog is a no-op, so this stays the end state. */
+      await clickButtonByText("Delete account…");
     }
     else if (view === "agent-inbox") {
       await seedAgentInbox();

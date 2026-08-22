@@ -22,6 +22,20 @@ pnpm screenshots:ios
 These use a 428 x 926 logical iPhone viewport at 3x density and are written to
 `branding/screenshots/ios/<theme>/<view>.png`.
 
+For the Google Play listing (phone, 7-inch and 10-inch tablet slots, plus the
+1024 x 500 feature graphic):
+
+```sh
+pnpm screenshots:play
+pnpm screenshots:play:feature
+```
+
+These land in `branding/screenshots/play/`. Unlike the App Store shots they do
+not need a device: the iOS-only native tab bar has no Android counterpart, so the
+web shell Chromium renders is the one that ships there. See
+[`scripts/README.md`](../scripts/README.md#play-store-assets-android) for the
+accepted sizes and the two capture gotchas.
+
 Output lands in `branding/screenshots/<theme>/<view>.png` (plus a crisp
 `<view>@2x.png` variant), for every combination of:
 

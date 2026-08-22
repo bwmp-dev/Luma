@@ -1,6 +1,7 @@
 import type { Channel, InvokeArgs } from "./mocks/core";
 import { emitWindowEvent } from "./mocks/window";
 import type { ThemeMode } from "../types";
+import type { ShowcasePlatform } from "./scenarios";
 import {
   GROUPS,
   HOSTS,
@@ -28,8 +29,8 @@ type ByteChannel = Channel<ArrayBuffer | number[] | string>;
 
 const NARROW_VIEWPORT_MAX_PX = 600;
 
-function isNarrowViewport(platform: "desktop" | "ios"): boolean {
-  if (platform !== "ios") return false;
+function isNarrowViewport(platform: ShowcasePlatform): boolean {
+  if (platform === "desktop") return false;
   return typeof window !== "undefined" && window.innerWidth <= NARROW_VIEWPORT_MAX_PX;
 }
 
@@ -82,7 +83,7 @@ function driveLocal(channel: ByteChannel): void {
 
 export function createInvokeHandler(
   theme: ThemeMode,
-  platform: "desktop" | "ios" = "desktop",
+  platform: ShowcasePlatform = "desktop",
 ): (cmd: string, args: InvokeArgs) => unknown {
   const settings = buildSettings(theme);
   const sessions: Record<string, string> = {
@@ -93,12 +94,14 @@ export function createInvokeHandler(
   return (cmd, args) => {
     switch (cmd) {
       case "platform_capabilities":
-        return platform === "ios" ? {
-          os: "ios",
+        return platform !== "desktop" ? {
+          os: platform,
           isMobile: true,
           features: {
             localTerminal: false, serial: false, sshConfigImport: false, puttyImport: false, sftp: true,
-            portForwarding: false, updater: false, biometrics: true,
+            portForwarding: false, updater: false,
+            // Android exposes no biometric unlock yet; iOS does.
+            biometrics: platform === "ios",
             windowControls: false, folderSync: false, dragAndDrop: false,
           },
         } : {
@@ -215,6 +218,29 @@ export function createInvokeHandler(
 
       case "sftp_list":
         return { path: (args.path as string) ?? SFTP_INITIAL_PATH, entries: SFTP_LISTING };
+
+      // Signed in, so the Account screen shows the real signed-in surface —
+      // including the delete control, which is what the store review shots and
+      // the simulator check need to exercise.
+      case "collab_get_config":
+        return { serverUrl: "https://collab.luma.bwmp.dev" };
+      case "collab_auth_status":
+        return {
+          status: "signedIn",
+          serverUrl: "https://collab.luma.bwmp.dev",
+          expiresAt: null,
+          accountConsoleUrl: "https://auth.luma.bwmp.dev/realms/luma/account",
+        };
+      case "collab_delete_account":
+        return {
+          collaborationDeleted: true,
+          syncDeleted: true,
+          collaborationError: null,
+          syncError: null,
+          accountConsoleUrl: "https://auth.luma.bwmp.dev/realms/luma/account",
+        };
+      case "collab_get_device_identity":
+        return null;
 
       case "pty_write":
       case "pty_resize":

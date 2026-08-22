@@ -97,6 +97,42 @@ export class RoomRouter {
     this.rooms.clear();
   }
 
+  /**
+   * Tear down a room that is being deleted: drop the participants this instance
+   * is holding, then remove the Redis state that outlives their connections.
+   *
+   * Participants attached to another replica are not reachable from here. Their
+   * sockets go inert once the room's keys are gone and are cleaned up by the
+   * usual presence expiry, so they see a dead room rather than a live one.
+   */
+  async evictRoom(roomId: string): Promise<void> {
+    const connections = this.rooms.get(roomId);
+    if (connections) {
+      for (const connection of connections) {
+        connection.socket.close(4004, "room deleted");
+      }
+      this.rooms.delete(roomId);
+      await this.subscriber.unsubscribe(this.channelKey(roomId));
+    }
+    await this.deleteRoomKeys(roomId);
+  }
+
+  /**
+   * Every `luma:room:{id}:*` key. The control and presence families are keyed by
+   * terminal and connection id, so they cannot be enumerated up front — but the
+   * hash tag pins the whole room to one slot, which keeps the scan safe on a
+   * cluster.
+   */
+  private async deleteRoomKeys(roomId: string): Promise<void> {
+    for await (const keys of this.command.scanIterator({
+      MATCH: `luma:room:{${roomId}}:*`,
+      COUNT: 500,
+    })) {
+      const batch = Array.isArray(keys) ? keys : [keys];
+      if (batch.length > 0) await this.command.del(batch);
+    }
+  }
+
   async keyEpochChanged(roomId: string, keyEpoch: number): Promise<void> {
     await this.setCurrentKeyEpoch(roomId, keyEpoch);
     await this.publish(roomId, { type: "room.key-epoch", keyEpoch });

@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom';
 import { CrossPlatform } from './components/CrossPlatform';
+import { DeleteAccount } from './components/DeleteAccount';
 import { Download } from './components/Download';
 import { Features } from './components/Features';
 import { Footer } from './components/Footer';
@@ -16,6 +17,7 @@ export function App() {
       <Route path='/' element={<Home />} />
       <Route path='/support' element={<Support />} />
       <Route path='/privacy' element={<Privacy />} />
+      <Route path='/delete-account' element={<DeleteAccount />} />
     </Routes>
   );
 }

@@ -4,7 +4,13 @@ import { terminalManager } from "../features/terminal/terminalManager";
 import { useCapabilityStore, DESKTOP_CAPABILITIES, type PlatformCapabilities } from "../stores/capabilityStore";
 import { setInvokeHandler } from "./mocks/core";
 import { createInvokeHandler } from "./invokeHandlers";
-import { applyScenario, isShowcaseView, settleMs, type ShowcaseView } from "./scenarios";
+import {
+  applyScenario,
+  isShowcaseView,
+  settleMs,
+  type ShowcasePlatform,
+  type ShowcaseView,
+} from "./scenarios";
 import type { ThemeMode } from "../types";
 import "../styles/globals.css";
 import "./showcase.css";
@@ -19,7 +25,11 @@ type ShowcaseDefaults = {
   view?: string | null;
 };
 
-function readParams(): { view: ShowcaseView; theme: "dark" | "light"; platform: "desktop" | "ios" } {
+function isShowcasePlatform(value: string): value is ShowcasePlatform {
+  return value === "ios" || value === "android" || value === "desktop";
+}
+
+function readParams(): { view: ShowcaseView; theme: "dark" | "light"; platform: ShowcasePlatform } {
   const params = new URLSearchParams(window.location.search);
   const defaults =
     (window as unknown as { __SHOWCASE_DEFAULTS__?: ShowcaseDefaults })
@@ -29,27 +39,29 @@ function readParams(): { view: ShowcaseView; theme: "dark" | "light"; platform: 
   const rawPlatform = params.get("platform") ?? defaults.platform ?? "desktop";
   const view = isShowcaseView(rawView) ? rawView : "terminal";
   const theme = rawTheme === "light" ? "light" : "dark";
-  const platform = rawPlatform === "ios" ? "ios" : "desktop";
+  const platform = isShowcasePlatform(rawPlatform) ? rawPlatform : "desktop";
   return { view, theme, platform };
 }
 
-const IOS_CAPABILITIES: PlatformCapabilities = {
-  os: "ios",
-  isMobile: true,
-  features: {
-    localTerminal: false,
-    serial: false,
-    sshConfigImport: false,
-    puttyImport: false,
-    sftp: true,
-    portForwarding: true,
-    updater: false,
-    biometrics: true,
-    windowControls: false,
-    folderSync: false,
-    dragAndDrop: false,
-  },
-};
+function mobileCapabilities(os: "ios" | "android"): PlatformCapabilities {
+  return {
+    os,
+    isMobile: true,
+    features: {
+      localTerminal: false,
+      serial: false,
+      sshConfigImport: false,
+      puttyImport: false,
+      sftp: true,
+      portForwarding: true,
+      updater: false,
+      biometrics: os === "ios",
+      windowControls: false,
+      folderSync: false,
+      dragAndDrop: false,
+    },
+  };
+}
 
 function markReady(): void {
   document.documentElement.setAttribute("data-showcase-ready", "true");
@@ -78,7 +90,7 @@ function applyTheme(theme: "dark" | "light"): void {
 }
 
 async function watchScenarioChannel(
-  platform: "desktop" | "ios",
+  platform: ShowcasePlatform,
   initialSeq: number,
 ): Promise<void> {
   let lastSeq = initialSeq;
@@ -129,7 +141,7 @@ async function boot(): Promise<void> {
   document.documentElement.dataset.platform = platform;
   applyTheme(theme);
   useCapabilityStore.getState().setCapabilities(
-    platform === "ios" ? IOS_CAPABILITIES : DESKTOP_CAPABILITIES,
+    platform === "desktop" ? DESKTOP_CAPABILITIES : mobileCapabilities(platform),
   );
 
   setInvokeHandler(createInvokeHandler(theme as ThemeMode, platform));

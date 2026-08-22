@@ -8,6 +8,7 @@ const pages = [
   { route: '/', file: 'index.html' },
   { route: '/support', file: 'support/index.html' },
   { route: '/privacy', file: 'privacy/index.html' },
+  { route: '/delete-account', file: 'delete-account/index.html' },
 ] as const;
 
 const distDirectory = resolve(import.meta.dirname, '../dist');

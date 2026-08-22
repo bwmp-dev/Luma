@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import type {
@@ -46,6 +46,12 @@ export interface CreatedInvite {
   keyEpoch: number;
   expiresAt: string;
 }
+
+export type AccountDeletionReport = {
+  roomsDeleted: number;
+  membershipsRemoved: number;
+  devicesRemoved: number;
+};
 
 export interface RedeemedInvite {
   memberId: string;
@@ -386,6 +392,69 @@ export class Database {
         [{ deviceId, envelope: keyEnvelope }],
       );
       return { memberId: member.id, role: invite.role, keyEpoch: invite.keyEpoch };
+    });
+  }
+
+  /** Rooms this subject owns, so the caller can purge their snapshots and Redis
+   * state before the rows that point at them are deleted. */
+  async ownedRoomIds(subject: string): Promise<string[]> {
+    const rows = await this.orm
+      .select({ id: rooms.id })
+      .from(rooms)
+      .where(eq(rooms.ownerSubject, subject));
+    return rows.map((row) => row.id);
+  }
+
+  /**
+   * Delete the account and everything hanging off it, in one transaction.
+   *
+   * Order is dictated by the foreign keys: `room_member_keys.device_id`
+   * references `devices` without a cascade, so every envelope sealed to this
+   * account's devices — including envelopes living in rooms other people own —
+   * must go before the devices themselves. Rooms cascade to their invites,
+   * members and keys; memberships in other people's rooms are removed without
+   * touching those rooms.
+   *
+   * Idempotent: an unknown subject deletes nothing and reports zeroes.
+   */
+  async deleteAccount(subject: string): Promise<AccountDeletionReport> {
+    return await this.orm.transaction(async (tx) => {
+      const owned = await tx
+        .select({ id: rooms.id })
+        .from(rooms)
+        .where(eq(rooms.ownerSubject, subject));
+      const ownedIds = owned.map((row) => row.id);
+
+      const ownedDevices = await tx
+        .select({ id: devices.id })
+        .from(devices)
+        .where(eq(devices.subject, subject));
+
+      for (const device of ownedDevices) {
+        await tx.delete(roomMemberKeys).where(eq(roomMemberKeys.deviceId, device.id));
+      }
+      if (ownedIds.length > 0) {
+        await tx.delete(roomMemberKeys).where(inArray(roomMemberKeys.roomId, ownedIds));
+        await tx.delete(roomInvites).where(inArray(roomInvites.roomId, ownedIds));
+        await tx.delete(roomMembers).where(inArray(roomMembers.roomId, ownedIds));
+      }
+
+      const memberships = await tx
+        .delete(roomMembers)
+        .where(eq(roomMembers.subject, subject))
+        .returning({ id: roomMembers.id });
+
+      if (ownedIds.length > 0) {
+        await tx.delete(rooms).where(inArray(rooms.id, ownedIds));
+      }
+      await tx.delete(devices).where(eq(devices.subject, subject));
+      await tx.delete(accounts).where(eq(accounts.subject, subject));
+
+      return {
+        roomsDeleted: ownedIds.length,
+        membershipsRemoved: memberships.length,
+        devicesRemoved: ownedDevices.length,
+      };
     });
   }
 

@@ -2,13 +2,13 @@ use serde::Deserialize;
 use tauri::State;
 
 use crate::collaboration::{
-    self, AddRoomMemberInput, AddRoomMemberResponse, AuthPollResponse, AuthStartResponse,
-    AuthStatusResponse, CollaborationConfig, CollaborationInvite, CollaborationResult,
-    CollaborationRuntimeState, CreateInviteResponse, CreateRoomInput, CreateRoomResponse,
-    DeviceIdentity, DevicesResponse, MintCapabilityResponse, ParseInviteInput, PutSnapshotInput,
-    PutSnapshotResponse, RealtimeTicketResponse, RegisterDeviceInput, RoomDetailsResponse,
-    RoomDeviceInput, RoomInput, RotateRoomKeyInput, SelfJoinResponse, SetDeviceIdentityInput,
-    SetServerUrlInput, SnapshotResponse,
+    self, AccountDeletionReport, AddRoomMemberInput, AddRoomMemberResponse, AuthPollResponse,
+    AuthStartResponse, AuthStatusResponse, CollaborationConfig, CollaborationInvite,
+    CollaborationResult, CollaborationRuntimeState, CreateInviteResponse, CreateRoomInput,
+    CreateRoomResponse, DeviceIdentity, DevicesResponse, MintCapabilityResponse, ParseInviteInput,
+    PutSnapshotInput, PutSnapshotResponse, RealtimeTicketResponse, RegisterDeviceInput,
+    RoomDetailsResponse, RoomDeviceInput, RoomInput, RotateRoomKeyInput, SelfJoinResponse,
+    SetDeviceIdentityInput, SetServerUrlInput, SnapshotResponse,
 };
 use crate::keystore::KeystoreState;
 use crate::AppState;
@@ -79,6 +79,15 @@ pub async fn collab_auth_sign_out(
     keystore_state: State<'_, KeystoreState>,
 ) -> CollaborationResult<()> {
     collaboration::auth_sign_out(&state.pool, &runtime, &keystore_state).await
+}
+
+#[tauri::command]
+pub async fn collab_delete_account(
+    state: State<'_, AppState>,
+    runtime: State<'_, CollaborationRuntimeState>,
+    keystore_state: State<'_, KeystoreState>,
+) -> CollaborationResult<AccountDeletionReport> {
+    collaboration::delete_account(&state.pool, &runtime, &keystore_state).await
 }
 
 #[tauri::command]

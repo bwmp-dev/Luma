@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Modal } from "./Modal";
 import { cn } from "../lib/utils";
 
@@ -13,6 +14,7 @@ export function ConfirmDialog({
   cancelLabel = "Cancel",
   destructive = false,
   busy = false,
+  requireTyped,
   onConfirm,
 }: {
   open: boolean;
@@ -23,8 +25,19 @@ export function ConfirmDialog({
   cancelLabel?: string;
   destructive?: boolean;
   busy?: boolean;
+  /** When set, the confirm button unlocks only once this exact word is typed.
+   * For actions that are irreversible or affect other people. */
+  requireTyped?: string;
   onConfirm: () => void;
 }) {
+  const [typed, setTyped] = useState("");
+
+  // Reopening must not inherit the previous attempt's typed confirmation.
+  useEffect(() => {
+    if (!open) setTyped("");
+  }, [open]);
+
+  const locked = requireTyped !== undefined && typed !== requireTyped;
   return (
     <Modal
       open={open}
@@ -43,7 +56,7 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onConfirm}
-            disabled={busy}
+            disabled={busy || locked}
             className={cn(
               "rounded-md px-3 py-1.5 text-sm font-medium disabled:opacity-50",
               destructive
@@ -57,6 +70,23 @@ export function ConfirmDialog({
       }
     >
       <div className="text-sm text-muted">{message}</div>
+      {requireTyped !== undefined && (
+        <label className="mt-3 block">
+          <span className="text-xs text-muted">
+            Type <span className="font-medium text-foreground">{requireTyped}</span> to
+            confirm.
+          </span>
+          <input
+            value={typed}
+            onChange={(event) => setTyped(event.target.value)}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
+            className="mt-1.5 w-full rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-sm text-foreground outline-none focus:border-accent"
+          />
+        </label>
+      )}
     </Modal>
   );
 }

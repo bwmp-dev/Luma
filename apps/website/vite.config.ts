@@ -15,6 +15,7 @@ export default defineConfig(async () => ({
         main: resolve(import.meta.dirname, "index.html"),
         support: resolve(import.meta.dirname, "support/index.html"),
         privacy: resolve(import.meta.dirname, "privacy/index.html"),
+        "delete-account": resolve(import.meta.dirname, "delete-account/index.html"),
       },
     },
   },

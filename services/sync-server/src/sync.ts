@@ -41,11 +41,11 @@ export async function vaultTarget(env: Env, vault: Vault): Promise<SyncTarget> {
   };
 }
 
-function currentKey(target: SyncTarget): string {
+function currentKey(target: Pick<SyncTarget, "prefix">): string {
   return `${target.prefix}/current.luma`;
 }
 
-function revisionsPrefix(target: SyncTarget): string {
+function revisionsPrefix(target: Pick<SyncTarget, "prefix">): string {
   return `${target.prefix}/revisions/`;
 }
 
@@ -174,7 +174,15 @@ async function pruneRevisions(env: Env, target: SyncTarget): Promise<void> {
   }
 }
 
-export async function deleteAll(env: Env, target: SyncTarget): Promise<void> {
+/**
+ * Remove a target's current blob and every retained revision. Takes only the
+ * prefix, not a full `SyncTarget`, so an account being deleted can be purged
+ * without first resolving quotas that its own deletion is invalidating.
+ */
+export async function deleteAll(
+  env: Env,
+  target: Pick<SyncTarget, "prefix">,
+): Promise<void> {
   const keys = [currentKey(target)];
   let cursor: string | undefined;
   do {

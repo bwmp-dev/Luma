@@ -1,7 +1,8 @@
-import { getOrCreateAccount, markDeleted } from "./accounts";
+import { getOrCreateAccount } from "./accounts";
 import { authenticate, HttpError } from "./auth";
+import { purgeAccountData } from "./deletion";
 import { json } from "./responses";
-import { accountTarget, deleteAll, download, upload, vaultTarget } from "./sync";
+import { accountTarget, download, upload, vaultTarget } from "./sync";
 import {
   bumpKeyEpoch,
   createInvite,
@@ -63,9 +64,7 @@ export function createHandler(authenticator: Authenticator = authenticate) {
           if (request.headers.get("x-confirm-delete") !== "delete-my-account") {
             throw new HttpError(400, "account deletion confirmation is required");
           }
-          await deleteAll(env, accountTarget(account));
-          await markDeleted(env, account.subject);
-          return new Response(null, { status: 204 });
+          return json(200, await purgeAccountData(env, account));
         }
         if (url.pathname === "/v1/account" && request.method === "GET") {
           return json(200, {

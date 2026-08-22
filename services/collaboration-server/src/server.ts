@@ -11,6 +11,7 @@ import {
 import { Authenticator, HttpError } from "./auth.js";
 import { loadConfig } from "./config.js";
 import { Database } from "./database.js";
+import { AccountDeleter } from "./deletion.js";
 import { RoomRouter } from "./roomRouter.js";
 import { SNAPSHOT_CONTENT_TYPE, SnapshotStorage } from "./storage.js";
 import { TicketStore } from "./tickets.js";
@@ -24,6 +25,7 @@ const authenticator = new Authenticator(config);
 const tickets = new TicketStore(redis, config);
 const snapshots = new SnapshotStorage(config);
 const roomRouter = new RoomRouter(redis, subscriber, config);
+const accountDeleter = new AccountDeleter(database, snapshots, roomRouter);
 const webSockets = new WebSocketServer({ noServer: true, maxPayload: config.maxEventBytes });
 const DEFAULT_CAPABILITY_TTL_SECONDS = 86_400;
 const MIN_CAPABILITY_TTL_SECONDS = 60;
@@ -88,6 +90,14 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
   const user = await authenticator.authenticate(request.headers);
   await enforceHttpRateLimit(user.subject);
   await database.ensureAccount(user.subject);
+
+  if (method === "DELETE" && url.pathname === "/v1/account") {
+    if (singleHeader(request.headers["x-confirm-delete"]) !== "delete-my-account") {
+      throw new HttpError(400, "account deletion confirmation is required");
+    }
+    sendJson(response, 200, await accountDeleter.purge(user.subject));
+    return;
+  }
 
   if (method === "POST" && url.pathname === "/v1/devices") {
     const body = await readJson(request, 32 * 1024);

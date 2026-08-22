@@ -289,6 +289,12 @@ async function invite(
   return ((await response.json()) as { secret: string }).secret;
 }
 
+function deleteAccount(server: Server, subject: string): Promise<Response> {
+  return server.call(subject, "DELETE", "/v1/account", undefined, {
+    "x-confirm-delete": "delete-my-account",
+  });
+}
+
 describe("sync API", () => {
   it("isolates storage using only the authenticated subject", async () => {
     const server = createTestServer();
@@ -655,5 +661,135 @@ describe("vault sync", () => {
       server.context,
     );
     expect(overQuota.status).toBe(413);
+  });
+
+  it("erases the personal blob and every retained revision", async () => {
+    const server = createTestServer();
+    await server.call("alice", "PUT", "/v1/sync", "first", { "if-none-match": "*" });
+    const [stored] = [...server.bucket.objects.keys()];
+    const etag = server.bucket.objects.get(stored)!.etag;
+    await server.call("alice", "PUT", "/v1/sync", "second", { "if-match": etag });
+    expect([...server.bucket.objects.keys()].some((key) => key.includes("/revisions/")))
+      .toBe(true);
+
+    const deleted = await deleteAccount(server, "alice");
+    expect(deleted.status).toBe(200);
+    expect([...server.bucket.objects.keys()]).toEqual([]);
+    expect(server.database.query("SELECT 1 FROM accounts WHERE subject = 'alice'"))
+      .toEqual([]);
+  });
+
+  it("erases vaults the account owns, blobs and rows alike", async () => {
+    const server = createTestServer();
+    const vaultId = await createVault(server, "alice");
+    await server.call("alice", "PUT", `/v1/vaults/${vaultId}/sync`, "vault data", {
+      "if-none-match": "*",
+    });
+    expect([...server.bucket.objects.keys()].some((key) => key.startsWith("vaults/")))
+      .toBe(true);
+
+    const report = await (await deleteAccount(server, "alice")).json();
+    expect(report).toMatchObject({ vaultsDeleted: 1 });
+    expect([...server.bucket.objects.keys()]).toEqual([]);
+    expect(server.database.query("SELECT 1 FROM vaults")).toEqual([]);
+    expect(server.database.query("SELECT 1 FROM vault_members")).toEqual([]);
+  });
+
+  it("takes a shared vault away from its other members", async () => {
+    const server = createTestServer();
+    const vaultId = await createVault(server, "alice");
+    const secret = await invite(server, "alice", vaultId, "writer");
+    await server.callJson("bob", "POST", "/v1/vaults/join", { secret });
+    await server.call("alice", "PUT", `/v1/vaults/${vaultId}/sync`, "shared", {
+      "if-none-match": "*",
+    });
+
+    await deleteAccount(server, "alice");
+
+    const afterward = await server.call("bob", "GET", `/v1/vaults/${vaultId}/sync`);
+    expect(afterward.status).toBe(404);
+    expect(server.database.query("SELECT 1 FROM vaults")).toEqual([]);
+  });
+
+  it("leaves vaults owned by others intact when a member deletes", async () => {
+    const server = createTestServer();
+    const vaultId = await createVault(server, "alice");
+    const secret = await invite(server, "alice", vaultId, "writer");
+    await server.callJson("bob", "POST", "/v1/vaults/join", { secret });
+    await server.call("alice", "PUT", `/v1/vaults/${vaultId}/sync`, "shared", {
+      "if-none-match": "*",
+    });
+
+    const report = await (await deleteAccount(server, "bob")).json();
+    expect(report).toMatchObject({ vaultsDeleted: 0, membershipsRemoved: 1 });
+
+    const owner = await server.call("alice", "GET", `/v1/vaults/${vaultId}/sync`);
+    expect(owner.status).toBe(200);
+    expect(
+      server.database.query("SELECT 1 FROM vault_members WHERE subject = 'bob'"),
+    ).toEqual([]);
+  });
+
+  it("removes the account's devices and sealed keys everywhere", async () => {
+    const server = createTestServer();
+    const vaultId = await createVault(server, "alice");
+    const secret = await invite(server, "alice", vaultId, "writer");
+    await server.callJson("bob", "POST", "/v1/vaults/join", { secret });
+    await server.callJson("bob", "POST", "/v1/vaults/devices", {
+      deviceId: "bob-laptop",
+      publicKey: { kty: "EC" },
+    });
+    await server.callJson("alice", "POST", `/v1/vaults/${vaultId}/keys`, {
+      keys: [{ subject: "bob", deviceId: "bob-laptop", envelope: { ciphertext: "s" } }],
+    });
+
+    const report = await (await deleteAccount(server, "bob")).json();
+    expect(report).toMatchObject({ devicesRemoved: 1 });
+    expect(
+      server.database.query("SELECT 1 FROM vault_devices WHERE subject = 'bob'"),
+    ).toEqual([]);
+    // The key lived in Alice's vault, but it was sealed to Bob's device.
+    expect(
+      server.database.query("SELECT 1 FROM vault_member_keys WHERE subject = 'bob'"),
+    ).toEqual([]);
+  });
+
+  it("is idempotent, so a retry after a partial failure is safe", async () => {
+    const server = createTestServer();
+    await createVault(server, "alice");
+
+    const first = await (await deleteAccount(server, "alice")).json();
+    expect(first).toMatchObject({ vaultsDeleted: 1 });
+
+    const second = await deleteAccount(server, "alice");
+    expect(second.status).toBe(200);
+    expect(await second.json()).toEqual({
+      vaultsDeleted: 0,
+      membershipsRemoved: 0,
+      devicesRemoved: 0,
+    });
+  });
+
+  it("refuses to delete without the confirmation header", async () => {
+    const server = createTestServer();
+    await server.call("alice", "PUT", "/v1/sync", "keep me", { "if-none-match": "*" });
+
+    const response = await server.call("alice", "DELETE", "/v1/account");
+    expect(response.status).toBe(400);
+    expect([...server.bucket.objects.keys()].length).toBe(1);
+  });
+
+  it("lets a deleted subject sign up again", async () => {
+    const server = createTestServer();
+    await server.call("alice", "PUT", "/v1/sync", "before", { "if-none-match": "*" });
+    await deleteAccount(server, "alice");
+
+    // A soft delete would leave `deleted_at` set and lock this subject out of
+    // every route forever, which is reachable whenever the user deletes their
+    // Luma data but keeps their identity provider account.
+    const again = await server.call("alice", "PUT", "/v1/sync", "after", {
+      "if-none-match": "*",
+    });
+    expect(again.status).toBe(204);
   });
 });

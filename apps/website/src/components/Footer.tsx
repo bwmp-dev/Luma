@@ -41,6 +41,12 @@ export function Footer() {
             >
               Privacy
             </Link>
+            <Link
+              to='/delete-account'
+              className='rounded-sm transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent'
+            >
+              Delete account
+            </Link>
             <a
               href={DISCORD_INVITE_URL}
               target='_blank'

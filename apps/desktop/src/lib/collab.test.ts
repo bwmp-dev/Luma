@@ -4,6 +4,7 @@ import {
   buildJoinToken,
   collabAddRoomMember,
   collabCreateRoom,
+  collabDeleteAccount,
   collabJoinRoomWithCapability,
   collabMintRoomCapability,
   collabSetServerUrl,
@@ -37,6 +38,23 @@ describe("parseCollaborationError", () => {
 });
 
 describe("command adapters wrap arguments in the contract shape", () => {
+  it("collab_delete_account takes no arguments", async () => {
+    let captured: unknown;
+    setInvoke((cmd, args) => {
+      captured = { cmd, args };
+      return {
+        collaborationDeleted: true,
+        syncDeleted: true,
+        collaborationError: null,
+        syncError: null,
+        accountConsoleUrl: "https://auth.example/realms/luma/account",
+      };
+    });
+    const report = await collabDeleteAccount();
+    expect(captured).toEqual({ cmd: "collab_delete_account", args: {} });
+    expect(report.accountConsoleUrl).toBe("https://auth.example/realms/luma/account");
+  });
+
   it("collab_create_room passes roomId + deviceKeys under input", async () => {
     let captured: unknown;
     setInvoke((cmd, args) => {

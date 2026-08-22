@@ -107,7 +107,7 @@ export function Privacy() {
 
           <PolicySection title='Your choices and deletion'>
             <p>
-              You can use Luma without an account, cloud sync, or collaboration. You can decline product analytics at the first-run prompt, or turn them off at any time in Settings → Privacy. You can disable sync or sign out at any time. To delete a Luma Cloud account and its encrypted sync copies, or to request deletion of support correspondence, contact us at the address below. Deleting a cloud account does not delete copies already downloaded to your devices, shared with collaborators, or stored with a third-party sync provider. You can avoid website analytics by using browser tracking protection or a content blocker.
+              You can use Luma without an account, cloud sync, or collaboration. You can decline product analytics at the first-run prompt, or turn them off at any time in Settings → Privacy. You can disable sync or sign out at any time. You can delete your Luma Cloud account and its encrypted sync copies from the app, in Settings → Account, or from the{' '}<Link to='/delete-account' className='font-medium text-accent hover:text-accent-strong'>account deletion page</Link>{' '}if you no longer have Luma installed; to request deletion of support correspondence, contact us at the address below. Deleting a cloud account does not delete copies already downloaded to your devices, shared with collaborators, or stored with a third-party sync provider. You can avoid website analytics by using browser tracking protection or a content blocker.
             </p>
           </PolicySection>
 

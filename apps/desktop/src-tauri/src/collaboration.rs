@@ -26,6 +26,12 @@ const MAX_AUTH_RESPONSE_BYTES: usize = 64 * 1024;
 const MAX_SNAPSHOT_BYTES: usize = 64 * 1024 * 1024;
 const INVITE_PREFIX: &str = "luma-collab-invite-v1.";
 const SESSION_SECRET_ID: &str = "oidc-session";
+const ACCOUNT_PATH: &str = "/v1/account";
+const CONFIRM_DELETE_HEADER: &str = "x-confirm-delete";
+const CONFIRM_DELETE_VALUE: &str = "delete-my-account";
+/// Where Luma Cloud lives unless the user points at their own deployment.
+/// Mirrors `DEFAULT_LUMA_CLOUD_URL` in the frontend's `lib/sync.ts`.
+const DEFAULT_LUMA_CLOUD_URL: &str = "https://sync.luma.bwmp.dev";
 const PRIVATE_KEY_SECRET_ID: &str = "device-private-key";
 #[cfg(any(target_os = "android", target_os = "ios"))]
 const KEYSTORE_OWNER: &str = "collaboration-credential";
@@ -348,6 +354,19 @@ pub struct AuthStatusResponse {
     /// Where the identity provider lets the user manage (or delete) the
     /// account. Only known once a session exists, since it derives from the
     /// issuer the session was minted against.
+    pub account_console_url: Option<String>,
+}
+
+/// Outcome of an account deletion. Each service reports independently: a
+/// failure on one must not hide the other's success, because the user needs to
+/// know exactly what is left to retry.
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountDeletionReport {
+    pub collaboration_deleted: bool,
+    pub sync_deleted: bool,
+    pub collaboration_error: Option<String>,
+    pub sync_error: Option<String>,
     pub account_console_url: Option<String>,
 }
 
@@ -843,6 +862,142 @@ pub async fn auth_sign_out(
     secret_delete(pool, keystore_state, SESSION_SECRET_ID).await?;
     *runtime.pending_auth.lock().unwrap() = None;
     Ok(())
+}
+
+/// Delete the Luma account's server-side data on both services.
+///
+/// Both are attempted regardless of the other's outcome — one service being
+/// down must not shield the other's copy of the user's data. The local session
+/// is cleared only when both succeeded, so a partial failure leaves the user
+/// signed in and able to retry rather than locked out of data that still
+/// exists. Both endpoints are idempotent, so retrying is always safe.
+///
+/// Deleting the sign-in identity itself happens in the browser, which is why
+/// the report carries the account console URL.
+pub async fn delete_account(
+    pool: &SqlitePool,
+    runtime: &CollaborationRuntimeState,
+    keystore_state: &KeystoreState,
+) -> CollaborationResult<AccountDeletionReport> {
+    let console_url = load_session(pool, keystore_state)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|session| account_console_url(&session.issuer));
+
+    let collaboration = purge_collaboration_account(pool, runtime, keystore_state).await;
+    let sync = purge_sync_accounts(pool, runtime, keystore_state).await;
+
+    let report = AccountDeletionReport {
+        collaboration_deleted: collaboration.is_ok(),
+        sync_deleted: sync.is_ok(),
+        collaboration_error: collaboration.err().map(|error| error.message),
+        sync_error: sync.err().map(|error| error.message),
+        account_console_url: console_url,
+    };
+
+    if report.collaboration_deleted && report.sync_deleted {
+        auth_sign_out(pool, runtime, keystore_state).await?;
+    }
+    Ok(report)
+}
+
+/// A response that means the account is not there. Absence is the goal, so
+/// these count as success — otherwise a retry after a partial deletion could
+/// never complete.
+fn is_already_gone(status: StatusCode) -> bool {
+    matches!(
+        status,
+        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN | StatusCode::NOT_FOUND
+    )
+}
+
+async fn purge_collaboration_account(
+    pool: &SqlitePool,
+    runtime: &CollaborationRuntimeState,
+    keystore_state: &KeystoreState,
+) -> CollaborationResult<()> {
+    let response =
+        authenticated_request(pool, runtime, keystore_state, Method::DELETE, ACCOUNT_PATH)
+            .await?
+            .header(CONFIRM_DELETE_HEADER, CONFIRM_DELETE_VALUE)
+            .send()
+            .await
+            .map_err(network_error)?;
+    if response.status().is_success() || is_already_gone(response.status()) {
+        return Ok(());
+    }
+    Err(server_error(response).await)
+}
+
+/// Purge the account from every Luma Cloud deployment this device syncs with.
+///
+/// The sync server is configured per vault rather than globally, so the URLs
+/// come from `sync_state`. The default cloud URL is always included: signing in
+/// creates an account row server-side even if the user never configured sync,
+/// and that row is still their data.
+async fn purge_sync_accounts(
+    pool: &SqlitePool,
+    runtime: &CollaborationRuntimeState,
+    keystore_state: &KeystoreState,
+) -> CollaborationResult<()> {
+    let urls = configured_cloud_urls(pool).await;
+    let token = account_access_token(pool, runtime, keystore_state).await?;
+    let client = http_client()?;
+
+    let mut failure = None;
+    for url in urls {
+        let response = client
+            .request(Method::DELETE, format!("{url}{ACCOUNT_PATH}"))
+            .bearer_auth(&token)
+            .header(CONFIRM_DELETE_HEADER, CONFIRM_DELETE_VALUE)
+            .send()
+            .await;
+        // Every deployment is attempted: one being unreachable must not leave
+        // another's copy of the data in place.
+        match response {
+            Err(error) => failure = Some(network_error(error)),
+            Ok(response) => {
+                if !response.status().is_success() && !is_already_gone(response.status()) {
+                    failure = Some(server_error(response).await);
+                }
+            }
+        }
+    }
+    match failure {
+        Some(error) => Err(error),
+        None => Ok(()),
+    }
+}
+
+/// Distinct Luma Cloud origins this device has configured, plus the default.
+async fn configured_cloud_urls(pool: &SqlitePool) -> Vec<String> {
+    let mut urls = vec![DEFAULT_LUMA_CLOUD_URL.to_string()];
+    let rows = sqlx::query("SELECT state FROM sync_state WHERE provider = 'luma-cloud'")
+        .fetch_all(pool)
+        .await
+        .unwrap_or_default();
+    for row in rows {
+        let Ok(state) = row.try_get::<Option<String>, _>("state") else {
+            continue;
+        };
+        let Some(url) = state
+            .and_then(|state| serde_json::from_str::<serde_json::Value>(&state).ok())
+            .and_then(|state| {
+                state
+                    .get("cloudUrl")
+                    .and_then(|value| value.as_str())
+                    .map(str::to_string)
+            })
+        else {
+            continue;
+        };
+        let url = url.trim_end_matches('/').to_string();
+        if validate_external_https_url(&url, "Luma Cloud URL").is_ok() && !urls.contains(&url) {
+            urls.push(url);
+        }
+    }
+    urls
 }
 
 pub async fn register_device(
@@ -2090,6 +2245,42 @@ fn build_realtime_url(server_url: &str, ticket: &str) -> CollaborationResult<Str
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn account_console_url_appends_the_account_path() {
+        assert_eq!(
+            account_console_url("https://auth.luma.bwmp.dev/realms/luma").as_deref(),
+            Some("https://auth.luma.bwmp.dev/realms/luma/account"),
+        );
+    }
+
+    #[test]
+    fn account_console_url_tolerates_a_trailing_slash() {
+        assert_eq!(
+            account_console_url("https://auth.luma.bwmp.dev/realms/luma/").as_deref(),
+            Some("https://auth.luma.bwmp.dev/realms/luma/account"),
+        );
+    }
+
+    #[test]
+    fn account_console_url_rejects_an_untrustworthy_issuer() {
+        // The URL is handed to the OS browser, so it gets the same treatment as
+        // any other endpoint the server names.
+        assert!(account_console_url("http://auth.luma.bwmp.dev/realms/luma").is_none());
+        assert!(account_console_url("https://user:pw@auth.example/realms/luma").is_none());
+        assert!(account_console_url("not a url").is_none());
+    }
+
+    #[test]
+    fn already_gone_statuses_count_as_deleted() {
+        // Absence is the goal: treating these as failures would make a retry
+        // after a partial deletion impossible to complete.
+        assert!(is_already_gone(StatusCode::UNAUTHORIZED));
+        assert!(is_already_gone(StatusCode::FORBIDDEN));
+        assert!(is_already_gone(StatusCode::NOT_FOUND));
+        assert!(!is_already_gone(StatusCode::INTERNAL_SERVER_ERROR));
+        assert!(!is_already_gone(StatusCode::BAD_GATEWAY));
+    }
 
     fn public_key() -> DevicePublicKey {
         DevicePublicKey {

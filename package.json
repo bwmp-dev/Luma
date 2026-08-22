@@ -27,6 +27,8 @@
     "screenshots:ios": "node scripts/capture-ios-screenshots.mjs",
     "screenshots:ipad": "node scripts/capture-ipad-screenshots.mjs",
     "screenshots:website-mobile": "node scripts/derive-website-mobile-screenshots.mjs",
+    "screenshots:play": "node scripts/capture-play-screenshots.mjs",
+    "screenshots:play:feature": "node scripts/render-play-feature-graphic.mjs",
     "showcase:serve": "SHOWCASE_PLATFORM=ios pnpm --dir apps/desktop exec vite --config showcase.vite.config.ts --port 4173 --strictPort",
     "showcase:sim:iphone": "pnpm --dir apps/desktop exec tauri ios dev \"Luma-iPhone-6.5\" --no-dev-server-wait -c '{\"build\":{\"beforeDevCommand\":\"\",\"devUrl\":\"http://localhost:4173\"}}'",
     "showcase:sim:ipad": "pnpm --dir apps/desktop exec tauri ios dev \"Luma-iPad-13\" --no-dev-server-wait -c '{\"build\":{\"beforeDevCommand\":\"\",\"devUrl\":\"http://localhost:4173\"}}'",
@@ -38,6 +40,9 @@
     "shared:build": "pnpm --filter @luma/collaboration-protocol build && pnpm --filter @luma/collaboration-encryption build",
     "workspace:typecheck": "pnpm --filter @luma/collaboration-protocol typecheck && pnpm --filter @luma/collaboration-encryption typecheck && pnpm --filter @luma/sync-server typecheck && pnpm --filter @luma/collaboration-server typecheck",
     "workspace:test": "pnpm --filter @luma/collaboration-protocol test && pnpm --filter @luma/collaboration-encryption test && pnpm --filter @luma/sync-server test && pnpm --filter @luma/collaboration-server test",
-    "workspace:build": "pnpm --filter @luma/collaboration-protocol build && pnpm --filter @luma/collaboration-encryption build && pnpm --filter @luma/collaboration-server build"
+    "workspace:build": "pnpm --filter @luma/collaboration-protocol build && pnpm --filter @luma/collaboration-encryption build && pnpm --filter @luma/collaboration-server build",
+    "release:check": "node scripts/release-preflight.mjs",
+    "release:desktop": "pnpm --dir apps/desktop tauri build",
+    "release:android": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/android-release.ps1"
   }
 }

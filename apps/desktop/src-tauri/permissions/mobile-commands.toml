@@ -120,6 +120,7 @@ commands.allow = [
   "collab_auth_poll",
   "collab_auth_status",
   "collab_auth_sign_out",
+  "collab_delete_account",
   "collab_get_device_identity",
   "collab_set_device_identity",
   "collab_register_device",
