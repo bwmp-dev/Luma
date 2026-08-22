@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, ChevronUp, CircleStop, ClipboardCopy, ClipboardPaste, Circle, Columns2, Container, Copy, Eraser, FolderInput, GitBranch, Globe, KeyRound, LayoutGrid, LoaderCircle, Mic, Paperclip, Radio, RadioTower, RotateCcw, Rows2, ScrollText, Search, Share2, ShieldAlert, ShieldCheck, TextSelect, Video, X } from "lucide-react";
 import { terminalManager } from "./terminalManager";
-import { AutocompleteOverlay } from "./AutocompleteOverlay";
 import { attachFileToSession, canAttachFile } from "./attachFile";
 import { useSessionStore } from "../../stores/sessionStore";
 import { useUiStore } from "../../stores/uiStore";
@@ -486,11 +485,6 @@ export function PaneView({
       {/* The xterm host keeps its own padding and stays the terminal's direct
           parent: dropOverflowingRow measures this element's content box. */}
       <div ref={hostRef} className="min-h-0 w-full flex-1 pl-2 pt-1.5" />
-
-      {/* Opt-in completion overlay. Absolutely positioned over the pane so it
-          never affects the terminal's layout or grid size, and self-hiding when
-          the feature is off or the input line is not known. */}
-      <AutocompleteOverlay sessionId={session.id} />
 
       {/* Arrow-key pad, shown only while a long press is driving it. Positioned
           in viewport coordinates at the press point and pointer-events-none, so

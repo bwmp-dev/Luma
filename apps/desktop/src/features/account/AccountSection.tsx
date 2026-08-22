@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { Loader2, UserRound } from "lucide-react";
+import { ExternalLink, Loader2, UserRound } from "lucide-react";
 import {
   collabAuthPoll,
   collabAuthSignOut,
@@ -134,6 +134,7 @@ export function AccountSection() {
   };
 
   const signedIn = auth?.status === "signedIn";
+  const accountConsoleUrl = auth?.accountConsoleUrl ?? null;
   const statusText =
     auth?.status === "signedIn"
       ? "Signed in. This account authorizes both sync and collaboration."
@@ -193,6 +194,22 @@ export function AccountSection() {
             {busy ? "Please wait…" : signedIn ? "Sign out" : "Sign in"}
           </button>
         </div>
+
+        {signedIn && accountConsoleUrl && (
+          <div className="mt-3 border-t border-border pt-3">
+            <button
+              type="button"
+              onClick={() => void openUrl(accountConsoleUrl)}
+              className="flex items-center gap-1.5 text-xs text-accent hover:underline"
+            >
+              Manage account <ExternalLink size={12} />
+            </button>
+            <p className="mt-1 text-xs text-muted">
+              Change your password, review sessions or delete your account in your
+              browser.
+            </p>
+          </div>
+        )}
 
         {device && (
           <div className="mt-3 border-t border-border pt-3 text-xs text-muted">
