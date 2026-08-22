@@ -63,34 +63,31 @@ export function AccountSection() {
   useEffect(() => {
     if (!device) return;
     let cancelled = false;
-    const timeout = window.setTimeout(
-      async () => {
-        try {
-          const result = await collabAuthPoll();
-          if (cancelled) return;
-          if (result.status === "complete") {
-            setDevice(null);
-            setFlowError(null);
-            await refreshAuthStatus();
-          } else {
-            setDevice((current) =>
-              current
-                ? {
-                    ...current,
-                    interval: result.retryAfterSeconds ?? current.interval,
-                  }
-                : null,
-            );
-          }
-        } catch (error) {
-          if (!cancelled) {
-            setDevice(null);
-            setFlowError(parseCollaborationError(error).message);
-          }
+    const timeout = window.setTimeout(async () => {
+      try {
+        const result = await collabAuthPoll();
+        if (cancelled) return;
+        if (result.status === "complete") {
+          setDevice(null);
+          setFlowError(null);
+          await refreshAuthStatus();
+        } else {
+          setDevice((current) =>
+            current
+              ? {
+                  ...current,
+                  interval: result.retryAfterSeconds ?? current.interval,
+                }
+              : null,
+          );
         }
-      },
-      Math.max(1, device.interval) * 1000,
-    );
+      } catch (error) {
+        if (!cancelled) {
+          setDevice(null);
+          setFlowError(parseCollaborationError(error).message);
+        }
+      }
+    }, Math.max(1, device.interval) * 1000);
     return () => {
       cancelled = true;
       window.clearTimeout(timeout);
@@ -167,9 +164,11 @@ export function AccountSection() {
   };
 
   const signedIn = auth?.status === "signedIn";
-  const accountConsoleUrl = deleteReport?.accountConsoleUrl ?? auth?.accountConsoleUrl ?? null;
+  const accountConsoleUrl =
+    deleteReport?.accountConsoleUrl ?? auth?.accountConsoleUrl ?? null;
   const deletionIncomplete =
-    deleteReport !== null && (!deleteReport.collaborationDeleted || !deleteReport.syncDeleted);
+    deleteReport !== null &&
+    (!deleteReport.collaborationDeleted || !deleteReport.syncDeleted);
   const statusText =
     auth?.status === "signedIn"
       ? "Signed in. This account authorizes both sync and collaboration."
@@ -240,7 +239,8 @@ export function AccountSection() {
               Manage account <ExternalLink size={12} />
             </button>
             <p className="mt-1 text-xs text-muted">
-              Change your password, review sessions or delete your account in your browser.
+              Change your password, review sessions or delete your account in your
+              browser.
             </p>
           </div>
         )}
@@ -249,14 +249,15 @@ export function AccountSection() {
           <div className="mt-3 border-t border-border pt-3 text-xs text-muted">
             <p className="flex items-center gap-1.5">
               <Loader2 size={12} className="animate-spin text-accent" />
-              Enter code <strong className="font-mono text-foreground">
-                {device.userCode}
-              </strong> in
+              Enter code{" "}
+              <strong className="font-mono text-foreground">{device.userCode}</strong> in
               your browser to finish signing in.
             </p>
             <button
               type="button"
-              onClick={() => void openUrl(device.verificationUriComplete ?? device.verificationUri)}
+              onClick={() =>
+                void openUrl(device.verificationUriComplete ?? device.verificationUri)
+              }
               className="mt-2 text-accent hover:underline"
             >
               Reopen sign-in page
@@ -288,11 +289,13 @@ export function AccountSection() {
                 {!deleteReport.collaborationDeleted && (
                   <li>Collaboration data: {deleteReport.collaborationError}</li>
                 )}
-                {!deleteReport.syncDeleted && <li>Sync data: {deleteReport.syncError}</li>}
+                {!deleteReport.syncDeleted && (
+                  <li>Sync data: {deleteReport.syncError}</li>
+                )}
               </ul>
               <p className="mt-1.5 text-xs text-muted">
-                You are still signed in so you can try again. Whatever was already deleted stays
-                deleted.
+                You are still signed in so you can try again. Whatever was already
+                deleted stays deleted.
               </p>
               <button
                 type="button"
@@ -307,8 +310,8 @@ export function AccountSection() {
             <div>
               <p className="text-sm font-medium">Your Luma data has been deleted.</p>
               <p className="mt-1 text-xs text-muted">
-                One step is left: delete the sign-in itself on your account page. We opened it in
-                your browser.
+                One step is left: delete the sign-in itself on your account page. We
+                opened it in your browser.
               </p>
               {accountConsoleUrl && (
                 <button
@@ -376,8 +379,8 @@ export function AccountSection() {
               <li>Vaults owned by other people — you are only removed from them</li>
             </ul>
             <p>
-              One last step happens in your browser: we will open your account page so you can
-              delete the sign-in itself. This cannot be undone.
+              One last step happens in your browser: we will open your account page so
+              you can delete the sign-in itself. This cannot be undone.
             </p>
           </div>
         }

@@ -4,7 +4,10 @@ import type {
   RoomKeyEnvelope,
   SerializedDevicePrivateKey,
 } from "@luma/collaboration-encryption";
-import type { EncryptedEventMessage, RoomRole } from "@luma/collaboration-protocol";
+import type {
+  EncryptedEventMessage,
+  RoomRole,
+} from "@luma/collaboration-protocol";
 
 /*
  * Typed invoke wrappers for the collaborative-terminals backend. This module is
@@ -251,7 +254,10 @@ export function collabSetDeviceIdentity(identity: DeviceIdentity): Promise<null>
   });
 }
 
-export function collabRegisterDevice(deviceId: string, publicKey: DevicePublicKey): Promise<null> {
+export function collabRegisterDevice(
+  deviceId: string,
+  publicKey: DevicePublicKey,
+): Promise<null> {
   return invoke<null>("collab_register_device", {
     input: { deviceId, publicKey },
   });
@@ -398,7 +404,9 @@ export function parseJoinToken(token: string): JoinLinkPayload {
   }
   let json: string;
   try {
-    json = new TextDecoder().decode(decodeBase64Url(token.slice(JOIN_TOKEN_PREFIX.length)));
+    json = new TextDecoder().decode(
+      decodeBase64Url(token.slice(JOIN_TOKEN_PREFIX.length)),
+    );
   } catch {
     throw new Error("This join link is malformed.");
   }
@@ -468,7 +476,8 @@ export function parseCollaborationError(error: unknown): CollaborationError {
       return {
         code: record.code as CollaborationErrorCode,
         message: record.message,
-        httpStatus: typeof record.httpStatus === "number" ? record.httpStatus : null,
+        httpStatus:
+          typeof record.httpStatus === "number" ? record.httpStatus : null,
       };
     }
     if (typeof record.message === "string") {
