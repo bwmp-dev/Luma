@@ -89,6 +89,8 @@ export type CollabAuthStatus = {
   status: CollabAuthStatusValue;
   serverUrl: string;
   expiresAt: number | null;
+  /** Identity provider account console, or null when not signed in. */
+  accountConsoleUrl: string | null;
 };
 
 export type CreateRoomResult = {

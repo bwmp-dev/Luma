@@ -72,7 +72,6 @@ export function SettingsScreen() {
   const restoreSessions = settings?.[SETTING_KEYS.restoreSessions] !== false;
   const autoReconnect = settings?.[SETTING_KEYS.autoReconnect] !== false;
   // Default OFF: enabling it starts recording command history locally.
-  const autocomplete = settings?.[SETTING_KEYS.terminalAutocomplete] === true;
   // Both default OFF. Dictation because the only engine a webview can reach may
   // be cloud-backed; auto-send because it skips the review step.
   const voiceDictation = settings?.[SETTING_KEYS.voiceDictation] === true;
@@ -141,21 +140,6 @@ export function SettingsScreen() {
                     setSetting.mutate({
                       key: SETTING_KEYS.restoreSessions,
                       value: !restoreSessions,
-                    })
-                  }
-                />
-              </Field>
-              <Field
-                label="Command autocomplete"
-                hint="Local only — history, snippets and remote paths. No command history ever leaves this device."
-              >
-                <Toggle
-                  checked={autocomplete}
-                  label="Command autocomplete"
-                  onClick={() =>
-                    setSetting.mutate({
-                      key: SETTING_KEYS.terminalAutocomplete,
-                      value: !autocomplete,
                     })
                   }
                 />

@@ -25,7 +25,6 @@ use crate::AppState;
 
 mod analytics;
 mod collaboration;
-mod completions;
 mod docker;
 mod hosts;
 mod import;
@@ -58,7 +57,6 @@ mod web_preview;
 
 pub use analytics::*;
 pub use collaboration::*;
-pub use completions::*;
 pub use docker::*;
 pub use hosts::*;
 pub use import::*;

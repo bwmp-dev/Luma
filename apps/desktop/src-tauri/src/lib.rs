@@ -19,7 +19,6 @@ mod server_stats;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 mod session_logging;
 mod sftp;
-mod shell_completions;
 mod snippet_runs;
 mod ssh;
 mod storage;
@@ -43,7 +42,6 @@ use repository::RepositoryManager;
 use serial::SerialManager;
 use server_stats::ServerStatsManager;
 use sftp::SftpManager;
-use shell_completions::ShellCompletionsManager;
 use snippet_runs::SnippetRunManager;
 use ssh::EmbeddedSshManager;
 use ssh::TunnelManager;
@@ -160,9 +158,6 @@ pub fn run() {
         // Docker views reuse one cached SSH session per host: a listing is
         // normally followed by stats, a log tail and an inspect.
         app.manage(DockerManager::default());
-        // Completion probes reuse one cached SSH session per host, like the
-        // server dashboard; the caches are memory-only.
-        app.manage(ShellCompletionsManager::default());
         // Preview tunnels live in TunnelManager; this only tracks the
         // host/port → tunnel mapping so re-opening a preview reuses it.
         app.manage(WebPreviewManager::default());
@@ -313,10 +308,6 @@ pub fn run() {
         commands::terminal_attach_upload,
         commands::server_stats_fetch,
         commands::server_stats_close,
-        commands::command_history_record,
-        commands::command_history_query,
-        commands::shell_completions_executables,
-        commands::shell_completions_paths,
         commands::voice_history_add,
         commands::voice_history_list,
         commands::voice_history_delete,
@@ -469,10 +460,6 @@ pub fn run() {
         commands::terminal_attach_upload,
         commands::server_stats_fetch,
         commands::server_stats_close,
-        commands::command_history_record,
-        commands::command_history_query,
-        commands::shell_completions_executables,
-        commands::shell_completions_paths,
         commands::voice_history_add,
         commands::voice_history_list,
         commands::voice_history_delete,
@@ -544,7 +531,6 @@ pub fn run() {
             app_handle.state::<ServerStatsManager>().kill_all();
             app_handle.state::<RepositoryManager>().kill_all();
             app_handle.state::<DockerManager>().kill_all();
-            app_handle.state::<ShellCompletionsManager>().kill_all();
             app_handle.state::<SnippetRunManager>().kill_all();
             // Before the SSH sessions it hands out: stopping the listener
             // denies any prompt still on screen rather than leaving an agent

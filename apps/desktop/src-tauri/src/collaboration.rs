@@ -345,6 +345,10 @@ pub struct AuthStatusResponse {
     pub status: AuthStatus,
     pub server_url: String,
     pub expires_at: Option<i64>,
+    /// Where the identity provider lets the user manage (or delete) the
+    /// account. Only known once a session exists, since it derives from the
+    /// issuer the session was minted against.
+    pub account_console_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -789,6 +793,7 @@ pub async fn auth_status(
                 status: AuthStatus::Pending,
                 server_url,
                 expires_at: Some(pending.expires_at),
+                account_console_url: None,
             });
         }
     }
@@ -797,6 +802,7 @@ pub async fn auth_status(
             status: AuthStatus::SignedOut,
             server_url,
             expires_at: None,
+            account_console_url: None,
         });
     };
     if session.server_url != server_url {
@@ -804,6 +810,7 @@ pub async fn auth_status(
             status: AuthStatus::SignedOut,
             server_url,
             expires_at: None,
+            account_console_url: None,
         });
     }
     let expired = session.expires_at <= Utc::now().timestamp() && session.refresh_token.is_none();
@@ -815,7 +822,17 @@ pub async fn auth_status(
         },
         server_url,
         expires_at: Some(session.expires_at),
+        account_console_url: account_console_url(&session.issuer),
     })
+}
+
+/// The identity provider's self-service account console, derived from the
+/// issuer (`https://host/realms/luma` → `https://host/realms/luma/account`).
+/// Returns `None` for an issuer that fails the same HTTPS checks the login
+/// flow applies, so the frontend never opens an attacker-supplied URL.
+fn account_console_url(issuer: &str) -> Option<String> {
+    validate_external_https_url(issuer, "identity issuer").ok()?;
+    Some(format!("{}/account", issuer.trim_end_matches('/')))
 }
 
 pub async fn auth_sign_out(

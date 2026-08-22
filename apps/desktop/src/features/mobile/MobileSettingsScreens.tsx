@@ -39,7 +39,6 @@ export function MobileTerminalSettingsScreen({ onBack }: { onBack: () => void })
   const scrollback = Number(settings?.[SETTING_KEYS.scrollback] ?? 5000);
   const restoreSessions = settings?.[SETTING_KEYS.restoreSessions] !== false;
   // Default OFF: enabling it starts recording command history locally.
-  const autocomplete = settings?.[SETTING_KEYS.terminalAutocomplete] === true;
   // Both default ON: they are the primary way to reach arrows and Tab without
   // opening the key row. Each one takes a gesture away from xterm, which is why
   // they can be turned off individually.
@@ -84,21 +83,6 @@ export function MobileTerminalSettingsScreen({ onBack }: { onBack: () => void })
               setSetting.mutate({
                 key: SETTING_KEYS.restoreSessions,
                 value: !restoreSessions,
-              })
-            }
-          />
-        </Field>
-        <Field
-          label="Command autocomplete"
-          hint="Local only — history, snippets and remote paths. No command history ever leaves this device. Tab on the terminal key row accepts a suggestion."
-        >
-          <Toggle
-            checked={autocomplete}
-            label="Command autocomplete"
-            onClick={() =>
-              setSetting.mutate({
-                key: SETTING_KEYS.terminalAutocomplete,
-                value: !autocomplete,
               })
             }
           />
