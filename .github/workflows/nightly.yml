@@ -266,8 +266,8 @@ jobs:
               fi
             done
           ) > SHA256SUMS
-          gh release upload "$NIGHTLY_TAG" SHA256SUMS --clobber
-          gh release edit "$NIGHTLY_TAG" --draft=false --prerelease
+          gh release upload "$NIGHTLY_TAG" SHA256SUMS --repo "$GITHUB_REPOSITORY" --clobber
+          gh release edit "$NIGHTLY_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
 
       - name: Promote the signed manifest to the nightly channel
         shell: bash
