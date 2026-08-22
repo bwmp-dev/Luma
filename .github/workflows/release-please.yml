@@ -236,9 +236,97 @@ jobs:
           xcrun stapler validate "$app_path"
           xcrun stapler validate "$dmg_path"
 
+  android:
+    name: Build signed Android App Bundle
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          shared-key: android-release
+          save-if: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Materialize Android signing key
+        id: signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        shell: bash
+        run: |
+          if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "ANDROID_KEYSTORE_BASE64 is required" >&2
+            exit 1
+          fi
+          key_path="$RUNNER_TEMP/luma-release.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$key_path"
+          echo "path=$key_path" >> "$GITHUB_OUTPUT"
+
+      - name: Build signed Play Store bundle
+        env:
+          LUMA_ANDROID_KEYSTORE: ${{ steps.signing.outputs.path }}
+          LUMA_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          LUMA_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          LUMA_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          LUMA_ANALYTICS_HOST: ${{ vars.LUMA_ANALYTICS_HOST }}
+          LUMA_ANALYTICS_KEY: ${{ vars.LUMA_ANALYTICS_KEY }}
+        run: pnpm --dir apps/desktop tauri android build --aab --ci
+
+      - name: Locate and verify bundle
+        id: bundle
+        env:
+          RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
+        shell: bash
+        run: |
+          bundle_path="$(find apps/desktop/src-tauri/gen/android/app/build/outputs/bundle -name '*.aab' -print -quit)"
+          if [ -z "$bundle_path" ]; then
+            echo "Signed Android App Bundle was not produced" >&2
+            exit 1
+          fi
+          jarsigner -verify -verbose -certs "$bundle_path" >/dev/null
+          output="Luma-${RELEASE_TAG#v}-android.aab"
+          cp "$bundle_path" "$output"
+          echo "path=$output" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: luma-${{ needs.release-please.outputs.tag_name }}-android-play
+          path: ${{ steps.bundle.outputs.path }}
+
+      - name: Attach bundle to draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: gh release upload "$RELEASE_TAG" "${{ steps.bundle.outputs.path }}" --repo "$GITHUB_REPOSITORY" --clobber
+
   checksums:
     name: Generate release checksums
-    needs: [release-please, build]
+    needs: [release-please, build, android]
     runs-on: blacksmith-4vcpu-ubuntu-2204
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
