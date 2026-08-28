@@ -140,33 +140,15 @@ pub async fn mcp_approval_resolve(
     Ok(())
 }
 
-/// Report the session the webview opened for a pending `mcp-session-request`,
-/// or the reason it could not.
-///
-/// The session id is validated and confirmed to be a live SSH session before it
-/// is accepted: it arrives from the webview, and a tool call is about to type a
-/// command into whatever it names.
+/// Report that the frontend could not open a pending command tab (for example,
+/// because host-key trust was refused before `ssh_spawn` could claim it).
 #[tauri::command]
 pub async fn mcp_session_ready(
     mcp: State<'_, McpState>,
-    embedded: State<'_, EmbeddedSshManager>,
     request_id: String,
-    session_id: Option<String>,
-    error: Option<String>,
+    error: String,
 ) -> Result<()> {
-    let outcome = match session_id {
-        Some(session_id) => {
-            crate::ssh::validate_host_id(&session_id)?;
-            if !embedded.is_authenticated(&session_id) {
-                return Err(LumaError::InvalidInput(
-                    "that session is not connected".into(),
-                ));
-            }
-            Ok(session_id)
-        }
-        None => Err(error.unwrap_or_else(|| "Luma could not open a session".into())),
-    };
-    mcp.sessions().resolve(&request_id, outcome);
+    mcp.sessions().fail(&request_id, error);
     Ok(())
 }
 

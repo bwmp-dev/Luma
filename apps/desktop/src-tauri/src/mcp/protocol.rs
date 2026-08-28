@@ -199,14 +199,10 @@ fn tool_definitions() -> Value {
             "name": TOOL_RUN_COMMAND,
             "title": "Run a command over SSH",
             "description": "Run one command on a granted host and return its output. Runs through \
-    Luma's stored credentials, in a terminal tab the user can see and type into — so a command that \
-    prompts for a sudo password will wait for them to answer it rather than failing. Commands run in \
-    a persistent shell per host, so the working directory and environment carry over between calls. \
-    Output is a terminal stream: stdout and stderr are merged into stdout, escape sequences are \
-    stripped, and full-screen programs such as vim or top will not render. Luma defines a shell \
-    function named __luma in the session and appends a call to it after each command to detect \
-    completion. A command whose last line reads its own stdin (a heredoc, or a bare 'cat') cannot \
-    be detected as finished and will run until the timeout.",
+    Luma's stored credentials in a visible interactive terminal tab. The command is sent unchanged \
+    through a PTY-backed SSH exec channel, so the user can watch it and provide input. Each call is \
+    independent. The terminal merges stdout and stderr, strips escape sequences from the returned \
+    output, and does not support full-screen applications such as vim or top.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -216,8 +212,8 @@ fn tool_definitions() -> Value {
                         "type": "integer",
                         "minimum": 1,
                         "maximum": 600,
-                        "description": "Wall-clock limit covering opening the session and running the \
-    command. Defaults to 60. On timeout the command keeps running in its tab.",
+                        "description": "Wall-clock limit covering opening the tab and running the \
+    command. Defaults to 60. On timeout the command may keep running in its tab.",
                     },
                 },
                 "required": ["hostId", "command"],
@@ -386,11 +382,8 @@ mod tests {
         assert!(description.contains("full-screen"));
     }
 
-    /// The description is the only place an agent learns that state carries over
-    /// and that the two streams are merged. Getting this wrong silently breaks
-    /// how a model reasons about its own commands.
     #[test]
-    fn run_command_describes_the_interactive_session_it_actually_uses() {
+    fn run_command_describes_the_interactive_exec_channel_it_actually_uses() {
         let listed = respond(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#);
         let tools = listed["result"]["tools"].as_array().unwrap();
         let run = tools
@@ -398,11 +391,12 @@ mod tests {
             .find(|tool| tool["name"] == TOOL_RUN_COMMAND)
             .unwrap();
         let description = run["description"].as_str().unwrap();
-        assert!(description.contains("sudo"));
-        assert!(description.contains("carry over"));
-        assert!(description.contains("merged"));
-        // The old promise was the opposite of what this now does.
-        assert!(!description.contains("no shell session between calls"));
+        assert!(description.contains("exec channel"));
+        assert!(description.contains("sent unchanged"));
+        assert!(description.contains("interactive terminal tab"));
+        assert!(description.contains("independent"));
+        assert!(description.contains("merges stdout and stderr"));
+        assert!(!description.contains("__luma"));
     }
 
     #[test]

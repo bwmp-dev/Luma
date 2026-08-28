@@ -626,7 +626,11 @@ export function PaneView({
         <ConnectionErrorAlert
           hostTitle={session.connectionTarget ?? session.title}
           message={describeSshError(session.errorCategory, session.errorMessage)}
-          onRetry={() => void restartSession(session.id)}
+          onRetry={
+            session.agentCommand
+              ? undefined
+              : () => void restartSession(session.id)
+          }
           onClose={() => closeSession(session.id)}
         />
       )}
@@ -645,13 +649,15 @@ export function PaneView({
         <div className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-between gap-3 border-t border-border bg-surface/95 px-4 py-2.5 text-sm backdrop-blur">
           <span className="min-w-0 flex-1 text-muted">{bannerMessage()}</span>
           <div className="flex shrink-0 gap-2">
-            <button
-              type="button"
-              onClick={() => void restartSession(session.id)}
-              className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-foreground hover:border-accent hover:text-accent"
-            >
-              <RotateCcw size={13} /> {isSsh || isSerial ? "Reconnect" : "Restart"}
-            </button>
+            {!session.agentCommand && (
+              <button
+                type="button"
+                onClick={() => void restartSession(session.id)}
+                className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-foreground hover:border-accent hover:text-accent"
+              >
+                <RotateCcw size={13} /> {isSsh || isSerial ? "Reconnect" : "Restart"}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => closeSession(session.id)}

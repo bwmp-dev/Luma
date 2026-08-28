@@ -133,19 +133,20 @@ fn normalize_os_token(value: &str) -> Option<&'static str> {
 }
 
 pub(super) fn normalize_uname(value: &str) -> SshRemoteOs {
-    let normalized = value.trim().to_ascii_lowercase();
+    let value = value.trim();
+    let normalized = value.to_ascii_lowercase();
+    let is_windows = normalized.contains("windows")
+        || normalized.starts_with("mingw")
+        || normalized.starts_with("msys")
+        || normalized.starts_with("cygwin")
+        || normalized == "windows_nt";
     let os_id = if normalized == "linux" {
         "linux"
     } else if normalized.starts_with("freebsd") {
         "freebsd"
     } else if normalized == "darwin" {
         "macos"
-    } else if normalized.contains("windows")
-        || normalized.starts_with("mingw")
-        || normalized.starts_with("msys")
-        || normalized.starts_with("cygwin")
-        || normalized == "windows_nt"
-    {
+    } else if is_windows {
         "windows"
     } else {
         "unknown"
@@ -153,7 +154,13 @@ pub(super) fn normalize_uname(value: &str) -> SshRemoteOs {
 
     SshRemoteOs {
         os_id: os_id.into(),
-        pretty_name: None,
+        pretty_name: is_windows.then(|| {
+            if normalized.contains("microsoft windows") {
+                value.to_string()
+            } else {
+                "Windows".into()
+            }
+        }),
     }
 }
 
@@ -210,18 +217,24 @@ mod tests {
     #[test]
     fn normalizes_uname_fallbacks() {
         let cases = [
-            ("Darwin\n", "macos"),
-            ("FreeBSD\n", "freebsd"),
-            ("Linux\n", "linux"),
-            ("MINGW64_NT-10.0\n", "windows"),
-            ("Microsoft Windows [Version 10.0.26100.4652]\n", "windows"),
-            ("Plan9\n", "unknown"),
+            ("Darwin\n", "macos", None),
+            ("FreeBSD\n", "freebsd", None),
+            ("Linux\n", "linux", None),
+            ("MINGW64_NT-10.0\n", "windows", Some("Windows")),
+            (
+                "Microsoft Windows [Version 10.0.26100.4652]\n",
+                "windows",
+                Some("Microsoft Windows [Version 10.0.26100.4652]"),
+            ),
+            ("Plan9\n", "unknown", None),
         ];
 
-        for (input, expected_id) in cases {
+        for (input, expected_id, expected_pretty_name) in cases {
+            let parsed = normalize_uname(input);
+            assert_eq!(parsed.os_id, expected_id, "input: {input:?}");
             assert_eq!(
-                normalize_uname(input).os_id,
-                expected_id,
+                parsed.pretty_name.as_deref(),
+                expected_pretty_name,
                 "input: {input:?}"
             );
         }

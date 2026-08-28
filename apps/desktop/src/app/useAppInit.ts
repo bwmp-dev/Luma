@@ -181,8 +181,6 @@ export function useAppInit(): void {
   // mirroring the `deep-link`/`ssh-remote-os` listener wiring.
   useEffect(() => startAgentInboxListener(), []);
 
-  // Open terminal tabs when an MCP agent asks for one. Inert where the MCP
-  // server is not compiled in (mobile): the event simply never fires.
   useEffect(() => startAgentSessionListener(), []);
 
   // Reflect any tunnels the backend already has running. Skipped on platforms

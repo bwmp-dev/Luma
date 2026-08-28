@@ -1035,6 +1035,16 @@ pub(crate) fn connect_error(error: russh::Error) -> LumaError {
 
 async fn detect_remote_os(handle: &client::Handle<Client>) -> super::SshRemoteOs {
     let operation = async {
+        // Probe Windows first. Its OpenSSH server may spend most of this
+        // best-effort detection budget rejecting Unix commands, while `cmd` is
+        // available regardless of whether the configured login shell is cmd or
+        // PowerShell.
+        let version = capture_remote_command(handle, b"cmd /c ver").await?;
+        let detected = super::remote_os::normalize_uname(&String::from_utf8_lossy(&version));
+        if detected.os_id != "unknown" {
+            return Some(detected);
+        }
+
         let release = capture_remote_command(handle, b"cat /etc/os-release").await?;
         let detected = super::remote_os::parse_os_release(&String::from_utf8_lossy(&release));
         if detected.os_id != "unknown" {
@@ -1046,11 +1056,7 @@ async fn detect_remote_os(handle: &client::Handle<Client>) -> super::SshRemoteOs
         if detected.os_id != "unknown" {
             return Some(detected);
         }
-
-        let version = capture_remote_command(handle, b"cmd /c ver").await?;
-        Some(super::remote_os::normalize_uname(&String::from_utf8_lossy(
-            &version,
-        )))
+        None
     };
     tokio::time::timeout(Duration::from_secs(3), operation)
         .await

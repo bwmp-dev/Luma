@@ -16,10 +16,9 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
 
 use crate::keystore::{self, KeystoreState};
-use crate::mcp::runner::{strip_echo, Sentinel};
 use crate::mcp::sessions::SessionOutcome;
 use crate::mcp::taps::PaneKind;
-use crate::mcp::{protocol, ActivityEntry, CommandOutcome, McpShared};
+use crate::mcp::{protocol, ActivityEntry, CommandOutcome, McpShared, MAX_COMMAND_OUTPUT_BYTES};
 use crate::ssh::exec::{self, ExecMessages, ExecRequest, ExecStream};
 use crate::ssh::EmbeddedSshManager;
 use crate::storage::hosts;
@@ -30,18 +29,12 @@ use crate::AppState;
 const DEFAULT_TIMEOUT_SECS: u64 = 60;
 const MAX_TIMEOUT_SECS: u64 = 600;
 const MAX_COMMAND_BYTES: usize = 64 * 1024;
-const MAX_OUTPUT_BYTES: usize = 1024 * 1024;
 /// A pane is a keyboard, not a file transfer. Far below the terminal layer's
 /// own 1 MiB input cap, and enough for any command someone would type.
 const MAX_PANE_SEND_BYTES: usize = 8 * 1024;
 const DEFAULT_PANE_READ_BYTES: usize = 64 * 1024;
 const MAX_PANE_READ_BYTES: usize = 256 * 1024;
 const MAX_PANE_READ_WAIT_MS: u64 = 30_000;
-/// Longest a single tap read waits before the run loop re-checks its deadline.
-/// The read itself wakes on new output, so this only bounds how late a timeout
-/// is noticed on a silent command.
-const POLL_INTERVAL: Duration = Duration::from_millis(500);
-
 const EXEC_MESSAGES: ExecMessages = ExecMessages {
     timed_out: "Command timed out",
     cancelled: "Command cancelled",
@@ -246,18 +239,38 @@ Ask the user to unlock Luma, then retry."
     let started = Instant::now();
     let timeout = Duration::from_secs(timeout_secs);
 
-    // Preferred path: type the command into a session the user can see and
-    // intervene in. Falls back to a one-off exec connection when there is no
-    // webview to host a tab, so a headless grant keeps working as before.
     let outcome = shared
         .sessions
-        .request(app, &grant.id, &grant.label, &host_id, &host_name, timeout)
+        .request(
+            app,
+            &grant.id,
+            &grant.label,
+            &host_id,
+            &host_name,
+            &command,
+            timeout,
+        )
         .await;
 
     let (result, via, session_id) = match outcome {
-        SessionOutcome::Ready(session_id) => {
-            let result =
-                run_in_session(app, shared, grant, &session_id, &command, started, timeout).await;
+        SessionOutcome::Completed {
+            session_id,
+            exit,
+            stdout,
+            truncated,
+        } => {
+            let result = if exit.code.is_none() && exit.error_message.is_some() {
+                Err(exit
+                    .error_message
+                    .unwrap_or_else(|| "The SSH command session failed".into()))
+            } else {
+                Ok(CommandRun {
+                    exit_code: exit.code,
+                    stdout,
+                    stderr: String::new(),
+                    truncated,
+                })
+            };
             (result, "tab", Some(session_id))
         }
         SessionOutcome::Failed(message) => (Err(message), "tab", None),
@@ -266,6 +279,7 @@ Ask the user to unlock Luma, then retry."
             "exec",
             None,
         ),
+        SessionOutcome::TimedOut(session_id) => (Err(timed_out(timeout)), "tab", session_id),
     };
 
     let duration_ms = started.elapsed().as_millis() as u64;
@@ -304,174 +318,7 @@ struct CommandRun {
     truncated: bool,
 }
 
-/// Type the command into a live session and read back what it produced.
-async fn run_in_session(
-    app: &AppHandle,
-    shared: &Arc<McpShared>,
-    grant: &McpGrant,
-    session_id: &str,
-    command: &str,
-    started: Instant,
-    timeout: Duration,
-) -> std::result::Result<CommandRun, String> {
-    // Sharing enables the tap's buffer and lights up the pane's agent badge, so
-    // the session shows in "Shared panes" for as long as the agent is using it.
-    let title = shared
-        .taps
-        .title(session_id)
-        .unwrap_or_else(|| session_id.to_string());
-    if !shared.taps.share(session_id, &grant.id, &title) {
-        return Err("Luma lost track of that terminal before the command ran.".into());
-    }
-
-    // One terminal is one keyboard: hold the session for the whole command so a
-    // second concurrent call queues instead of interleaving on the same tty.
-    //
-    // Bounded by the caller's own deadline. Waiting past it and then typing
-    // anyway would put a command on screen with no budget left to read what it
-    // produced — the agent would report a timeout for something it had just
-    // started, with no way to tell that from a command that genuinely hung.
-    let lock = shared.session_lock(session_id);
-    let queue_budget = timeout
-        .checked_sub(started.elapsed())
-        .ok_or_else(|| timed_out(timeout))?;
-    let _guard = tokio::time::timeout(queue_budget, lock.lock())
-        .await
-        .map_err(|_| {
-            format!(
-                "Timed out after {} seconds waiting for another command to finish \
-on this host's terminal.",
-                timeout.as_secs()
-            )
-        })?;
-
-    // Taken before the write, so the read starts at this command's own output
-    // rather than replaying what was already on screen.
-    let cursor = shared.taps.cursor(session_id, &grant.id);
-
-    // The helper that reports completion is defined once per shell, on the same
-    // line as the first command; later commands just call it. That is why the
-    // user sees `; __luma` rather than a line of printf after everything an
-    // agent runs.
-    let (sentinel, needs_definition) = shared.sentinel_for(session_id);
-    let typed = sentinel.command_line(command, needs_definition);
-
-    let pty = app.state::<PtyManager>();
-    let embedded = app.state::<EmbeddedSshManager>();
-    if let Err(error) =
-        crate::commands::write_terminal_session(&pty, &embedded, session_id, typed.clone())
-    {
-        // Nothing reached the shell, so the helper is not defined and the next
-        // attempt must not assume it is.
-        if needs_definition {
-            shared.forget_sentinel(session_id);
-        }
-        return Err(error.to_string());
-    }
-
-    // A run that does not complete leaves the helper's state in doubt: the shell
-    // it was defined in may have been replaced (`exec`, `su`, a nested shell),
-    // taking the definition with it. Every exit below therefore forgets it
-    // except the one that saw the sentinel actually arrive — re-defining is
-    // cheap, while wrongly assuming it survived strands every later command on
-    // "__luma: command not found".
-    let outcome = read_until_sentinel(
-        shared, grant, session_id, &sentinel, &typed, cursor, started, timeout,
-    )
-    .await;
-    if outcome.is_err() {
-        shared.forget_sentinel(session_id);
-    }
-    outcome
-}
-
-/// Accumulate tap output until the sentinel arrives, the deadline passes, or
-/// the session goes away.
-#[allow(clippy::too_many_arguments)]
-async fn read_until_sentinel(
-    shared: &Arc<McpShared>,
-    grant: &McpGrant,
-    session_id: &str,
-    sentinel: &Sentinel,
-    typed: &str,
-    cursor: Option<u64>,
-    started: Instant,
-    timeout: Duration,
-) -> std::result::Result<CommandRun, String> {
-    let mut buffer = String::new();
-    let mut next = cursor;
-    let mut truncated = false;
-    loop {
-        let remaining = timeout
-            .checked_sub(started.elapsed())
-            .ok_or_else(|| timed_out(timeout))?;
-
-        let read = match shared
-            .taps
-            .read(
-                session_id,
-                &grant.id,
-                next,
-                MAX_OUTPUT_BYTES,
-                remaining.min(POLL_INTERVAL),
-            )
-            .await
-        {
-            Some(read) => read,
-            None => {
-                // The tab was closed (or unshared) mid-command. Nothing will
-                // ever type into this session again, so stop tracking its lock.
-                shared.forget_session(session_id);
-                return Err("The terminal running this command was closed.".into());
-            }
-        };
-
-        next = Some(read.next_seq);
-        if read.dropped > 0 {
-            truncated = true;
-        }
-        buffer.push_str(&read.text);
-        if buffer.len() > MAX_OUTPUT_BYTES {
-            // Keep the tail: the sentinel arrives at the end, and dropping it
-            // would turn a finished command into a timeout.
-            let cut = buffer.len() - MAX_OUTPUT_BYTES;
-            let cut = (cut..buffer.len())
-                .find(|index| buffer.is_char_boundary(*index))
-                .unwrap_or(buffer.len());
-            buffer.drain(..cut);
-            truncated = true;
-        }
-
-        if let Some((output, exit_code)) = sentinel.parse(&buffer) {
-            return Ok(CommandRun {
-                exit_code,
-                // A PTY merges the two streams, so everything is stdout and
-                // stderr is empty rather than guessed at.
-                stdout: strip_echo(output, typed).to_string(),
-                stderr: String::new(),
-                truncated,
-            });
-        }
-
-        if started.elapsed() >= timeout {
-            return Err(timed_out(timeout));
-        }
-    }
-}
-
-/// The command is still visible in its tab, so say so: the user can look at it,
-/// answer whatever it is waiting for, and the agent can read the result.
-fn timed_out(timeout: Duration) -> String {
-    format!(
-        "Command timed out after {} seconds. It may still be running in its Luma tab — \
-if it is waiting for input such as a sudo password, answer it there, then read the \
-result with luma_pane_read.",
-        timeout.as_secs()
-    )
-}
-
-/// One-off non-interactive connection. Used when no window is open to host a
-/// tab, which keeps a headless grant working exactly as it did before.
+/// Run through an SSH exec channel so the command reaches the host unchanged.
 async fn run_via_exec(
     pool: &sqlx::SqlitePool,
     keystore_state: &KeystoreState,
@@ -482,7 +329,7 @@ async fn run_via_exec(
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
     let mut truncated = false;
-    let marker = exec::OutputCap::new(MAX_OUTPUT_BYTES).marker();
+    let marker = exec::OutputCap::new(MAX_COMMAND_OUTPUT_BYTES).marker();
 
     let exit_code = exec::run_command_on_host(
         pool,
@@ -491,7 +338,7 @@ async fn run_via_exec(
         ExecRequest {
             command,
             timeout,
-            max_output_bytes: MAX_OUTPUT_BYTES,
+            max_output_bytes: MAX_COMMAND_OUTPUT_BYTES,
             messages: EXEC_MESSAGES,
         },
         None,
@@ -515,6 +362,14 @@ async fn run_via_exec(
         stderr: String::from_utf8_lossy(&stderr).into_owned(),
         truncated,
     })
+}
+
+fn timed_out(timeout: Duration) -> String {
+    format!(
+        "Command timed out after {} seconds. It may still be running in its Luma tab; \
+the user can interact with it there and its pane can be read with luma_pane_read.",
+        timeout.as_secs()
+    )
 }
 
 async fn pane_send(

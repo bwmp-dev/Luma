@@ -46,9 +46,9 @@ export type McpActivityEntry = {
   exitCode: number | null;
   durationMs: number | null;
   error: string | null;
-  /** Terminal session it ran in, or null for the non-interactive fallback. */
+  /** Terminal session involved in the activity, if any. */
   sessionId: string | null;
-  /** "tab" when it ran in a visible session, "exec" for a one-off connection. */
+  /** "tab" for visible command sessions, "exec" for the headless fallback. */
   via: "tab" | "exec" | null;
 };
 
@@ -64,12 +64,6 @@ export type McpApprovalRequest = {
 /** Event carrying an approval request from the backend. */
 export const MCP_APPROVAL_EVENT = "mcp-approval-request";
 
-/**
- * The backend asking for a terminal session to run an agent's command in.
- *
- * Sessions are created frontend-first, so the backend cannot open one itself.
- * It asks, and waits for `mcpSessionReady`.
- */
 export type McpSessionRequest = {
   id: string;
   grantId: string;
@@ -141,21 +135,11 @@ export function resolveMcpApproval(
   return invoke<void>("mcp_approval_resolve", { requestId, allowed });
 }
 
-/**
- * Answer a pending session request: the connected session to use, or why not.
- *
- * The backend re-validates the id and refuses one that is not a live session —
- * it is about to type a command into whatever this names.
- */
 export function mcpSessionReady(
   requestId: string,
-  session: { sessionId: string } | { error: string },
+  error: string,
 ): Promise<void> {
-  return invoke<void>("mcp_session_ready", {
-    requestId,
-    sessionId: "sessionId" in session ? session.sessionId : null,
-    error: "error" in session ? session.error : null,
-  });
+  return invoke<void>("mcp_session_ready", { requestId, error });
 }
 
 export function listMcpActivity(): Promise<McpActivityEntry[]> {

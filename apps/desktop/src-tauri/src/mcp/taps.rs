@@ -33,6 +33,13 @@ use tokio::sync::Notify;
 /// be worth persisting.
 const RING_CAPACITY: usize = 256 * 1024;
 
+pub(crate) fn strip_terminal_output(bytes: &[u8]) -> String {
+    let mut stripper = AnsiStripper::default();
+    let mut output = Vec::with_capacity(bytes.len());
+    stripper.strip(bytes, &mut output);
+    String::from_utf8_lossy(&output).into_owned()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SharedPane {
@@ -500,6 +507,10 @@ mod tests {
     #[test]
     fn strips_colour_and_keeps_text() {
         assert_eq!(strip(&[b"\x1b[31mred\x1b[0m text"]), "red text");
+        assert_eq!(
+            strip_terminal_output(b"\x1b[31mred\x1b[0m text"),
+            "red text"
+        );
     }
 
     #[test]

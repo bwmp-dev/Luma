@@ -222,6 +222,8 @@ export async function spawnSsh(
     /** Land inside a tmux/zellij workspace. The backend builds the attach
      * command from the validated session name — never a command string. */
     multiplexer?: MultiplexerAttach;
+    /** Opaque id for a grant-scoped MCP command held by the backend. */
+    mcpRequestId?: string;
   },
   onData: (data: Uint8Array | string) => void,
   onExit: (payload: SshExitPayload) => void,
@@ -302,6 +304,7 @@ export async function spawnSsh(
         cols: request.cols,
         rows: request.rows,
         multiplexer: request.multiplexer ?? null,
+        mcpRequestId: request.mcpRequestId ?? null,
       },
       onData: dataChannel,
       onExit: exitChannel,

@@ -75,7 +75,7 @@ type SessionState = {
      * sessions the user did not just ask for — an agent opening one to run a
      * command — which must be visible without interrupting. Returns the new
      * session id so the caller can follow its progress. */
-    options?: { background?: boolean },
+    options?: { background?: boolean; mcpRequestId?: string },
   ) => Promise<string>;
   openSerialSession: (config: SerialConfig, title?: string) => Promise<void>;
   /** Restart a session's backend. `reconnect` marks an auto-reconnect attempt:
@@ -268,10 +268,15 @@ function handleSessionExit(
 
   const session = get().sessions.find((s) => s.id === id);
   const isSsh = session?.type === "ssh";
+  const agentCommand = session?.agentCommand === true;
+  const effectiveExit =
+    agentCommand && exit.code !== null && exit.code !== undefined
+      ? { ...exit, errorCategory: undefined, errorMessage: undefined }
+      : exit;
   const previousAttempt = session?.reconnectAttempt ?? 0;
   const plan =
-    isSsh && session
-      ? planReconnect(exit.errorCategory, autoReconnectEnabled, previousAttempt)
+    isSsh && session && !agentCommand
+      ? planReconnect(effectiveExit.errorCategory, autoReconnectEnabled, previousAttempt)
       : null;
 
   if (plan && session) {
@@ -306,8 +311,8 @@ function handleSessionExit(
   clearReconnectTimer(id);
   set((state) => ({
     sessions: patchSession(state.sessions, id, {
-      ...exitPatch(exit),
-      connectionState: exit.errorCategory ? "failed" : "disconnected",
+      ...exitPatch(effectiveExit),
+      connectionState: effectiveExit.errorCategory ? "failed" : "disconnected",
       nextRetryAt: null,
       latencyMs: null,
       agentForwarding: false,
@@ -574,6 +579,8 @@ async function launch(
   // also what the automatic Mosh→SSH fallback re-attaches with.
   const moshFallbackAttach =
     descriptor.kind === "ssh" ? descriptor.multiplexer : undefined;
+  const agentCommand =
+    descriptor.kind === "ssh" && descriptor.mcpRequestId !== undefined;
   // SSH sessions must clear the host-key preflight before any spawn. This
   // covers first-open, split-pane duplication, and workspace restore alike —
   // an unknown host on restore prompts, it is never silently auto-trusted.
@@ -606,6 +613,7 @@ async function launch(
     } catch {
       transport = "ssh";
     }
+    if (agentCommand) transport = "ssh";
     if (!sessionStillOpen(get, id)) return;
     if (transport !== "ssh") {
       if (moshFallbackAttach) {
@@ -845,9 +853,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     options,
   ) => {
     const id = crypto.randomUUID();
+    const agentCommand = options?.mcpRequestId !== undefined;
     // An explicit workspace wins; otherwise the host may have one saved to
     // resume. Either way the title carries the workspace it landed in.
-    const attach = multiplexer ?? resumeAttachFor(hostId);
+    const attach = agentCommand
+      ? undefined
+      : multiplexer ?? resumeAttachFor(hostId);
     const displayTitle = withMultiplexerTitle(title ?? "SSH", attach);
     const session: TerminalSession = {
       id,
@@ -860,20 +871,28 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       hostEphemeral: ephemeral === true,
       tabColor: tabColor ?? null,
       activePaneId: id,
-      restore: {
-        kind: "ssh",
-        hostId,
-        title: displayTitle,
-        connectionTarget: hostname ?? title ?? "SSH host",
-        tabColor: tabColor ?? null,
-        multiplexer: attach,
-      },
+      agentCommand,
+      restore: agentCommand
+        ? undefined
+        : {
+            kind: "ssh",
+            hostId,
+            title: displayTitle,
+            connectionTarget: hostname ?? title ?? "SSH host",
+            tabColor: tabColor ?? null,
+            multiplexer: attach,
+          },
     };
     await openInNewTab(
       set,
       get,
       session,
-      { kind: "ssh", hostId, multiplexer: attach },
+      {
+        kind: "ssh",
+        hostId,
+        multiplexer: attach,
+        mcpRequestId: options?.mcpRequestId,
+      },
       displayTitle,
       options,
     );

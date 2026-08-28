@@ -13,7 +13,6 @@
 pub(crate) mod approval;
 mod grants;
 mod protocol;
-pub(crate) mod runner;
 mod server;
 pub(crate) mod sessions;
 pub mod stdio;
@@ -55,6 +54,7 @@ pub(crate) fn client_executable_path() -> Result<String> {
 /// snippet runner's fan-out limit: enough for an agent to work, low enough that
 /// a runaway loop cannot flood a host.
 const MAX_CONCURRENT_PER_GRANT: usize = 4;
+pub(crate) const MAX_COMMAND_OUTPUT_BYTES: usize = 1024 * 1024;
 /// Recent tool calls kept for the activity list. Bounded because this is a
 /// live view, not an audit archive.
 const MAX_ACTIVITY_ENTRIES: usize = 200;
@@ -89,11 +89,9 @@ pub struct ActivityEntry {
     pub exit_code: Option<u32>,
     pub duration_ms: Option<u64>,
     pub error: Option<String>,
-    /// Terminal session the command ran in, so the UI can offer to focus it.
-    /// `None` for the exec fallback, which has no tab.
+    /// Terminal session involved in the activity, if any.
     pub session_id: Option<String>,
-    /// `"tab"` when the command ran in a visible interactive session,
-    /// `"exec"` when it used a one-off non-interactive connection.
+    /// `"tab"` for visible command sessions and `"exec"` for headless fallback.
     pub via: Option<&'static str>,
 }
 
@@ -166,9 +164,6 @@ pub(crate) struct McpShared {
     pub sessions: Arc<SessionRegistry>,
     activity: Mutex<VecDeque<ActivityEntry>>,
     semaphores: Mutex<HashMap<String, Arc<Semaphore>>>,
-    session_locks: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
-    /// Sentinel per session, alive as long as the shell that defines its helper.
-    sentinels: Mutex<HashMap<String, runner::Sentinel>>,
 }
 
 impl McpShared {
@@ -180,47 +175,6 @@ impl McpShared {
                 .entry(grant_id.to_string())
                 .or_insert_with(|| Arc::new(Semaphore::new(MAX_CONCURRENT_PER_GRANT))),
         )
-    }
-
-    /// One terminal is one keyboard: two commands typed into the same session at
-    /// once would interleave on the same tty. This serialises them.
-    fn session_lock(&self, session_id: &str) -> Arc<tokio::sync::Mutex<()>> {
-        Arc::clone(
-            self.session_locks
-                .lock()
-                .unwrap()
-                .entry(session_id.to_string())
-                .or_default(),
-        )
-    }
-
-    /// The sentinel for a session, minting one on first use.
-    ///
-    /// Per session rather than per command because the helper that prints it is
-    /// defined once, in that shell, and every later command just calls it.
-    fn sentinel_for(&self, session_id: &str) -> (runner::Sentinel, bool) {
-        let mut sentinels = self.sentinels.lock().unwrap();
-        match sentinels.get(session_id) {
-            Some(sentinel) => (sentinel.clone(), false),
-            None => {
-                let sentinel = runner::Sentinel::new(&uuid::Uuid::new_v4().simple().to_string());
-                sentinels.insert(session_id.to_string(), sentinel.clone());
-                (sentinel, true)
-            }
-        }
-    }
-
-    /// Forget a session's sentinel, so the next command re-defines the helper.
-    /// Used when the shell it was defined in is gone.
-    fn forget_sentinel(&self, session_id: &str) {
-        self.sentinels.lock().unwrap().remove(session_id);
-    }
-
-    /// Drop the per-session state for a session that has gone away, so the maps
-    /// do not grow with every tab the user ever opened.
-    fn forget_session(&self, session_id: &str) {
-        self.session_locks.lock().unwrap().remove(session_id);
-        self.sentinels.lock().unwrap().remove(session_id);
     }
 
     fn record(&self, entry: ActivityEntry) {
@@ -442,59 +396,17 @@ mod tests {
             exit_code: Some(0),
             duration_ms: 17,
             error: None,
-            session_id: Some("session-1".into()),
-            via: "tab",
+            session_id: None,
+            via: "exec",
         });
         assert_eq!(entry.action, "run-command");
         assert_eq!(entry.target, "prod");
         assert_eq!(entry.input_bytes, 42);
-        assert_eq!(entry.via, Some("tab"));
-        assert_eq!(entry.session_id.as_deref(), Some("session-1"));
+        assert_eq!(entry.via, Some("exec"));
+        assert_eq!(entry.session_id, None);
         // The command itself is nowhere in the serialised entry.
         let json = serde_json::to_string(&entry).unwrap();
         assert!(!json.contains("command\":\""));
-    }
-
-    /// The helper is defined once per shell, so only the FIRST command in a
-    /// session carries its definition. Getting this wrong either redefines it on
-    /// every command (visible noise, the thing this exists to avoid) or never
-    /// defines it at all.
-    #[test]
-    fn only_the_first_command_in_a_session_defines_the_helper() {
-        let shared = McpShared::default();
-        let (first, needs_definition) = shared.sentinel_for("session-a");
-        assert!(needs_definition);
-        let (again, needs_definition) = shared.sentinel_for("session-a");
-        assert!(!needs_definition);
-        assert_eq!(first, again);
-
-        // A different session has its own shell, so its own helper and marker.
-        let (other, needs_definition) = shared.sentinel_for("session-b");
-        assert!(needs_definition);
-        assert_ne!(first, other);
-
-        // Forgetting it — a timeout, or a shell that may have been replaced —
-        // makes the next command define it again.
-        shared.forget_sentinel("session-a");
-        let (fresh, needs_definition) = shared.sentinel_for("session-a");
-        assert!(needs_definition);
-        assert_ne!(first, fresh);
-    }
-
-    #[test]
-    fn each_session_gets_its_own_lock() {
-        let shared = McpShared::default();
-        let first = shared.session_lock("session-a");
-        assert!(Arc::ptr_eq(&first, &shared.session_lock("session-a")));
-        assert!(!Arc::ptr_eq(&first, &shared.session_lock("session-b")));
-
-        // A closed session stops being tracked, so the map cannot grow forever.
-        shared.session_lock("session-a");
-        shared.sentinel_for("session-a");
-        shared.forget_session("session-a");
-        assert!(!Arc::ptr_eq(&first, &shared.session_lock("session-a")));
-        // Its sentinel goes with it, so a reused id starts clean.
-        assert!(shared.sentinel_for("session-a").1);
     }
 
     #[test]

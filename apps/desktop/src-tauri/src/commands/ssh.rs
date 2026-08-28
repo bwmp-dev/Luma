@@ -31,6 +31,10 @@ pub struct SshSpawnRequest {
     /// become an arbitrary-command channel.
     #[serde(default)]
     pub multiplexer: Option<MultiplexerAttach>,
+    /// Opaque request id for an MCP command. The backend resolves the command
+    /// from its pending grant-scoped request; the frontend never receives it.
+    #[serde(default)]
+    pub mcp_request_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -356,6 +360,34 @@ async fn ssh_spawn_impl(
     }
     let (mut config, title) =
         ssh::connection_config(&state.pool, &keystore_state, &request.host_id).await?;
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let mcp_command = request
+        .mcp_request_id
+        .as_deref()
+        .map(|request_id| {
+            app.state::<crate::mcp::McpState>()
+                .sessions()
+                .claim(request_id, &request.host_id)
+                .map_err(LumaError::InvalidInput)
+        })
+        .transpose()?;
+    #[cfg(any(target_os = "android", target_os = "ios"))]
+    if request.mcp_request_id.is_some() {
+        return Err(LumaError::InvalidInput(
+            "MCP command sessions are unavailable on mobile".into(),
+        ));
+    }
+
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    if let Some(command) = &mcp_command {
+        if request.multiplexer.is_some() {
+            return Err(LumaError::InvalidInput(
+                "an MCP command cannot also attach to a workspace".into(),
+            ));
+        }
+        config.startup_command = Some(command.command().to_string());
+    }
     // A multiplexer attach replaces the host's own startup command for this
     // spawn only; the built command is validated here, never supplied verbatim.
     if let Some(attach) = &request.multiplexer {
@@ -380,18 +412,35 @@ async fn ssh_spawn_impl(
     let agent_sink = crate::agent_events::AgentEventSink::new(app.clone());
     let agent_sink_for_data = agent_sink.clone();
     let mut agent_scanner = crate::agent_events::AgentEventScanner::new();
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let mcp_command_for_data = mcp_command.clone();
     let data_callback = Box::new(move |bytes: &[u8]| {
         agent_sink_for_data.publish(agent_scanner.scan(bytes));
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
         tap_for_data.push(bytes);
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        if let Some(command) = &mcp_command_for_data {
+            command.observe(bytes);
+            if bytes == crate::ssh::SSH_AUTHENTICATED_MARKER {
+                let _ = on_data.send(InvokeResponseBody::Raw(bytes.to_vec()));
+                let _ = on_data.send(InvokeResponseBody::Raw(command.display_line().into_bytes()));
+                return;
+            }
+        }
         let _ = on_data.send(InvokeResponseBody::Raw(bytes.to_vec()));
     });
-    let exit_callback = Box::new(move |exit| {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    let mcp_command_for_exit = mcp_command.clone();
+    let exit_callback = Box::new(move |exit: SshExit| {
         // `finish_session` runs this on every SSH termination path — auth
         // abort, shell-open failure, normal exit — so the tap needs no hook
         // inside the transport layer.
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
         tap_for_exit.detach();
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        if let Some(command) = &mcp_command_for_exit {
+            command.finished(exit.clone());
+        }
         let _ = on_exit.send(exit);
     });
     let remote_os_callback = Box::new(move |metadata: SshRemoteOs| {
@@ -415,7 +464,7 @@ async fn ssh_spawn_impl(
             let _ = app_for_remote_os.emit_to("main", SSH_REMOTE_OS_EVENT_NAME, event);
         }
     });
-    let session_id = embedded
+    let session_id = match embedded
         .connect(
             config,
             request.cols,
@@ -424,11 +473,36 @@ async fn ssh_spawn_impl(
             exit_callback,
             remote_os_callback,
         )
-        .await?;
+        .await
+    {
+        Ok(session_id) => session_id,
+        Err(error) => {
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            if let Some(command) = &mcp_command {
+                command.failed(error.to_string());
+            }
+            return Err(error);
+        }
+    };
 
     agent_sink.attach(&session_id);
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     tap.attach(&session_id, &title);
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    if let Some(command) = &mcp_command {
+        if !app.state::<crate::mcp::McpState>().taps().share(
+            &session_id,
+            command.grant_id(),
+            &title,
+        ) {
+            command.failed("Luma could not share the command tab with its MCP grant.".into());
+            let _ = embedded.disconnect(&session_id);
+            return Err(LumaError::InvalidInput(
+                "could not prepare the MCP command tab".into(),
+            ));
+        }
+        command.started(&session_id);
+    }
 
     {
         pending_remote_os.lock().unwrap().session_id = Some(session_id.clone());

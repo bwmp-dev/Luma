@@ -93,6 +93,8 @@ export type TerminalSession = {
   /** True only after this live session explicitly enabled SSH agent
    * forwarding. Transient and never persisted into workspace snapshots. */
   agentForwarding?: boolean;
+  /** Command-specific MCP tab. It does not auto-reconnect or persist. */
+  agentCommand?: boolean;
   /** Host keys observed on the network during the last host-key preflight scan
    * for this session. Populated only for the blocking `host-key-changed` error
    * state so the alert can show new-vs-known fingerprints for comparison. */

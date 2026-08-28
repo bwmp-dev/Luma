@@ -20,7 +20,7 @@ export function ConnectionErrorAlert({
   hostTitle: string;
   message: string;
   /** Re-run connect (which re-runs the host-key preflight). */
-  onRetry: () => void;
+  onRetry?: () => void;
   onClose: () => void;
 }) {
   return (
@@ -50,14 +50,16 @@ export function ConnectionErrorAlert({
           >
             <X size={14} /> Close
           </button>
-          <button
-            type="button"
-            autoFocus
-            onClick={onRetry}
-            className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground hover:opacity-90"
-          >
-            <RotateCcw size={14} /> Retry
-          </button>
+          {onRetry && (
+            <button
+              type="button"
+              autoFocus
+              onClick={onRetry}
+              className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground hover:opacity-90"
+            >
+              <RotateCcw size={14} /> Retry
+            </button>
+          )}
         </div>
       </div>
     </div>

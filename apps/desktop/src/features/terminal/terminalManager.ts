@@ -56,7 +56,12 @@ import {
  */
 export type SpawnDescriptor =
   | { kind: "local"; ref: ShellRef | undefined }
-  | { kind: "ssh"; hostId: string; multiplexer?: MultiplexerAttach }
+  | {
+      kind: "ssh";
+      hostId: string;
+      multiplexer?: MultiplexerAttach;
+      mcpRequestId?: string;
+    }
   | { kind: "mosh"; hostId: string }
   | { kind: "serial"; config: SerialConfig };
 
@@ -966,6 +971,13 @@ async function spawnBackend(sessionId: string): Promise<ManagedSpawnResult> {
     if (/__LUMA_SSH_AUTHENTICATED__/.test(readableTranscript)) reportStage("authentication");
     if (!session.sshFinalizing && /__LUMA_SSH_AUTHENTICATED__/.test(readableTranscript)) {
       session.sshFinalizing = true;
+      if (descriptor.mcpRequestId) {
+        session.sshTranscript = "";
+        session.lastPromptSignature = "";
+        term.clear();
+        session.callbacks.onSshAuthenticated();
+        return;
+      }
       // Keep the overlay visible until the local authentication marker settles,
       // then reveal a clean terminal and ask the remote shell to redraw.
       window.setTimeout(() => {
@@ -1006,6 +1018,7 @@ async function spawnBackend(sessionId: string): Promise<ManagedSpawnResult> {
         cols: term.cols,
         rows: term.rows,
         multiplexer: descriptor.multiplexer,
+        mcpRequestId: descriptor.mcpRequestId,
       },
       handleData,
       (payload: SshExitPayload) =>
