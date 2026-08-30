@@ -2,6 +2,7 @@ import { useState } from "react";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { AlertTriangle, Download, KeyRound, Upload } from "lucide-react";
 import { Modal } from "../../components/Modal";
+import { normalizeDialogPath } from "../../lib/dialogPath";
 import { PassphrasePrompt } from "./PassphrasePrompt";
 import { ConflictDialog } from "./ConflictDialog";
 import { useInvalidateHosts } from "../../hooks/useHosts";
@@ -69,7 +70,7 @@ export function BackupSection({ vaultId }: { vaultId: string }) {
     });
     if (typeof path === "string") {
       setExportError(null);
-      setExportPhase({ kind: "passphrase", path });
+      setExportPhase({ kind: "passphrase", path: normalizeDialogPath(path) });
     }
   };
 
@@ -98,7 +99,7 @@ export function BackupSection({ vaultId }: { vaultId: string }) {
     });
     if (typeof selected === "string") {
       setImportError(null);
-      setImportPhase({ kind: "passphrase", path: selected });
+      setImportPhase({ kind: "passphrase", path: normalizeDialogPath(selected) });
     }
   };
 

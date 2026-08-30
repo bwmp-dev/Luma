@@ -24,6 +24,7 @@ import {
 } from "../../lib/hosts";
 import { useInvalidateHosts } from "../../hooks/useHosts";
 import { useCapabilityStore } from "../../stores/capabilityStore";
+import { normalizeDialogPath } from "../../lib/dialogPath";
 import { cn } from "../../lib/utils";
 
 /*
@@ -273,7 +274,7 @@ export function ImportDialog({
         filters: fileFilters(source),
       });
       if (typeof picked === "string") {
-        setFilePath(picked);
+        setFilePath(normalizeDialogPath(picked));
         setSelected(new Set());
         setResult(null);
       }

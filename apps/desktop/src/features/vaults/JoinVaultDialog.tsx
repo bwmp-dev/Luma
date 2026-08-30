@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { open as openFolder } from "@tauri-apps/plugin-dialog";
 import { FolderOpen, ShieldAlert } from "lucide-react";
 import { Modal } from "../../components/Modal";
+import { normalizeDialogPath } from "../../lib/dialogPath";
 import { parseLumaError } from "../../lib/hosts";
 import {
   createVault,
@@ -128,7 +129,7 @@ export function JoinVaultDialog({
 
   const pickFolder = async () => {
     const selected = await openFolder({ directory: true, multiple: false });
-    if (typeof selected === "string") setFolderPath(selected);
+    if (typeof selected === "string") setFolderPath(normalizeDialogPath(selected));
   };
 
   const buildInput = (): SyncConfigureInput | null => {

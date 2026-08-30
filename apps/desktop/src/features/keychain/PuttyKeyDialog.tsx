@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { Fingerprint, FolderOpen, KeyRound, Loader2, Lock, X } from "lucide-react";
+import { normalizeDialogPath } from "../../lib/dialogPath";
 import {
   importPuttyKey,
   inspectPuttyKey,
@@ -66,6 +67,7 @@ export function PuttyKeyDialog({
       return;
     }
     if (typeof picked !== "string") return;
+    picked = normalizeDialogPath(picked);
 
     setPath(picked);
     setInfo(null);
