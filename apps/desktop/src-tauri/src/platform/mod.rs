@@ -11,6 +11,24 @@ pub fn home_dir() -> Option<PathBuf> {
     var.map(PathBuf::from).filter(|path| path.is_dir())
 }
 
+// Dialogs return native paths on desktop and `file://` URLs on iOS. Convert
+// the latter before filesystem validation or access while leaving ordinary
+// paths unchanged.
+pub(crate) fn picker_path(value: &str) -> Option<PathBuf> {
+    let is_file_url = value
+        .get(..5)
+        .is_some_and(|prefix| prefix.eq_ignore_ascii_case("file:"));
+    if !is_file_url {
+        return Some(PathBuf::from(value));
+    }
+
+    let url = tauri::Url::parse(value).ok()?;
+    if url.scheme() != "file" || url.query().is_some() || url.fragment().is_some() {
+        return None;
+    }
+    url.to_file_path().ok()
+}
+
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -136,6 +154,29 @@ pub fn detect_shells() -> Vec<DetectedShell> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn picker_paths_decode_file_urls() {
+        let path = std::env::temp_dir().join("Luma picker file.txt");
+        let url = tauri::Url::from_file_path(&path).unwrap();
+        assert_eq!(picker_path(url.as_str()), Some(path));
+    }
+
+    #[test]
+    fn picker_paths_reject_invalid_file_urls() {
+        assert_eq!(picker_path("file:relative/path"), None);
+        assert_eq!(picker_path("file:///tmp/file?query"), None);
+    }
+
+    #[test]
+    fn picker_paths_preserve_native_paths() {
+        let path = if cfg!(windows) {
+            r"C:\Users\alice\file.txt"
+        } else {
+            "/home/alice/file.txt"
+        };
+        assert_eq!(picker_path(path), Some(PathBuf::from(path)));
+    }
 
     #[test]
     fn detects_at_least_one_shell() {

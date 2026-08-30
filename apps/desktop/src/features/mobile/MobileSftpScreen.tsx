@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   ArrowLeftRight,
@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useHosts } from "../../hooks/useHosts";
 import { sftpListKey, useSftpList } from "../../hooks/useSftp";
+import { normalizeDialogPath } from "../../lib/dialogPath";
 import {
   describeClipboard,
   OTHER_SIDE,
@@ -280,7 +281,7 @@ function ConnectedView({
   const pickAndUpload = async () => {
     const selected = await open({ multiple: true, directory: false });
     if (!selected) return;
-    const paths = Array.isArray(selected) ? selected : [selected];
+    const paths = (Array.isArray(selected) ? selected : [selected]).map(normalizeDialogPath);
     const files: SftpEntry[] = paths.map((path) => ({
       name: basename(path),
       path,
@@ -298,17 +299,36 @@ function ConnectedView({
     });
   };
 
-  // Download: pick a destination folder via the system picker, then fetch the
-  // entry into it.
+  // iOS cannot pick folders, but its save dialog can choose the exact target
+  // for a file. Directory downloads retain the folder-picker flow on platforms
+  // that support it.
   const pickAndDownload = async (entry: SftpEntry) => {
+    if (entry.kind !== "dir") {
+      const selected = await save({ defaultPath: entry.name });
+      if (typeof selected !== "string") return;
+      const destination = normalizeDialogPath(selected);
+      const separator = destination.includes("\\") ? "\\" : "/";
+      const destinationDir = parentPath(destination, separator);
+      if (!destinationDir) return;
+      transfer({
+        source: { kind: "remote", sessionId },
+        dest: { kind: "local" },
+        files: [{ ...entry, name: basename(destination) }],
+        destDir: destinationDir,
+        destSeparator: separator,
+      });
+      return;
+    }
+
     const dir = await open({ directory: true, multiple: false });
     if (typeof dir !== "string") return;
+    const destination = normalizeDialogPath(dir);
     transfer({
       source: { kind: "remote", sessionId },
       dest: { kind: "local" },
       files: [entry],
-      destDir: dir,
-      destSeparator: dir.includes("\\") ? "\\" : "/",
+      destDir: destination,
+      destSeparator: destination.includes("\\") ? "\\" : "/",
     });
   };
 

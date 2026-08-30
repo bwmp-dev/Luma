@@ -2,6 +2,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { terminalAttachUpload } from "../../lib/sftp";
 import { escapeRemotePathArg } from "../../lib/shellEscape";
 import { parseLumaError } from "../../lib/hosts";
+import { normalizeDialogPath } from "../../lib/dialogPath";
 import { useSessionStore } from "../../stores/sessionStore";
 import { terminalManager } from "./terminalManager";
 import type { TerminalSession } from "../../types";
@@ -23,7 +24,7 @@ export function canAttachFile(session: TerminalSession | undefined): boolean {
 /** Show the OS file picker. Returns null when the user cancels. */
 export async function pickLocalFile(): Promise<string | null> {
   const picked = await open({ multiple: false, directory: false });
-  return typeof picked === "string" ? picked : null;
+  return typeof picked === "string" ? normalizeDialogPath(picked) : null;
 }
 
 /**

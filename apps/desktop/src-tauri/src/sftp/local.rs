@@ -361,12 +361,19 @@ pub(super) fn validate_local_path(path: &str) -> Result<PathBuf> {
             "local path exceeds {MAX_PATH_BYTES} bytes"
         )));
     }
-    if has_empty_component(path) {
+    let path = crate::platform::picker_path(path)
+        .ok_or_else(|| LumaError::InvalidInput("local path is invalid".into()))?;
+    let path_text = path.to_string_lossy();
+    if path_text.contains('\0') {
+        return Err(LumaError::InvalidInput(
+            "local path may not contain NUL".into(),
+        ));
+    }
+    if has_empty_component(&path_text) {
         return Err(LumaError::InvalidInput(
             "local path contains an empty component".into(),
         ));
     }
-    let path = PathBuf::from(path);
     if !path.is_absolute() {
         return Err(LumaError::InvalidInput(
             "local path must be absolute".into(),

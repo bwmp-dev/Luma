@@ -11,6 +11,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { normalizeDialogPath } from "../../lib/dialogPath";
 import { PassphrasePrompt } from "./PassphrasePrompt";
 import { parseLumaError } from "../../lib/hosts";
 import {
@@ -177,7 +178,7 @@ function SyncSectionBody({ vault, config }: { vault: Vault; config: SyncConfig }
 
   const pickFolder = async () => {
     const selected = await open({ directory: true, multiple: false });
-    if (typeof selected === "string") setFolderPath(selected);
+    if (typeof selected === "string") setFolderPath(normalizeDialogPath(selected));
   };
 
   const onDisable = () => {

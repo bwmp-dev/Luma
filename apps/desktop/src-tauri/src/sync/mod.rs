@@ -646,10 +646,11 @@ pub async fn configure(
     match provider {
         "local-folder" => {
             let folder = required_trimmed(input.folder_path.take(), "folderPath")?;
-            let folder_path = PathBuf::from(&folder);
+            let folder_path = crate::platform::picker_path(&folder)
+                .ok_or_else(|| LumaError::InvalidInput("folderPath is invalid".into()))?;
             providers::validate_local_folder(&folder_path)?;
             reject_app_data_path(&folder_path, app_data_dir)?;
-            stored.folder_path = Some(folder);
+            stored.folder_path = Some(folder_path.to_string_lossy().into_owned());
             clear_provider_credentials(pool, keystore_state, vault_id, &[]).await?;
         }
         "webdav" => {
@@ -3066,7 +3067,11 @@ fn validate_file_path(path: &str, app_data_dir: &Path, require_file: bool) -> Re
     if path.trim().is_empty() || path.contains('\0') || path.len() > 32_768 {
         return Err(LumaError::InvalidInput("file path is invalid".into()));
     }
-    let path = PathBuf::from(path);
+    let path = crate::platform::picker_path(path)
+        .ok_or_else(|| LumaError::InvalidInput("file path is invalid".into()))?;
+    if path.to_string_lossy().contains('\0') {
+        return Err(LumaError::InvalidInput("file path is invalid".into()));
+    }
     if !path.is_absolute() {
         return Err(LumaError::InvalidInput("file path must be absolute".into()));
     }
@@ -3612,7 +3617,8 @@ async fn create_provider(
             let folder = stored.folder_path.as_ref().ok_or_else(|| {
                 LumaError::SyncUnavailable("local sync folder is not configured".into())
             })?;
-            let path = PathBuf::from(folder);
+            let path = crate::platform::picker_path(folder)
+                .ok_or_else(|| LumaError::SyncUnavailable("local sync folder is invalid".into()))?;
             providers::validate_local_folder(&path)?;
             reject_app_data_path(&path, app_data_dir)?;
             Ok(Box::new(LocalFolderProvider::new(path, slot)))

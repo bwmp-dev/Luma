@@ -761,7 +761,13 @@ pub(crate) fn validate_import_path(path: &str) -> Result<PathBuf> {
             "import file path is invalid".into(),
         ));
     }
-    let path = PathBuf::from(path);
+    let path = crate::platform::picker_path(path)
+        .ok_or_else(|| LumaError::InvalidInput("import file path is invalid".into()))?;
+    if path.to_string_lossy().contains('\0') {
+        return Err(LumaError::InvalidInput(
+            "import file path is invalid".into(),
+        ));
+    }
     if !path.is_absolute() {
         return Err(LumaError::InvalidInput(
             "import file path must be absolute".into(),
