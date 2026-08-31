@@ -208,6 +208,16 @@ const bundledTerminalFontReady =
  * every prompt-jump / copy-output action becomes a no-op.
  */
 
+/** What a preview mirror copies: the session it renders, and the callback that
+ * re-fits its card. Held on the mirror so any code that touches a preview can
+ * reach the terminal it is a copy of. */
+type PreviewLink = {
+  sourceId: string;
+  /** Re-fit the card after the copied rendering changed shape (the source was
+   * resized, or its font size changed under it). */
+  onGridChange: () => void;
+};
+
 /** One command cycle bounded by OSC 133 markers. */
 type CommandMark = {
   /** Marker at the prompt-start line (OSC 133;A). */
@@ -380,13 +390,17 @@ type ManagedSession = {
    * output (viewer/controller of a shared terminal) and forwards local typing to
    * `onInput` instead of a PTY. */
   display: boolean;
-  /** A preview mirror (a display session created by `mirrorSession`). Its grid
-   * is owned by the session it mirrors and its font size is derived from the
-   * card it has to fit, so the global font/grid plumbing — `configure`,
-   * `applyTerminalStyle`, `fitSession` — deliberately leaves it alone. It
-   * follows the real terminal instead: a font-size change refits the SOURCE,
-   * whose resize the mirror is already subscribed to. */
-  preview: boolean;
+  /** Set on a preview mirror (a display session created by `mirrorSession`),
+   * naming the session it copies. Its grid and font size are owned by that
+   * session, so the global font/grid plumbing — `configure`,
+   * `applyTerminalStyle`, `fitSession` — deliberately leaves it alone and
+   * follows the source instead. Null for every other session. */
+  previewOf: PreviewLink | null;
+  /** Uniform CSS scale currently applied to a preview mirror's element. A
+   * preview renders at the SAME font size as the terminal it mirrors and is
+   * shrunk by this transform, so the card shows the terminal's own rendering at
+   * a smaller size rather than a different, tinier one. 1 everywhere else. */
+  previewScale: number;
   /** For a display session, where locally-typed input is delivered (the collab
    * client encrypts it as terminal.input for the owner). Null for viewers with no
    * control lease and for normal backend sessions. */
@@ -404,10 +418,17 @@ const BACKEND_RESIZE_DEBOUNCE_MS = 100;
 // grid plus a little slack.
 const PREVIEW_SEED_LINES = 60;
 
-/** Smallest font a preview will shrink to. Below this the miniature stops being
+/** Smallest scale a preview will shrink to. Below this the miniature stops being
  * readable, so a very wide source is clipped at the right edge instead — the
- * start of each line, which is where the prompt and command live. */
-const MIN_PREVIEW_FONT_SIZE = 5;
+ * start of each line, which is where the prompt and command live. A scale rather
+ * than a pixel floor, so a reader who has picked a larger terminal font gets a
+ * proportionally larger miniature: 0.35 is ~5px at the default 14. */
+const MIN_PREVIEW_SCALE = 0.35;
+
+/** A preview is never drawn LARGER than the terminal it mirrors: once the card
+ * can hold the source's grid outright, the miniature simply is the terminal at
+ * its own size. */
+const MAX_PREVIEW_SCALE = 1;
 
 type ManagerConfig = {
   fontSize: number;
@@ -483,9 +504,70 @@ function dropOverflowingRow(session: ManagedSession): void {
   session.term.resize(session.term.cols, session.term.rows - 1);
 }
 
+/**
+ * Re-copy every live mirror's render settings from the session it previews, and
+ * ask its card to refit.
+ *
+ * A preview is the source's rendering scaled down, so it has to use the source's
+ * font — not the configured one, which a detached or pre-change session may not
+ * be using either. This runs after any global style change, once the sources
+ * have already been updated, because a mirror is only correct relative to the
+ * terminal it copies.
+ */
+function syncPreviews(): void {
+  for (const session of sessions.values()) {
+    const link = session.previewOf;
+    if (!link || session.disposed) continue;
+    const source = sessions.get(link.sourceId);
+    if (!source) continue;
+    const fontFamily = source.term.options.fontFamily;
+    const fontSize = (source.term.options.fontSize as number) ?? config.fontSize;
+    if (
+      session.term.options.fontFamily === fontFamily &&
+      session.term.options.fontSize === fontSize
+    ) {
+      continue;
+    }
+    session.term.options.fontFamily = fontFamily;
+    session.term.options.fontSize = fontSize;
+    link.onGridChange();
+  }
+}
+
+/**
+ * Draw a preview mirror at `scale`, anchored to its top-left so the newest
+ * output stays where the card expects it.
+ *
+ * The transform is on the .xterm element, so xterm itself keeps laying out and
+ * rasterizing at the real terminal's font size and only the finished rendering
+ * is shrunk — which is what makes the card a scaled copy of the terminal instead
+ * of a second, smaller terminal.
+ *
+ * The element is also sized to the grid it contains rather than to the host. A
+ * transform does not affect layout, so a percentage size here would leave the
+ * .xterm box (and with it the absolutely-positioned viewport, whose stylesheet
+ * default is opaque black) larger than the rows that fill it — a black band
+ * under the output in a light theme. Pinning it to the grid means the viewport
+ * ends exactly where the last row does.
+ */
+function applyPreviewScale(
+  session: ManagedSession,
+  scale: number,
+  grid: { width: number; height: number },
+): void {
+  const element = session.term.element;
+  if (!element) return;
+  session.previewScale = scale;
+  element.style.transformOrigin = "top left";
+  element.style.transform = scale === 1 ? "" : `scale(${scale})`;
+  element.style.width = `${grid.width}px`;
+  element.style.height = `${grid.height}px`;
+}
+
 /** Pixel size of the grid a terminal currently renders, or null before it has
  * been opened into the DOM. Measured off `.xterm-screen`, which xterm sizes from
- * its own exact cell metrics — so this is cols×rows in real pixels. */
+ * its own exact cell metrics — so this is cols×rows in real pixels. Includes any
+ * preview scale, since it is measured through the transform. */
 function renderedGridSize(
   session: ManagedSession,
 ): { width: number; height: number } | null {
@@ -1081,10 +1163,10 @@ export const terminalManager = {
     const previous = config;
     config = { ...config, ...partial };
     for (const session of sessions.values()) {
-      // A preview's font size is derived from the card it fits, not configured;
-      // it follows the real terminal by mirroring that session's resize.
+      // A preview copies its source's rendering, so it takes the font size from
+      // that session rather than from config — syncPreviews below.
       if (
-        !session.preview &&
+        !session.previewOf &&
         partial.fontSize !== undefined &&
         partial.fontSize !== previous.fontSize
       ) {
@@ -1098,6 +1180,7 @@ export const terminalManager = {
         session.term.options.theme = currentTheme();
       }
     }
+    syncPreviews();
   },
 
   /**
@@ -1124,15 +1207,13 @@ export const terminalManager = {
     if (style.fontSize !== undefined) config.fontSize = style.fontSize;
     for (const session of sessions.values()) {
       if (schemeChanged) session.term.options.theme = currentTheme();
+      // A preview keeps its source's grid and font, so neither the configured
+      // font nor a refit applies here; syncPreviews copies both from the source
+      // once every source has been updated.
+      if (session.previewOf) continue;
       if (style.fontFamily !== undefined) {
         session.term.options.fontFamily = config.fontFamily;
       }
-      // A preview keeps the derived size that makes its mirrored grid fit its
-      // card, and keeps the grid itself — so neither the configured size nor a
-      // refit applies. The new family still does: it must render in the same
-      // typeface as the terminal it previews, and fitPreview corrects for the
-      // cell metrics that come with it.
-      if (session.preview) continue;
       if (style.fontSize !== undefined) session.term.options.fontSize = config.fontSize;
       // Font changes alter cell metrics, so the grid must be refit; a scheme-only
       // change does not, but refitting is cheap and safe.
@@ -1140,6 +1221,7 @@ export const terminalManager = {
         this.fitSession(session.id);
       }
     }
+    syncPreviews();
   },
 
   defaultShellRef(): ShellRef | undefined {
@@ -1368,7 +1450,8 @@ export const terminalManager = {
       onModifierConsumed: null,
       outputTap: null,
       display: false,
-      preview: false,
+      previewOf: null,
+      previewScale: 1,
       onInput: null,
     };
     sessions.set(sessionId, session);
@@ -1430,9 +1513,9 @@ export const terminalManager = {
    * a preview mirror, which would otherwise pull focus off the screen it sits on
    * (and, on mobile, could raise the soft keyboard). `accelerated: false` keeps
    * it off the WebGL renderer; see the call site below. `fit: false` leaves the
-   * grid alone instead of resizing it to the host: a preview mirror owns the
-   * SOURCE's grid so it wraps identically, and its host is sized from that grid
-   * rather than the other way round.
+   * grid alone instead of resizing it to the host: a preview mirror renders the
+   * SOURCE's grid at the source's size and is scaled into its card by
+   * fitPreview, so fitting it to the host is what would break the copy.
    */
   attach(
     sessionId: string,
@@ -1506,9 +1589,9 @@ export const terminalManager = {
     const session = sessions.get(sessionId);
     if (!session?.term.element?.isConnected) return;
     // A preview mirror's grid belongs to the session it mirrors; refitting it
-    // to its own card is what would re-wrap the output. It fits by font size
-    // instead — see fitPreview.
-    if (session.preview) return;
+    // to its own card is what would re-wrap the output. It fits by scaling the
+    // rendering instead — see fitPreview.
+    if (session.previewOf) return;
     try {
       session.fit.fit();
       dropOverflowingRow(session);
@@ -1783,9 +1866,6 @@ export const terminalManager = {
        * Detached windows forward this to the real session so the backend PTY
        * matches the grid actually on screen. */
       onResize?: (cols: number, rows: number) => void;
-      /** Mark this as a preview mirror, exempting it from the global font/grid
-       * plumbing (see ManagedSession.preview). Set by mirrorSession. */
-      preview?: boolean;
     } = {},
   ): void {
     if (sessions.has(sessionId)) return;
@@ -1843,7 +1923,8 @@ export const terminalManager = {
       onModifierConsumed: null,
       outputTap: null,
       display: true,
-      preview: options.preview === true,
+      previewOf: null,
+      previewScale: 1,
       onInput: options.onInput ?? null,
     };
     sessions.set(sessionId, session);
@@ -1877,13 +1958,14 @@ export const terminalManager = {
    * receives. Both halves run inside the manager, so a preview never puts
    * terminal bytes on a React path; the caller only attaches a host element.
    *
-   * The mirror adopts the SOURCE's column count and never refits to its own
-   * container (`attach` is called with `fit: false`). That is what makes a
-   * preview look like the terminal rather than an approximation of it: every
-   * line wraps where it wrapped in the real session, right-aligned prompt
-   * segments stay right-aligned, and a full-screen TUI addressing absolute
-   * cursor positions lands where it meant to. `fitPreview` then shrinks the font
-   * until that grid fits the card, instead of re-wrapping to fit.
+   * The mirror adopts the SOURCE's column count and font size, and never refits
+   * to its own container (`attach` is called with `fit: false`). That is what
+   * makes a preview the terminal rather than an approximation of it: xterm
+   * rasterizes the identical grid at the identical size, so every line wraps
+   * where it wrapped in the real session, right-aligned prompt segments stay
+   * right-aligned, and a full-screen TUI addressing absolute cursor positions
+   * lands where it meant to. `fitPreview` then scales that rendering down to the
+   * card with a CSS transform, instead of re-rendering it smaller.
    *
    * @param previewId Id for the mirror; must not collide with a real session.
    * @param sourceId The live session to mirror.
@@ -1895,9 +1977,10 @@ export const terminalManager = {
     sourceId: string,
     options: {
       lines?: number;
-      /** Called after the mirror's grid follows a resize of the source, so the
-       * caller can re-run fitPreview: the grid changed shape while the card
-       * did not, which no ResizeObserver on the host would notice. */
+      /** Called after the rendering this mirror copies changed shape — the
+       * source was resized, or the terminal font changed under both. The caller
+       * re-runs fitPreview: the copied rendering changed while the card did not,
+       * which no ResizeObserver on the host would notice. */
       onGridChange?: () => void;
     } = {},
   ): () => void {
@@ -1905,13 +1988,24 @@ export const terminalManager = {
     if (!source || sessions.has(previewId)) return () => {};
     // No onInput: createDisplaySession then sets disableStdin, so the mirror is
     // read-only and cannot send anything to the source's PTY.
-    this.createDisplaySession(previewId, { preview: true });
+    this.createDisplaySession(previewId);
     const mirror = sessions.get(previewId);
+    if (!mirror) return () => {};
+    const onGridChange = options.onGridChange ?? (() => {});
+    // Marks this a preview: from here on the global font/grid plumbing skips it
+    // and copies from `sourceId` instead.
+    mirror.previewOf = { sourceId, onGridChange };
     // Adopt the source's COLUMNS before seeding: xterm wraps as it writes, so a
     // seed written into the default 80-column grid would already be re-wrapped
     // by the time the resize arrived. Rows are left as they are — fitPreview
     // sets them from the card once this is attached.
-    mirror?.term.resize(source.term.cols, mirror.term.rows);
+    mirror.term.resize(source.term.cols, mirror.term.rows);
+    // And the source's FONT: the preview is that rendering scaled, so it has to
+    // start from the same cell metrics. Read off the source rather than config,
+    // which a detached window or a pre-change session may not be using.
+    mirror.term.options.fontFamily = source.term.options.fontFamily;
+    mirror.term.options.fontSize =
+      (source.term.options.fontSize as number) ?? config.fontSize;
     // Each serialized line closes its own SGR state, so slicing to a tail keeps
     // colors intact and spares the mirror a full scrollback replay.
     const seed = this.getBufferText(sourceId);
@@ -1930,7 +2024,7 @@ export const terminalManager = {
       const current = sessions.get(previewId);
       if (!current || current.disposed || current.term.cols === cols) return;
       current.term.resize(cols, current.term.rows);
-      options.onGridChange?.();
+      onGridChange();
     });
     return () => {
       resized.dispose();
@@ -1939,54 +2033,58 @@ export const terminalManager = {
     };
   },
 
-  /** The font size a preview mirror currently renders at, or null when it is not
-   * a live preview. Lets a caller detect that a fitPreview pass changed nothing
+  /** The background the terminal currently renders on, for a surface that has to
+   * extend it — a preview card is wider or taller than the grid it holds, and
+   * anything but the terminal's own background there reads as a border around
+   * the output rather than as part of it. */
+  terminalBackground(): string {
+    return currentTheme().background ?? DARK_THEME.background ?? "#000000";
+  },
+
+  /** The scale a preview mirror is currently drawn at, or null when it is not a
+   * live preview. Lets a caller detect that a fitPreview pass changed nothing
    * and stop iterating. */
-  previewFontSize(previewId: string): number | null {
+  previewScale(previewId: string): number | null {
     const session = sessions.get(previewId);
-    if (!session?.preview) return null;
-    return (session.term.options.fontSize as number) ?? config.fontSize;
+    if (!session?.previewOf) return null;
+    return session.previewScale;
   },
 
   /**
-   * Fit a preview mirror to its card by SHRINKING THE FONT until the source's
-   * column count fits, instead of reducing the columns until the font fits
-   * (what `fitSession` does everywhere else). Columns are what decide where
-   * every line breaks, so holding them is what makes a preview look like the
-   * terminal rather than a re-flowed approximation of it.
+   * Fit a preview mirror to its card by SCALING THE WHOLE TERMINAL DOWN, rather
+   * than re-rendering it smaller.
    *
-   * Rows are then set to whatever the card can show at that font. A phone
-   * terminal is tall and narrow while its card is short and wide, so demanding
-   * that the source's ROWS fit too would drive the font to the floor and still
-   * clip the bottom of the grid. Rows do not affect wrapping, so the preview
-   * instead shows the tail of the session — the most recent output, which is
-   * what the card is being read for — at a legible size. The cost is that a
-   * full-screen TUI is cropped to the last N lines rather than shown whole.
+   * The mirror keeps the source's columns AND the source's font size, so xterm
+   * lays out and rasterizes exactly what the real terminal does — same cell
+   * metrics, same wrap points, same glyphs. A CSS transform then shrinks that
+   * rendering to the card. The card is therefore a photograph of the terminal,
+   * which is what "1:1" means here; re-fitting the font instead would give a
+   * differently-hinted, differently-rounded grid that only resembles it.
    *
-   * xterm derives cell metrics from the font and both scale linearly, so the
-   * ratio between the card and the currently rendered grid is the factor to
-   * apply. It is measured rather than computed from a hardcoded aspect: the
-   * bundled font's advance width, the device pixel ratio and xterm's own
-   * rounding all feed into the real cell size.
+   * The scale comes from width alone: the source's columns are what decide every
+   * wrap point, so they must fit. Rows are then set to whatever the scaled card
+   * can show, because a phone terminal is tall and narrow while its card is
+   * short and wide — demanding the rows fit too would drive the scale to the
+   * floor. Rows do not affect wrapping, so the preview shows the tail of the
+   * session (the most recent output, which is what the card is read for) at a
+   * legible size. The cost is that a full-screen TUI is cropped to its last N
+   * lines rather than shown whole.
    *
-   * The font is clamped to MIN_PREVIEW_FONT_SIZE, so a very wide source stops
-   * shrinking and is clipped at the right edge instead of becoming a grey
-   * smear. Returns the font size applied, or null when nothing could be
-   * measured yet (not a preview, not attached, or laid out to zero).
+   * The scale is clamped to MIN_PREVIEW_SCALE, so a very wide source stops
+   * shrinking and is clipped at the right edge instead of becoming a grey smear,
+   * and to MAX_PREVIEW_SCALE so a narrow grid in a wide card is never drawn
+   * larger than the terminal itself.
    *
-   * One measure-and-apply pass. xterm re-measures the font asynchronously, so
-   * reading the geometry again in the same call would see the old cell metrics;
-   * callers instead call this once per frame, which converges — each pass scales
-   * from what is actually on screen — and settles as soon as the size stops
-   * changing.
+   * Returns the scale applied, or null when nothing could be measured yet (not a
+   * preview, not attached, or laid out to zero).
    *
-   * @param maxFontSize Upper bound, so a narrow grid in a wide card renders at
-   * a deliberately miniature size instead of ballooning past the real terminal.
+   * @param maxRows Row ceiling for the mirrored grid. Rows are cheap to render
+   * but not free, and a card only needs the tail.
    */
-  fitPreview(previewId: string, maxFontSize: number): number | null {
+  fitPreview(previewId: string, maxRows: number): number | null {
     const session = sessions.get(previewId);
     const host = session?.term.element?.parentElement;
-    if (!session?.preview || !host) return null;
+    if (!session?.previewOf || !host) return null;
     const style = window.getComputedStyle(host);
     const availableWidth =
       host.clientWidth -
@@ -2000,27 +2098,30 @@ export const terminalManager = {
     const grid = renderedGridSize(session);
     if (!grid) return null;
 
-    const applied = (session.term.options.fontSize as number) ?? config.fontSize;
-    // Width only: the columns must fit, the rows are chosen to suit.
-    // Round DOWN to a tenth — xterm rounds cell dimensions up, so biasing the
-    // font down is what keeps the last column inside the card.
-    const next = Math.max(
-      MIN_PREVIEW_FONT_SIZE,
-      Math.min(
-        maxFontSize,
-        Math.floor((applied * availableWidth * 10) / grid.width) / 10,
-      ),
-    );
-    if (next !== applied) session.term.options.fontSize = next;
+    // The grid is measured through the transform already applied, so divide it
+    // back out to get the unscaled width the terminal renders at.
+    const naturalWidth = grid.width / session.previewScale;
+    const naturalCellHeight = grid.height / session.previewScale / session.term.rows;
+    if (naturalWidth <= 0 || naturalCellHeight <= 0) return null;
 
-    // Cell height at the NEW font, derived from the metrics actually rendered at
-    // the old one. Both scale with the font, so the ratio carries across.
-    const cellHeight = (grid.height / session.term.rows) * (next / applied);
-    const rows = Math.max(1, Math.floor(availableHeight / cellHeight));
+    const scale = Math.max(
+      MIN_PREVIEW_SCALE,
+      Math.min(MAX_PREVIEW_SCALE, availableWidth / naturalWidth),
+    );
+
+    // Rows the card can show at this scale. Measured in unscaled pixels, since
+    // that is the space the grid is laid out in before the transform.
+    const rows = Math.max(
+      1,
+      Math.min(maxRows, Math.floor(availableHeight / scale / naturalCellHeight)),
+    );
+    applyPreviewScale(session, scale, {
+      width: naturalWidth,
+      height: naturalCellHeight * rows,
+    });
     // Columns are never touched here: that is the whole contract of a mirror.
     if (rows !== session.term.rows) session.term.resize(session.term.cols, rows);
-    else if (next !== applied) session.term.refresh(0, session.term.rows - 1);
-    return next;
+    return scale;
   },
 
   /** Clear a display-only session's screen and scrollback, so a buffer snapshot

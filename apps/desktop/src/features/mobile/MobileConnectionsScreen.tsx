@@ -148,7 +148,7 @@ export function MobileConnectionsScreen({
                     <MobileTerminalPreview
                       sessionId={sessionId}
                       status={status}
-                      className="h-36 w-full border-b border-border/60 bg-background px-2 py-1.5"
+                      className="h-36 w-full border-b border-border/60 px-2 py-1.5"
                     />
                   )}
                   <div className="flex items-center gap-1">

@@ -130,6 +130,31 @@ select,
   outline: none !important;
 }
 
+/* The mobile session previews render through xterm's DOM renderer (they stay off
+   WebGL so they can't evict the real terminal's context), which makes their rows
+   real text nodes. iOS inflates small text inside a block, so the glyphs grow
+   while the row boxes keep the height measured from the cell — the preview's
+   lines then overlap and overrun their card. Terminal output is laid out by the
+   grid, never by the reader's text size. */
+.xterm {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/*
+ * A preview mirror is the real terminal's rendering scaled down (see
+ * terminalManager.fitPreview), so its viewport is a full-size scroller that the
+ * card clips. Its scrollbar would be a scaled-down scrollbar drawn over the
+ * output — the card is a glance, not somewhere to scroll — so hide it while
+ * leaving the terminal's own untouched.
+ */
+.luma-terminal-preview .xterm-viewport {
+  scrollbar-width: none;
+}
+.luma-terminal-preview .xterm-viewport::-webkit-scrollbar {
+  display: none;
+}
+
 /* The main region is a skip-link target, not an interactive control; don't ring
    the whole content area when focus lands on it. */
 #main-content:focus,

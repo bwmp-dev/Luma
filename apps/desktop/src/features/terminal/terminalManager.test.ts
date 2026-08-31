@@ -898,34 +898,38 @@ describe("terminalManager preview mirror", () => {
     terminalManager.dispose("mirror-nofit");
   });
 
-  it("keeps a preview's derived font size when the configured size changes", async () => {
-    await createLocalWithOutput("mirror-font");
+  it("keeps a preview's font size equal to the session it mirrors", async () => {
+    const { term } = await createLocalWithOutput("mirror-font");
     const stop = terminalManager.mirrorSession("preview:mirror-font", "mirror-font");
     const mirror = newestTerminal();
-    mirror.options.fontSize = 6;
 
     terminalManager.configure({ fontSize: 20 });
+    expect(mirror.options.fontSize).toBe(term.options.fontSize);
     terminalManager.applyTerminalStyle({ fontSize: 22 });
+    expect(mirror.options.fontSize).toBe(term.options.fontSize);
 
-    // 6 is what makes the mirrored grid fit its card; the terminal's own size
-    // reaches the preview by way of the source's resize instead.
-    expect(mirror.options.fontSize).toBe(6);
+    // A copy of the terminal's rendering has to be drawn at the terminal's size;
+    // it is the CARD that adapts, by scaling that rendering (fitPreview).
+    expect(mirror.options.fontSize).toBe(22);
 
     stop();
     terminalManager.dispose("mirror-font");
     terminalManager.configure({ fontSize: 14 });
+    terminalManager.applyTerminalStyle({ fontSize: 14 });
   });
 });
 
 describe("terminalManager preview fit", () => {
-  /** Mirror a source of `cols`x`rows` into a host of the given pixel box, with
-   * the mirror's rendered grid measuring `gridWidth`x`gridHeight`. jsdom does no
-   * layout, so both are stubbed the way the fit-overflow suite does it. */
+  /** Mirror a source into a host of the given pixel box, with the mirror's
+   * rendering measuring `grid` at scale 1. jsdom does no layout, so both are
+   * stubbed the way the fit-overflow suite does it — and since a preview is
+   * measured THROUGH its transform, the stub reports the grid multiplied by
+   * whatever scale is currently applied, the way a browser would. */
   async function previewInto(
     id: string,
     host: { width: number; height: number },
     grid: { width: number; height: number },
-    fontSize = 14,
+    onGridChange?: () => void,
   ): Promise<{ mirror: Terminal; previewId: string; stop: () => void }> {
     setInvoke((cmd) => {
       if (cmd === "pty_spawn") return { sessionId: `${id}-backend`, shellName: "bash" };
@@ -934,9 +938,8 @@ describe("terminalManager preview fit", () => {
     });
     await terminalManager.createSession(id, { kind: "local", ref: undefined }, callbacks());
     const previewId = `preview:${id}`;
-    const stop = terminalManager.mirrorSession(previewId, id);
+    const stop = terminalManager.mirrorSession(previewId, id, { onGridChange });
     const mirror = createdTerminals[createdTerminals.length - 1];
-    mirror.options.fontSize = fontSize;
 
     const element = document.createElement("div");
     document.body.appendChild(element);
@@ -954,40 +957,96 @@ describe("terminalManager preview fit", () => {
       fit: false,
     });
     const screen = mirror.element?.querySelector(".xterm-screen") as HTMLElement;
-    screen.getBoundingClientRect = () =>
-      ({ width: grid.width, height: grid.height }) as DOMRect;
+    const rows = mirror.rows;
+    screen.getBoundingClientRect = () => {
+      const scale = terminalManager.previewScale(previewId) ?? 1;
+      // Height tracks the row count the same way a real render does, so a fit
+      // pass that added rows measures the taller grid on the next pass.
+      return {
+        width: grid.width * scale,
+        height: (grid.height / rows) * mirror.rows * scale,
+      } as DOMRect;
+    };
     return { mirror, previewId, stop };
   }
 
-  it("shrinks the font until the source's columns fit, keeping those columns", async () => {
-    // A grid twice as wide as the card halves the font. The column count — what
-    // decides every wrap point — is untouched.
+  it("scales the rendering until the source's columns fit, keeping those columns", async () => {
+    // A rendering twice as wide as the card is drawn at half size. Neither the
+    // column count — what decides every wrap point — nor the font it renders at
+    // is touched, so the card holds the terminal's own output, shrunk.
     const { mirror, previewId, stop } = await previewInto(
       "fit-preview",
       { width: 300, height: 400 },
       { width: 600, height: 400 },
     );
 
-    expect(terminalManager.fitPreview(previewId, 14)).toBe(7);
-    expect(mirror.options.fontSize).toBe(7);
+    expect(terminalManager.fitPreview(previewId, 60)).toBe(0.5);
+    expect(mirror.options.fontSize).toBe(14);
     expect(mirror.cols).toBe(80);
 
     stop();
     terminalManager.dispose("fit-preview");
   });
 
-  it("fills the card with rows instead of squeezing the font to fit them", async () => {
-    // 24 rows over 400px is a 16.67px cell; halving the font halves that to
-    // 8.33px, so a 400px-tall card shows 48 rows. A phone session is far taller
-    // than its card, and shrinking the font until every row fit would leave the
-    // text unreadable — the preview shows the tail at a legible size instead.
+  it("renders the mirror at the source's font size, not the configured one", async () => {
+    setInvoke((cmd) => {
+      if (cmd === "pty_spawn") return { sessionId: "font-copy-backend", shellName: "bash" };
+      if (cmd === "pty_kill" || cmd === "pty_resize") return undefined;
+      throw new Error(`unexpected ${cmd}`);
+    });
+    await terminalManager.createSession(
+      "font-copy",
+      { kind: "local", ref: undefined },
+      callbacks(),
+    );
+    const source = createdTerminals[createdTerminals.length - 1];
+    // A detached window, or a session opened before the setting changed, can
+    // render at a size the manager's config no longer holds.
+    source.options.fontSize = 18;
+
+    const stop = terminalManager.mirrorSession("preview:font-copy", "font-copy");
+    const mirror = createdTerminals[createdTerminals.length - 1];
+
+    expect(mirror.options.fontSize).toBe(18);
+
+    stop();
+    terminalManager.dispose("font-copy");
+  });
+
+  it("follows the source's font size when Appearance changes it", async () => {
+    const changes: number[] = [];
+    const { mirror, stop } = await previewInto(
+      "fit-preview-restyle",
+      { width: 300, height: 400 },
+      { width: 600, height: 400 },
+      () => changes.push(1),
+    );
+
+    terminalManager.applyTerminalStyle({ fontSize: 20 });
+
+    // The preview copies the terminal's rendering, so it has to be drawn at the
+    // terminal's new size — and its card has to refit, since the rendering it
+    // scales just changed shape.
+    expect(mirror.options.fontSize).toBe(20);
+    expect(changes.length).toBeGreaterThan(0);
+
+    stop();
+    terminalManager.dispose("fit-preview-restyle");
+    terminalManager.applyTerminalStyle({ fontSize: 14 });
+  });
+
+  it("fills the card with rows instead of shrinking further to fit them", async () => {
+    // 24 rows over 400px is a 16.67px cell; at half scale that is 8.33px on
+    // screen, so a 400px-tall card shows 48 rows. A phone session is far taller
+    // than its card, and shrinking until every row fit would leave the text
+    // unreadable — the preview shows the tail at a legible size instead.
     const { mirror, previewId, stop } = await previewInto(
       "fit-preview-rows",
       { width: 300, height: 400 },
       { width: 600, height: 400 },
     );
 
-    terminalManager.fitPreview(previewId, 14);
+    terminalManager.fitPreview(previewId, 60);
 
     expect(mirror.rows).toBe(48);
     expect(mirror.cols).toBe(80);
@@ -996,17 +1055,33 @@ describe("terminalManager preview fit", () => {
     terminalManager.dispose("fit-preview-rows");
   });
 
-  it("never grows past the caller's ceiling", async () => {
-    // A grid far narrower than the card could scale up 4x; a preview stays a
-    // thumbnail instead of rendering larger than the terminal it mirrors.
+  it("caps the mirrored grid at the caller's row ceiling", async () => {
+    // The card only shows the tail, so rows past the ceiling would be laid out
+    // and immediately scrolled out of sight.
+    const { mirror, previewId, stop } = await previewInto(
+      "fit-preview-rowcap",
+      { width: 300, height: 400 },
+      { width: 600, height: 400 },
+    );
+
+    terminalManager.fitPreview(previewId, 30);
+
+    expect(mirror.rows).toBe(30);
+
+    stop();
+    terminalManager.dispose("fit-preview-rowcap");
+  });
+
+  it("never draws a preview larger than the terminal it mirrors", async () => {
+    // A rendering far narrower than the card could scale up 4x; a preview is a
+    // copy, so it stops at the terminal's own size.
     const { previewId, stop } = await previewInto(
       "fit-preview-cap",
       { width: 400, height: 400 },
       { width: 100, height: 100 },
-      6,
     );
 
-    expect(terminalManager.fitPreview(previewId, 7)).toBe(7);
+    expect(terminalManager.fitPreview(previewId, 60)).toBe(1);
 
     stop();
     terminalManager.dispose("fit-preview-cap");
@@ -1019,25 +1094,26 @@ describe("terminalManager preview fit", () => {
       { width: 2000, height: 400 },
     );
 
-    // 14 * (20/2000) would be 0.14pt; the wide source is clipped instead.
-    expect(terminalManager.fitPreview(previewId, 14)).toBe(5);
+    // 20/2000 would be 0.01; the wide source is clipped at the right edge
+    // instead.
+    expect(terminalManager.fitPreview(previewId, 60)).toBe(0.35);
 
     stop();
     terminalManager.dispose("fit-preview-floor");
   });
 
-  it("reports the size unchanged once it fits, so a caller stops iterating", async () => {
-    // Card and grid are the same width, so the font is already right; 24 rows
-    // over 400px also exactly fills the card, so nothing changes at all.
+  it("reports the scale unchanged once it fits, so a caller stops iterating", async () => {
+    // Card and rendering are the same width, so the preview is already drawn at
+    // 1:1; 24 rows over 400px also exactly fills the card, so nothing changes.
     const { previewId, stop } = await previewInto(
       "fit-preview-settled",
       { width: 400, height: 400 },
       { width: 400, height: 400 },
-      7,
     );
 
-    expect(terminalManager.previewFontSize(previewId)).toBe(7);
-    expect(terminalManager.fitPreview(previewId, 7)).toBe(7);
+    expect(terminalManager.fitPreview(previewId, 24)).toBe(1);
+    expect(terminalManager.previewScale(previewId)).toBe(1);
+    expect(terminalManager.fitPreview(previewId, 24)).toBe(1);
 
     stop();
     terminalManager.dispose("fit-preview-settled");
@@ -1055,8 +1131,8 @@ describe("terminalManager preview fit", () => {
       callbacks(),
     );
 
-    expect(terminalManager.fitPreview("fit-preview-real", 7)).toBeNull();
-    expect(terminalManager.previewFontSize("fit-preview-real")).toBeNull();
+    expect(terminalManager.fitPreview("fit-preview-real", 60)).toBeNull();
+    expect(terminalManager.previewScale("fit-preview-real")).toBeNull();
 
     terminalManager.dispose("fit-preview-real");
   });

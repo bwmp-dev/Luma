@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { terminalManager } from "../terminal/terminalManager";
+import { useTerminalStyleStore } from "../../stores/terminalStyleStore";
 import { cn } from "../../lib/utils";
 
 /*
@@ -9,11 +10,12 @@ import { cn } from "../../lib/utils";
  * it the same output bytes the source receives. This component only owns the
  * host element and the lifetime — no terminal bytes pass through React.
  *
- * The mirror keeps the SOURCE's grid rather than refitting to the card, so the
- * preview renders exactly what the terminal renders: same wrap points, same
- * right-aligned prompt segments, same TUI layout. Fitting is done by shrinking
- * the font (fitPreview) until that grid fits the card — a scaled-down terminal
- * instead of a re-flowed one.
+ * The mirror keeps the SOURCE's grid AND the source's font size rather than
+ * refitting to the card, so xterm rasterizes exactly what the terminal
+ * rasterizes: same wrap points, same right-aligned prompt segments, same TUI
+ * layout, same glyphs. fitPreview then scales that rendering into the card with
+ * a CSS transform — the terminal itself, drawn smaller, rather than a second
+ * terminal re-rendered at a tiny font.
  *
  * A mirror is a second xterm instance, so one is only kept alive while its card
  * is actually on screen: scrolling a card out of view tears its mirror down, and
@@ -26,15 +28,14 @@ import { cn } from "../../lib/utils";
  * by the time it scrolls in. */
 const PRELOAD_MARGIN = "200px";
 
-/** Ceiling for the miniature's font. A preview is a glanceable thumbnail, not a
- * second place to read output, so it stays well under the terminal's own size
- * even when the grid would allow more. */
-const MAX_PREVIEW_FONT_SIZE = 7;
+/** Row ceiling for the mirrored grid. The card shows the tail of the session, so
+ * more rows than this are laid out and immediately scrolled out of sight. */
+const MAX_PREVIEW_ROWS = 60;
 
-/** fitPreview scales from the metrics currently on screen, and xterm rounds cell
- * dimensions, so the first pass lands close rather than exact. Re-running it
+/** fitPreview measures the rendering currently on screen, so a pass taken before
+ * the webfont or a row resize has landed can be slightly off. Re-running it
  * converges within a pass or two; this only bounds the loop so a pathological
- * case (a font whose metrics never settle) cannot spin every frame forever. */
+ * case (metrics that never settle) cannot spin every frame forever. */
 const MAX_FIT_PASSES = 4;
 
 export function MobileTerminalPreview({
@@ -52,6 +53,14 @@ export function MobileTerminalPreview({
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
+  // The card is wider and taller than the grid it holds (the mirror keeps the
+  // source's columns, and only whole rows fit), so the box has to carry the
+  // terminal's own background or the leftover reads as a frame around the
+  // output instead of as part of the terminal. Subscribed rather than read once:
+  // the manager owns the resolved theme, but only the store re-renders when the
+  // user picks a different scheme.
+  useTerminalStyleStore((state) => state.schemeId);
+  const background = terminalManager.terminalBackground();
 
   useEffect(() => {
     const host = hostRef.current;
@@ -78,14 +87,14 @@ export function MobileTerminalPreview({
     const previewId = `preview:${sessionId}`;
     let frame: number | null = null;
     // Each pass measures what is actually rendered and applies one correction,
-    // so passes are chained across frames — a font change only shows up in the
-    // next frame's metrics — until fitPreview reports the size unchanged.
+    // so passes are chained across frames — a row resize only shows up in the
+    // next frame's metrics — until fitPreview reports the scale unchanged.
     const scheduleFit = (pass = 0) => {
       if (frame !== null) cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         frame = null;
-        const before = terminalManager.previewFontSize(previewId);
-        const after = terminalManager.fitPreview(previewId, MAX_PREVIEW_FONT_SIZE);
+        const before = terminalManager.previewScale(previewId);
+        const after = terminalManager.fitPreview(previewId, MAX_PREVIEW_ROWS);
         if (after !== null && after !== before && pass + 1 < MAX_FIT_PASSES) {
           scheduleFit(pass + 1);
         }
@@ -131,7 +140,11 @@ export function MobileTerminalPreview({
       aria-hidden="true"
       // The mirror is decorative: the card's own button carries the label and
       // the tap target, so the preview must not swallow touches meant for it.
-      className={cn("pointer-events-none overflow-hidden", className)}
+      style={{ background }}
+      className={cn(
+        "luma-terminal-preview pointer-events-none overflow-hidden",
+        className,
+      )}
     />
   );
 }
