@@ -20,6 +20,7 @@ import {
   RefreshCw,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 import { useHosts } from "../../hooks/useHosts";
 import { sftpListKey, useSftpList } from "../../hooks/useSftp";
@@ -47,6 +48,8 @@ import {
   formatBytes,
   parentPath,
   sftpDelete,
+  sftpDiscardSavePlaceholder,
+  sftpMobileDownloadDir,
   sftpMkdir,
   sftpRename,
   remoteJoin,
@@ -189,6 +192,10 @@ function ConnectedView({
     run: () => void;
   } | null>(null);
   const [pendingPaste, setPendingPaste] = useState<string[] | null>(null);
+  const [downloadNotice, setDownloadNotice] = useState<{
+    tone: "info" | "danger";
+    message: string;
+  } | null>(null);
 
   useEffect(() => {
     void loadViewPrefs();
@@ -278,8 +285,16 @@ function ConnectedView({
 
   // Upload: pick one or more local files via the system picker, then push them
   // into the current remote directory.
+  // `fileAccessMode: "scoped"` keeps the picked file where it is. The default,
+  // "copy", has iOS duplicate it into <sandbox>/tmp and hands back that path;
+  // nothing here deletes it afterwards, so every upload used to leave a full
+  // second copy inside the app.
   const pickAndUpload = async () => {
-    const selected = await open({ multiple: true, directory: false });
+    const selected = await open({
+      multiple: true,
+      directory: false,
+      fileAccessMode: "scoped",
+    });
     if (!selected) return;
     const paths = (Array.isArray(selected) ? selected : [selected]).map(normalizeDialogPath);
     const files: SftpEntry[] = paths.map((path) => ({
@@ -299,12 +314,35 @@ function ConnectedView({
     });
   };
 
-  // iOS cannot pick folders, but its save dialog can choose the exact target
-  // for a file. Directory downloads retain the folder-picker flow on platforms
-  // that support it.
+  // Mobile has no folder picker: tauri-plugin-dialog rejects
+  // open({ directory: true }) with FolderPickerNotImplemented on BOTH iOS and
+  // Android. A file download can still name its own target through the save
+  // dialog, but a folder download has nowhere to ask about, so it goes to the
+  // app's own Documents directory -- which UIFileSharingEnabled surfaces in
+  // Files.app, so the folder is still reachable once it lands.
   const pickAndDownload = async (entry: SftpEntry) => {
-    if (entry.kind !== "dir") {
+    setDownloadNotice(null);
+    try {
+      if (entry.kind === "dir") {
+        const destDir = await sftpMobileDownloadDir();
+        transfer({
+          source: { kind: "remote", sessionId },
+          dest: { kind: "local" },
+          files: [entry],
+          destDir,
+          destSeparator: "/",
+        });
+        setDownloadNotice({
+          tone: "info",
+          message: `Saving ${entry.name} to the app's Files folder.`,
+        });
+        return;
+      }
+
       const selected = await save({ defaultPath: entry.name });
+      // iOS stages the placeholder before presenting the picker, so it is left
+      // behind on cancel too -- discard it either way.
+      await sftpDiscardSavePlaceholder(entry.name, selected ?? "");
       if (typeof selected !== "string") return;
       const destination = normalizeDialogPath(selected);
       const separator = destination.includes("\\") ? "\\" : "/";
@@ -317,19 +355,14 @@ function ConnectedView({
         destDir: destinationDir,
         destSeparator: separator,
       });
-      return;
+    } catch (error) {
+      // A rejected picker used to reject unhandled, so Download did nothing at
+      // all with nothing on screen to say why.
+      setDownloadNotice({
+        tone: "danger",
+        message: parseLumaError(error).message,
+      });
     }
-
-    const dir = await open({ directory: true, multiple: false });
-    if (typeof dir !== "string") return;
-    const destination = normalizeDialogPath(dir);
-    transfer({
-      source: { kind: "remote", sessionId },
-      dest: { kind: "local" },
-      files: [entry],
-      destDir: destination,
-      destSeparator: destination.includes("\\") ? "\\" : "/",
-    });
   };
 
   // Copy straight to the host held by the other pane, into whatever directory
@@ -504,6 +537,30 @@ function ConnectedView({
             className="flex items-center gap-1.5 rounded-md border border-danger/50 px-2.5 py-1.5 font-medium text-danger active:bg-danger/15"
           >
             <RefreshCw size={12} /> Reconnect
+          </button>
+        </div>
+      )}
+
+      {/* Download destination / failure notice. Mobile folder downloads pick
+          their own destination, so where the bytes went has to be said out
+          loud; a rejected picker reports here rather than vanishing. */}
+      {downloadNotice && (
+        <div
+          className={cn(
+            "flex items-center gap-3 border-b px-3 py-2 text-xs",
+            downloadNotice.tone === "danger"
+              ? "border-danger/40 bg-danger/10 text-danger"
+              : "border-border bg-raised text-muted",
+          )}
+        >
+          <span className="flex-1">{downloadNotice.message}</span>
+          <button
+            type="button"
+            aria-label="Dismiss"
+            onClick={() => setDownloadNotice(null)}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md active:bg-raised"
+          >
+            <X size={14} />
           </button>
         </div>
       )}

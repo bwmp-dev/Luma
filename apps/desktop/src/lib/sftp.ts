@@ -137,6 +137,28 @@ export function localDelete(path: string, recursive: boolean): Promise<void> {
   return invoke<void>("local_delete", { path, recursive });
 }
 
+/**
+ * The directory mobile downloads land in. Mobile has no folder picker, so a
+ * folder download goes to the app's own Documents directory, which is visible
+ * in Files.app. Mobile only — the command is not registered on desktop.
+ */
+export function sftpMobileDownloadDir(): Promise<string> {
+  return invoke<string>("sftp_mobile_download_dir");
+}
+
+/**
+ * Discard the empty placeholder an iOS save dialog stages in Documents.
+ * `saveFileDialog` has no way to ask iOS for a path, so it exports a throwaway
+ * empty file and returns where the user put the real one; the placeholder is
+ * left behind. No-op when nothing was staged. Mobile only.
+ */
+export function sftpDiscardSavePlaceholder(
+  fileName: string,
+  savedPath: string,
+): Promise<void> {
+  return invoke<void>("sftp_discard_save_placeholder", { fileName, savedPath });
+}
+
 // Transfers ------------------------------------------------------------------
 
 export function sftpUpload(

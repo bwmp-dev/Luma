@@ -30,10 +30,8 @@ mod web_preview;
 use std::path::PathBuf;
 
 use sqlx::SqlitePool;
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use tauri::Emitter;
 use tauri::Manager;
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 use tauri_plugin_deep_link::DeepLinkExt;
 
 use docker::DockerManager;
@@ -82,7 +80,10 @@ pub fn run() {
         logging::init(&log_dir);
         tracing::info!("luma {} starting", env!("CARGO_PKG_VERSION"));
 
-        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        // Deep links reach the frontend as a `deep-link` window event on every
+        // platform. The plugin emits `deep-link://new-url` from RunEvent::Opened
+        // on iOS/macOS and from its Android intent handler, so this listener must
+        // NOT be desktop-gated -- iOS delivered the URL and nothing forwarded it.
         {
             let app_handle = app.handle().clone();
             app.deep_link().on_open_url(move |event| {
@@ -90,11 +91,13 @@ pub fn run() {
                     let _ = app_handle.emit("deep-link", url.as_str());
                 }
             });
+        }
 
-            #[cfg(debug_assertions)]
-            if let Err(error) = app.deep_link().register_all() {
-                tracing::warn!(%error, "could not register development deep links");
-            }
+        // Registering the scheme with the OS only applies to desktop; iOS and
+        // Android take it from CFBundleURLTypes / the generated intent filter.
+        #[cfg(all(debug_assertions, not(any(target_os = "android", target_os = "ios"))))]
+        if let Err(error) = app.deep_link().register_all() {
+            tracing::warn!(%error, "could not register development deep links");
         }
 
         let app_data_dir = app.path().app_data_dir()?;
@@ -458,6 +461,8 @@ pub fn run() {
         commands::sftp_copy,
         commands::sftp_cancel,
         commands::sftp_retry,
+        commands::sftp_mobile_download_dir,
+        commands::sftp_discard_save_placeholder,
         commands::terminal_attach_upload,
         commands::server_stats_fetch,
         commands::server_stats_close,

@@ -8,6 +8,7 @@
     "core:default",
     "dialog:allow-open",
     "dialog:allow-save",
+    "deep-link:default",
     "opener:default",
     "ios-glass-tabbar:default",
     "allow-mobile-commands",

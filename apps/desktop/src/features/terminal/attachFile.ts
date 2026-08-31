@@ -23,7 +23,13 @@ export function canAttachFile(session: TerminalSession | undefined): boolean {
 
 /** Show the OS file picker. Returns null when the user cancels. */
 export async function pickLocalFile(): Promise<string | null> {
-  const picked = await open({ multiple: false, directory: false });
+  // "scoped" opens the file in place. The default, "copy", duplicates it into
+  // <sandbox>/tmp on iOS and nothing deletes that copy once the upload lands.
+  const picked = await open({
+    multiple: false,
+    directory: false,
+    fileAccessMode: "scoped",
+  });
   return typeof picked === "string" ? normalizeDialogPath(picked) : null;
 }
 

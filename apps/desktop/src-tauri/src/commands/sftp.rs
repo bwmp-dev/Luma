@@ -2,6 +2,8 @@ use serde::Serialize;
 use tauri::ipc::Channel;
 use tauri::State;
 
+#[cfg(any(target_os = "android", target_os = "ios"))]
+use crate::errors::LumaError;
 use crate::errors::Result;
 use crate::keystore::KeystoreState;
 use crate::sftp::{
@@ -229,4 +231,86 @@ pub async fn sftp_retry(
     on_progress: Channel<TransferProgress>,
 ) -> Result<TransferStartResponse> {
     sftp::sftp_retry(&manager, &transfer_id, on_progress).await
+}
+
+/// Resolve the directory mobile downloads land in, creating it if needed.
+///
+/// iOS and Android have no folder picker (`tauri-plugin-dialog` returns
+/// `FolderPickerNotImplemented` on both), so a folder download cannot ask the
+/// user where to put it. It goes to the app's own Documents directory instead,
+/// which `UIFileSharingEnabled` exposes in Files.app.
+#[cfg(any(target_os = "android", target_os = "ios"))]
+#[tauri::command]
+pub async fn sftp_mobile_download_dir(app: tauri::AppHandle) -> Result<String> {
+    use tauri::Manager;
+
+    let dir = app
+        .path()
+        .document_dir()
+        .map_err(|error| LumaError::InvalidInput(format!("no document directory: {error}")))?;
+    tokio::fs::create_dir_all(&dir).await?;
+    dir.to_str()
+        .map(str::to_owned)
+        .ok_or_else(|| LumaError::InvalidInput("document directory path is not valid UTF-8".into()))
+}
+
+/// Discard the empty placeholder an iOS save dialog leaves in Documents.
+///
+/// `saveFileDialog` cannot ask iOS for a destination path directly, so it
+/// creates an empty file in the app's Documents directory and exports *that*,
+/// returning the location the user picked. The placeholder is never cleaned up,
+/// and `UIFileSharingEnabled` makes the strays visible in Files.app.
+///
+/// Only ever removes a zero-byte regular file directly inside Documents, and
+/// never the path the save dialog returned: a finished download is not empty,
+/// so a real file cannot be destroyed by a name collision.
+#[cfg(any(target_os = "android", target_os = "ios"))]
+#[tauri::command]
+pub async fn sftp_discard_save_placeholder(
+    app: tauri::AppHandle,
+    file_name: String,
+    saved_path: String,
+) -> Result<()> {
+    use tauri::Manager;
+
+    // A bare file name only: anything with separators or traversal could point
+    // outside Documents.
+    if file_name.is_empty()
+        || file_name.contains('/')
+        || file_name.contains('\\')
+        || file_name.contains('\0')
+        || file_name == "."
+        || file_name == ".."
+    {
+        return Err(LumaError::InvalidInput(
+            "placeholder name must be a bare file name".into(),
+        ));
+    }
+
+    let documents = app
+        .path()
+        .document_dir()
+        .map_err(|error| LumaError::InvalidInput(format!("no document directory: {error}")))?;
+    let placeholder = documents.join(&file_name);
+
+    // The save dialog returns where the user actually put the file. If that is
+    // the same path, there is no placeholder to discard -- only the real file.
+    if let Some(saved) = crate::platform::picker_path(&saved_path) {
+        if saved == placeholder {
+            return Ok(());
+        }
+    }
+
+    let metadata = match tokio::fs::symlink_metadata(&placeholder).await {
+        Ok(metadata) => metadata,
+        // Nothing there is the normal outcome on platforms that do not stage a
+        // placeholder at all.
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.into()),
+    };
+    if !metadata.is_file() || metadata.len() != 0 {
+        return Ok(());
+    }
+    tokio::fs::remove_file(&placeholder).await?;
+    Ok(())
 }

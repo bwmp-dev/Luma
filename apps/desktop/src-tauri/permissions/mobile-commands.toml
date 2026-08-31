@@ -80,6 +80,8 @@ commands.allow = [
   "sftp_copy",
   "sftp_cancel",
   "sftp_retry",
+  "sftp_mobile_download_dir",
+  "sftp_discard_save_placeholder",
   "terminal_attach_upload",
   "voice_history_add",
   "voice_history_list",

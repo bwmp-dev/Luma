@@ -219,6 +219,9 @@ export function createInvokeHandler(
       case "sftp_list":
         return { path: (args.path as string) ?? SFTP_INITIAL_PATH, entries: SFTP_LISTING };
 
+      case "sftp_mobile_download_dir":
+        return "/var/mobile/Containers/Data/Application/Luma/Documents";
+
       // Signed in, so the Account screen shows the real signed-in surface —
       // including the delete control, which is what the store review shots and
       // the simulator check need to exercise.
@@ -251,6 +254,7 @@ export function createInvokeHandler(
       case "serial_write":
       case "serial_kill":
       case "server_stats_close":
+      case "sftp_discard_save_placeholder":
       case "sftp_disconnect":
         return null;
 

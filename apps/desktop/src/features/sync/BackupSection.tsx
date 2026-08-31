@@ -3,6 +3,8 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { AlertTriangle, Download, KeyRound, Upload } from "lucide-react";
 import { Modal } from "../../components/Modal";
 import { normalizeDialogPath } from "../../lib/dialogPath";
+import { sftpDiscardSavePlaceholder } from "../../lib/sftp";
+import { useCapabilityStore } from "../../stores/capabilityStore";
 import { PassphrasePrompt } from "./PassphrasePrompt";
 import { ConflictDialog } from "./ConflictDialog";
 import { useInvalidateHosts } from "../../hooks/useHosts";
@@ -20,6 +22,8 @@ import {
   type ImportPreview,
   type ObjectCounts,
 } from "../../lib/sync";
+
+const BACKUP_FILE_NAME = "luma-backup.luma";
 
 const COUNT_LABELS: { key: keyof ObjectCounts; label: string }[] = [
   { key: "hosts", label: "Hosts" },
@@ -58,6 +62,8 @@ export function BackupSection({ vaultId }: { vaultId: string }) {
     void queryClient.invalidateQueries({ queryKey: ["snippets"] });
   };
 
+  const isMobile = useCapabilityStore((s) => s.capabilities.isMobile);
+
   // Export ------------------------------------------------------------------
   const [exportPhase, setExportPhase] = useState<ExportPhase>({ kind: "idle" });
   const [exportBusy, setExportBusy] = useState(false);
@@ -65,9 +71,14 @@ export function BackupSection({ vaultId }: { vaultId: string }) {
 
   const startExport = async () => {
     const path = await save({
-      defaultPath: "luma-backup.luma",
+      defaultPath: BACKUP_FILE_NAME,
       filters: [{ name: "Luma backup", extensions: ["luma", "bin"] }],
     });
+    // iOS stages an empty placeholder in Documents before showing the picker
+    // and never removes it, on cancel or otherwise.
+    if (isMobile) {
+      await sftpDiscardSavePlaceholder(BACKUP_FILE_NAME, path ?? "");
+    }
     if (typeof path === "string") {
       setExportError(null);
       setExportPhase({ kind: "passphrase", path: normalizeDialogPath(path) });

@@ -50,6 +50,11 @@
   },
   "plugins": {
     "deep-link": {
+      "mobile": [
+        {
+          "scheme": ["luma"]
+        }
+      ],
       "desktop": {
         "schemes": [
           "luma"

@@ -58,9 +58,13 @@ export async function attachNativeTabBar(
 
   try {
     const selectedIndex = tabIndex(useMobileNavStore.getState().tab);
+    // setItems is what decides whether a native bar exists: it adds the bar to
+    // the window. Everything after it is decoration on a bar that is already on
+    // screen, so it must not be able to fail the attach -- reporting "not
+    // attached" once the view exists renders the web capsule underneath it.
     await setItems(nativeTabs(), selectedIndex);
-    await Promise.all([syncBadges(sessionCount), syncTintColor()]);
     nativeActive = true;
+    await Promise.all([syncBadges(sessionCount), syncTintColor()]);
     setTabBarHeight(WEB_TAB_BAR_HEIGHT);
     return true;
   } catch {
@@ -84,23 +88,53 @@ function tabIndex(tab: MobileTab): number {
   return TAB_ITEMS.findIndex((item) => item.tab === tab);
 }
 
-function resolvedAccentColor(): string {
-  return getComputedStyle(document.documentElement)
+/** The theme accent, flattened to #rrggbb.
+ *
+ * Themes may specify colors as #rrggbbaa and the accent is carried through
+ * verbatim, but UIColor is built from a fixed-width hex string: an 8-digit
+ * value used to be rejected outright, leaving the bar tinted by the previous
+ * theme. Alpha is dropped rather than honoured -- a translucent tint on the
+ * selected tab icon reads as a washed-out icon, not as a design choice.
+ */
+export function resolvedAccentColor(): string | null {
+  const accent = getComputedStyle(document.documentElement)
     .getPropertyValue("--accent")
     .trim();
+  const match = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(accent);
+  if (!match) return null;
+  const hex = match[1];
+  if (hex.length === 3) {
+    return `#${hex[0]}${hex[0]}${hex[1]}${hex[1]}${hex[2]}${hex[2]}`;
+  }
+  return `#${hex.slice(0, 6)}`;
 }
 
+// Cosmetic: a tint the plugin will not accept must never fail the caller. The
+// native bar is added to the window by setItems, so a throw here used to abort
+// attach with the bar already on screen -- and the web capsule would then
+// render underneath it, showing two tab bars at once.
 async function syncTintColor(): Promise<void> {
-  await invoke("plugin:ios-glass-tabbar|set_tint_color", {
-    payload: { color: resolvedAccentColor() },
-  });
+  const color = resolvedAccentColor();
+  if (!color) return;
+  try {
+    await invoke("plugin:ios-glass-tabbar|set_tint_color", {
+      payload: { color },
+    });
+  } catch {
+    // Leaves the previous tint in place; the next theme change retries.
+  }
 }
 
+// Cosmetic, like the tint: never fail the caller once the bar exists.
 async function syncBadges(sessionCount: number): Promise<void> {
-  await setBadge(
-    tabIndex("connections"),
-    sessionCount > 0 ? String(sessionCount) : null,
-  );
+  try {
+    await setBadge(
+      tabIndex("connections"),
+      sessionCount > 0 ? String(sessionCount) : null,
+    );
+  } catch {
+    // Stale badge until the next session-count change retries.
+  }
 }
 
 /** Mirror the store's selected tab into the native bar. No-op when inactive. */

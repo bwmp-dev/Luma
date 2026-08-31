@@ -14,6 +14,7 @@ import {
 } from "../../stores/webPreviewStore";
 import { previewUrl, type WebListener } from "../../lib/webPreview";
 import { cn } from "../../lib/utils";
+import { useCapabilityStore } from "../../stores/capabilityStore";
 
 /*
  * Discovers HTTP servers listening on a connected SSH host and previews them
@@ -40,6 +41,7 @@ export function WebPreviewDialog({
    * with it. */
   sessionId?: string | null;
 }) {
+  const isMobile = useCapabilityStore((s) => s.capabilities.isMobile);
   const listeners = useWebPreviewStore((s) => s.listeners);
   const discovering = useWebPreviewStore((s) => s.discovering);
   const discoverError = useWebPreviewStore((s) => s.discoverError);
@@ -199,6 +201,16 @@ export function WebPreviewDialog({
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
               Open previews
             </h3>
+            {isMobile && (
+              /* The tunnel is a listener inside this app, so it is only
+                 serviced while the app runs. iOS suspends a backgrounded app,
+                 which stalls the connection until Luma is foregrounded again --
+                 say so rather than letting the browser look broken. */
+              <p className="mb-2 text-xs text-muted">
+                These URLs work while Luma is open. Switching to another app
+                pauses the tunnel, and pages stop loading until you return.
+              </p>
+            )}
             <div className="space-y-2">
               {previews.map((preview) => {
                 const url = previewUrl(preview);

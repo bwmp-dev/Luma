@@ -133,12 +133,19 @@ class GlassTabBarPlugin: Plugin, UITabBarDelegate {
   private static func color(hex: String) -> UIColor? {
     let value = hex.trimmingCharacters(in: .whitespacesAndNewlines)
       .replacingOccurrences(of: "#", with: "")
-    guard value.count == 6, let rgb = UInt64(value, radix: 16) else { return nil }
+    // Luma themes carry CSS hex colors, which may include an alpha byte
+    // (#rrggbbaa). Accept both widths rather than rejecting the whole update:
+    // a rejected tint used to leave the bar on its previous theme colour.
+    guard value.count == 6 || value.count == 8, let rgb = UInt64(value, radix: 16) else {
+      return nil
+    }
+    let hasAlpha = value.count == 8
+    let shift: UInt64 = hasAlpha ? 8 : 0
     return UIColor(
-      red: CGFloat((rgb >> 16) & 0xff) / 255,
-      green: CGFloat((rgb >> 8) & 0xff) / 255,
-      blue: CGFloat(rgb & 0xff) / 255,
-      alpha: 1
+      red: CGFloat((rgb >> (16 + shift)) & 0xff) / 255,
+      green: CGFloat((rgb >> (8 + shift)) & 0xff) / 255,
+      blue: CGFloat((rgb >> shift) & 0xff) / 255,
+      alpha: hasAlpha ? CGFloat(rgb & 0xff) / 255 : 1
     )
   }
 
