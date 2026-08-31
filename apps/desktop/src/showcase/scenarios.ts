@@ -13,6 +13,10 @@ export type ShowcasePlatform = "desktop" | "ios" | "android";
 
 export type ShowcaseView =
   | "terminal"
+  // The Connections list, whose cards hold the open sessions' own terminals
+  // (see MobileTerminalPreview). Mobile-only, and worth a scene of its own:
+  // a preview can only be judged next to the session it shows.
+  | "connections"
   | "hosts"
   | "snippets"
   | "settings"
@@ -27,6 +31,7 @@ export type ShowcaseView =
 
 export const SHOWCASE_VIEWS: ShowcaseView[] = [
   "terminal",
+  "connections",
   "hosts",
   "snippets",
   "settings",
@@ -43,7 +48,10 @@ export function isShowcaseView(value: string): value is ShowcaseView {
 }
 
 export function settleMs(view: ShowcaseView): number {
-  return view === "terminal" ? 1900 : 650;
+  // Both terminal scenes wait on the same thing: the mocked session output
+  // arriving and xterm painting it. A card shows nothing its session has not
+  // rendered yet, so the list needs that long too.
+  return view === "terminal" || view === "connections" ? 1900 : 650;
 }
 
 const frame = () =>
@@ -223,6 +231,19 @@ export async function applyScenario(
       }
       nav.navigate("connections");
       nav.setFullscreen(true);
+      await frame();
+      return;
+    }
+    if (view === "connections") {
+      /* Same end-state rule as the terminal scene: open sessions only if there
+       * are none, then always land on the list rather than inside one. The
+       * split in setupTerminal leaves the list with several cards, which is
+       * what shows that each one holds its own session. */
+      if (useSessionStore.getState().tabs.length === 0) {
+        await setupTerminal();
+      }
+      nav.navigate("connections");
+      nav.setFullscreen(false);
       await frame();
       return;
     }

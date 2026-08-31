@@ -139,16 +139,18 @@ export function MobileConnectionsScreen({
             return (
               <ContextMenu key={tab.id} actions={actions} minWidth="min-w-44">
                 <li className="overflow-hidden rounded-xl bg-raised">
-                  {/* A live miniature of the session, so the list answers "what
-                      is it doing?" without opening it. Only rendered once there
-                      is a session to mirror; the row below is the tap target.
-                      The preview renders the session's real grid scaled down, so
-                      this box is what decides how many lines of tail it shows. */}
+                  {/* A live window onto the session, so the list answers "what is
+                      it doing?" without opening it. Only rendered once there is a
+                      session to show; the row below is the tap target. The box
+                      holds the session's real terminal, scaled to this width and
+                      cropped to its last rows, so its height is what decides how
+                      many of them the card shows. No padding: the terminal draws
+                      edge to edge, exactly as it does full-screen. */}
                   {previews && sessionId && (
                     <MobileTerminalPreview
                       sessionId={sessionId}
                       status={status}
-                      className="h-36 w-full border-b border-border/60 px-2 py-1.5"
+                      className="h-36 w-full border-b border-border/60"
                     />
                   )}
                   <div className="flex items-center gap-1">

@@ -147,6 +147,9 @@ export class Terminal {
   scrolledTo: number | null = null;
   baseY = 0;
   viewportY = 0;
+  /** Viewport-relative cursor row. Preview fitting anchors on it, so a test can
+   * park the cursor below the last written line the way a live prompt does. */
+  cursorY = 0;
 
   constructor(options: Record<string, unknown> = {}) {
     this.options = options;
@@ -174,7 +177,7 @@ export class Terminal {
         type: "normal" as const,
         baseY: this.baseY,
         viewportY: this.viewportY,
-        cursorY: 0,
+        cursorY: this.cursorY,
         cursorX: 0,
         length: this.baseY + this.rows,
         getNullCell: () => new FakeCell(),
@@ -240,8 +243,8 @@ export class Terminal {
   }
 
   /** Everything written into this terminal, in order. Display sessions (collab
-   * viewers, preview mirrors) are fed entirely through write(), so this is how a
-   * test observes what they were shown. */
+   * viewers) are fed entirely through write(), so this is how a test observes
+   * what they were shown. */
   writes: string[] = [];
   write(data: unknown): void {
     this.writes.push(
