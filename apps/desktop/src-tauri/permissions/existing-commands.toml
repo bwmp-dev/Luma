@@ -92,6 +92,7 @@ commands.allow = [
   "tunnel_start",
   "tunnel_stop",
   "tunnels_list",
+  "browser_open_in_app",
   "sftp_connect",
   "sftp_disconnect",
   "sftp_sessions",

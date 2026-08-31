@@ -18,9 +18,14 @@ import { useCapabilityStore } from "../../stores/capabilityStore";
 
 /*
  * Discovers HTTP servers listening on a connected SSH host and previews them
- * through a temporary local forward bound to 127.0.0.1. The preview opens in
- * the system browser rather than an in-app webview; the local URL stays
- * visible and copyable so it also works if the system handler fails.
+ * through a temporary local forward bound to 127.0.0.1.
+ *
+ * On mobile the preview opens in a browser the app presents (see
+ * stores/webPreviewStore.launch), because the forward is served by this process:
+ * leaving for the system browser gets Luma suspended and the page never
+ * finishes loading. Desktop keeps using the system browser, which is both better
+ * and harmless there. Either way the local URL stays visible and copyable, so a
+ * preview still works if neither browser opens.
  *
  * A preview opened from a terminal pane is closed with that pane. Previews the
  * app recovered on startup have no known owner and stay up until closed from
@@ -202,13 +207,15 @@ export function WebPreviewDialog({
               Open previews
             </h3>
             {isMobile && (
-              /* The tunnel is a listener inside this app, so it is only
-                 serviced while the app runs. iOS suspends a backgrounded app,
-                 which stalls the connection until Luma is foregrounded again --
-                 say so rather than letting the browser look broken. */
+              /* The tunnel is a listener inside this app, so it is only serviced
+                 while Luma is in the foreground. Opening previews in the in-app
+                 browser is what keeps it there, so the remaining hazard is the
+                 user leaving deliberately -- say so rather than letting a page
+                 that stopped loading look like a broken server. */
               <p className="mb-2 text-xs text-muted">
-                These URLs work while Luma is open. Switching to another app
-                pauses the tunnel, and pages stop loading until you return.
+                Previews open in a browser inside Luma, which keeps the tunnel
+                running while you read. Opening one in another app pauses it
+                until you come back.
               </p>
             )}
             <div className="space-y-2">

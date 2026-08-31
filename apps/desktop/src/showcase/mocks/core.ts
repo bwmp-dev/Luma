@@ -20,9 +20,16 @@ export type InvokeHandler = (
 
 let handler: InvokeHandler | null = null;
 
-/** True when this bundle is running inside a real Tauri webview. */
-const NATIVE_HOST =
-  typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+/** True when this bundle is running inside a real Tauri webview.
+ *
+ * Checked per call rather than once at module evaluation: Tauri installs
+ * `__TAURI_INTERNALS__` from an init script, and this module can evaluate first.
+ * Latching "no native host" at import time then routes every later plugin call
+ * into the seed data — which looks exactly like running in a plain browser, so
+ * the native surfaces this file exists to reach silently never attach. */
+function isNativeHost(): boolean {
+  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
 
 /* Tauri addresses plugin commands as `plugin:<name>|<command>`; app commands
  * never contain a colon. Routing on the prefix rather than a hand-kept list of
@@ -32,6 +39,11 @@ function isPluginCommand(cmd: string): boolean {
   return cmd.startsWith("plugin:");
 }
 
+/* App commands whose whole job is to put a native view on screen. They carry no
+ * app data, so there is nothing for the seed to answer with, and answering
+ * anyway would photograph the absence of the very surface they present. */
+const NATIVE_SURFACE_COMMANDS = new Set(["browser_open_in_app"]);
+
 export function setInvokeHandler(fn: InvokeHandler): void {
   handler = fn;
 }
@@ -40,7 +52,7 @@ export async function invoke<T = unknown>(
   cmd: string,
   args: InvokeArgs = {},
 ): Promise<T> {
-  if (NATIVE_HOST && isPluginCommand(cmd)) {
+  if (isNativeHost() && (isPluginCommand(cmd) || NATIVE_SURFACE_COMMANDS.has(cmd))) {
     return realCore.invoke<T>(cmd, args);
   }
   if (!handler) {
@@ -62,7 +74,7 @@ export function transformCallback(
 }
 
 export function isTauri(): boolean {
-  return NATIVE_HOST;
+  return isNativeHost();
 }
 
 /* The plugin event bridge. Delegating to the real implementation hands back a
@@ -74,7 +86,7 @@ export async function addPluginListener(
   event: string,
   callback: (payload: unknown) => void,
 ): Promise<{ unregister: () => Promise<void> }> {
-  if (NATIVE_HOST) {
+  if (isNativeHost()) {
     return realCore.addPluginListener(plugin, event, callback);
   }
   void plugin;

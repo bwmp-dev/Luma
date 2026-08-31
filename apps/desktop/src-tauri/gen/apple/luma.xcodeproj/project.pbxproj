@@ -22,6 +22,7 @@
 		6AF7F3B9CC665C1DDB660E8B /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 59C792A4726AFADEADC5480A /* WebKit.framework */; };
 		7836BB4E6F0DE9F82B3B3666 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 889148FB83A5C407848F791A /* MetalKit.framework */; };
 		8F19FAEDA8CF44C2875B6E56 /* LumaMenu.swift in Sources */ = {isa = PBXBuildFile; fileRef = F98284A9CA9DBC522D8E6AC6 /* LumaMenu.swift */; };
+		FEAEDAB3E35F46458A7445CC /* LumaBrowser.swift in Sources */ = {isa = PBXBuildFile; fileRef = E646D6F713370B90FC8EFABC /* LumaBrowser.swift */; };
 		954C39342B9959FC86315259 /* LumaActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = D189241E06B18B604105677B /* LumaActivityAttributes.swift */; };
 		AA5CFE8E43ACEE19139E668B /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 65E72A2666234CEE92BDEEAD /* UIKit.framework */; };
 		AC6782F939FE100A4270BD0E /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 34AF16A79E64DA76B1FD01E7 /* SwiftUI.framework */; };
@@ -138,6 +139,7 @@
 		EC304183740023A97AAB1B55 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		EE1727BF9A46BA753DD5E23F /* known_hosts.rs */ = {isa = PBXFileReference; path = known_hosts.rs; sourceTree = "<group>"; };
 		F98284A9CA9DBC522D8E6AC6 /* LumaMenu.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaMenu.swift; sourceTree = "<group>"; };
+		E646D6F713370B90FC8EFABC /* LumaBrowser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LumaBrowser.swift; sourceTree = "<group>"; };
 		FB1938D5364450F4DCBD4E9D /* ssh.rs */ = {isa = PBXFileReference; path = ssh.rs; sourceTree = "<group>"; };
 		FBB227EFAC4C3CBAB3871F8C /* mod.rs */ = {isa = PBXFileReference; path = mod.rs; sourceTree = "<group>"; };
 		FC2D0037E158120B836B83D2 /* collaboration.rs */ = {isa = PBXFileReference; path = collaboration.rs; sourceTree = "<group>"; };
@@ -297,6 +299,7 @@
 		886F335E5E17A208E0E592DE /* luma */ = {
 			isa = PBXGroup;
 			children = (
+				E646D6F713370B90FC8EFABC /* LumaBrowser.swift */,
 				4ED9FCA2F5B4A65E4A826E04 /* LumaLiveActivity.swift */,
 				F98284A9CA9DBC522D8E6AC6 /* LumaMenu.swift */,
 				82C981E0D49899869B47A137 /* main.mm */,
@@ -581,6 +584,7 @@
 			files = (
 				35E9DEA33C5AB5F4894B62CF /* LumaActivityAttributes.swift in Sources */,
 				28211C846355396664231DDC /* LumaLiveActivity.swift in Sources */,
+				FEAEDAB3E35F46458A7445CC /* LumaBrowser.swift in Sources */,
 				8F19FAEDA8CF44C2875B6E56 /* LumaMenu.swift in Sources */,
 				DA3C42591DA5AF2C2B015FC3 /* main.mm in Sources */,
 			);
