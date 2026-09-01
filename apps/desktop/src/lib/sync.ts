@@ -65,6 +65,68 @@ export type SyncProvider =
   | "github-gist"
   | "luma-cloud";
 
+/**
+ * When local changes are pushed without the user asking. "on-change" pushes
+ * shortly after the last edit settles; "interval" batches pending changes onto
+ * a fixed cadence and transfers nothing on a tick that finds none.
+ */
+export type AutoPushMode = "off" | "on-change" | "interval";
+
+/**
+ * This device's automatic sync schedule for one vault. Never synced itself: a
+ * laptop that is awake all day and a phone on cellular want different answers,
+ * so each device keeps its own (see migration 0022).
+ */
+export type AutoSyncSettings = {
+  pushMode: AutoPushMode;
+  /** Only meaningful when `pushMode` is "interval". */
+  pushIntervalMinutes: number;
+  /** How often the remote is polled for other devices' changes; 0 is off. */
+  pullIntervalMinutes: number;
+  pullOnStart: boolean;
+  pullOnFocus: boolean;
+};
+
+/**
+ * Cadences the backend accepts. Anything else is rejected rather than clamped,
+ * so the picker and `AUTO_INTERVAL_CHOICES` in sync/mod.rs must agree.
+ */
+export const AUTO_INTERVAL_CHOICES = [5, 10, 15, 30, 60, 180, 360, 720, 1440] as const;
+
+/** "10 minutes", "1 hour", "6 hours", "1 day". */
+export function formatCadence(minutes: number): string {
+  if (minutes < 60) return `${minutes} minutes`;
+  if (minutes < 1440) {
+    const hours = minutes / 60;
+    return `${hours} hour${hours === 1 ? "" : "s"}`;
+  }
+  const days = minutes / 1440;
+  return `${days} day${days === 1 ? "" : "s"}`;
+}
+
+/*
+ * Both schedules are one dropdown each in the UI, but the backend models the
+ * push side as a mode plus a cadence (the mode decides whether the cadence is
+ * read at all). These two functions are the only place that mapping lives.
+ */
+
+/** The dropdown value representing a push schedule: "off", "on-change" or minutes. */
+export function pushScheduleValue(auto: AutoSyncSettings): string {
+  if (auto.pushMode === "interval") return String(auto.pushIntervalMinutes);
+  return auto.pushMode;
+}
+
+/** Apply a push dropdown value, leaving the pull side untouched. */
+export function withPushSchedule(
+  auto: AutoSyncSettings,
+  value: string,
+): AutoSyncSettings {
+  if (value === "off" || value === "on-change") {
+    return { ...auto, pushMode: value };
+  }
+  return { ...auto, pushMode: "interval", pushIntervalMinutes: Number(value) };
+}
+
 export type SyncConfig = {
   vaultId: string;
   enabled: boolean;
@@ -80,6 +142,8 @@ export type SyncConfig = {
   lastRemoteVersion: string | null;
   passphraseSet: boolean;
   passphraseRemembered: boolean;
+  /** This device's automatic schedule; defaults when sync is not configured. */
+  auto: AutoSyncSettings;
 };
 
 export type SyncConfigureInput =
@@ -97,6 +161,26 @@ export type SyncReport = {
   privateKeysApplied: number;
   /** Private keys that could not be included because the keystore was locked. */
   privateKeysSkippedLocked: number;
+};
+
+/** Window event name carrying every automatic sync attempt (see sync/auto.rs). */
+export const AUTO_SYNC_EVENT = "sync-auto";
+
+/** What made the scheduler act. Every reason runs the same bidirectional sync. */
+export type AutoSyncReason =
+  | "startup"
+  | "focus"
+  | "change"
+  | "push-interval"
+  | "pull-interval";
+
+export type AutoSyncEvent = {
+  vaultId: string;
+  reason: AutoSyncReason;
+  phase: "started" | "completed" | "failed";
+  report: SyncReport | null;
+  errorCategory: string | null;
+  errorMessage: string | null;
 };
 
 export type ExportResult = {
@@ -171,6 +255,23 @@ export function syncListConfigs(): Promise<SyncConfig[]> {
 
 export function syncConfigure(vaultId: string, input: SyncConfigureInput): Promise<null> {
   return invoke<null>("sync_configure", { vaultId, input });
+}
+
+/** Replace this device's automatic schedule for one vault. */
+export function syncSetAuto(
+  vaultId: string,
+  settings: AutoSyncSettings,
+): Promise<null> {
+  return invoke<null>("sync_set_auto", { vaultId, settings });
+}
+
+/**
+ * Tell the backend scheduler the app is in the foreground again. Vaults with
+ * `pullOnFocus` pull once, subject to the same cooldown, conflict and key
+ * checks as any other automatic sync — so calling this liberally is safe.
+ */
+export function syncAutoFocus(): Promise<null> {
+  return invoke<null>("sync_auto_focus", {});
 }
 
 export function syncSetPassphrase(

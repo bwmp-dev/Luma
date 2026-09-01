@@ -170,6 +170,10 @@ export function createInvokeHandler(
         return SYNC_CONFIG;
       case "sync_list_configs":
         return [SYNC_CONFIG];
+      // The scheduler is nudged on every foreground; showcase captures have no
+      // backend to nudge.
+      case "sync_auto_focus":
+        return null;
       case "tunnels_list":
       case "port_forwards_list":
         return [];

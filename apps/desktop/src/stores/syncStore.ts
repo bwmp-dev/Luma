@@ -1,11 +1,14 @@
 import { create } from "zustand";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { parseLumaError } from "../lib/hosts";
 import { queryClient } from "../lib/queryClient";
 import { SYNC_CONFIG_KEY } from "../hooks/useSync";
 import {
+  AUTO_SYNC_EVENT,
   syncNow as runSyncNow,
   syncResolve as runSyncResolve,
   syncSetPassphrase,
+  type AutoSyncEvent,
   type Conflict,
   type ConflictResolution,
   type SyncReport,
@@ -54,6 +57,8 @@ export type VaultSyncState = {
   needsPassphrase: boolean;
   /** Set-passphrase / resolve in-flight flag distinct from `status`. */
   busy: boolean;
+  /** True while the *backend scheduler* is driving this vault's sync. */
+  automatic: boolean;
 };
 
 export const EMPTY_VAULT_SYNC_STATE: VaultSyncState = {
@@ -64,6 +69,7 @@ export const EMPTY_VAULT_SYNC_STATE: VaultSyncState = {
   errorMessage: null,
   needsPassphrase: false,
   busy: false,
+  automatic: false,
 };
 
 type SyncState = {
@@ -83,6 +89,8 @@ type SyncState = {
     passphrase: string,
     remember: boolean,
   ) => Promise<void>;
+  /** Apply one scheduler event (see `startAutoSyncListener`). */
+  applyAutoSyncEvent: (event: AutoSyncEvent) => void;
   /** Title-bar entry point: surface whichever vault needs attention, else sync all. */
   activate: (vaultIds: string[]) => void;
   openConflicts: (vaultId: string) => void;
@@ -150,7 +158,21 @@ function patchVault(
   }));
 }
 
-function applyReport(report: SyncReport, vaultId: string, set: SetState) {
+/**
+ * Whether the user is watching. A sync they asked for may open a dialog on its
+ * result; one the scheduler started may not — a modal appearing over the
+ * terminal because a timer fired would be worse than the problem it reports.
+ * Background conflicts and errors still land in the store, so the title-bar
+ * indicator and the vault's sync panel show them.
+ */
+type ReportOrigin = "user" | "background";
+
+function applyReport(
+  report: SyncReport,
+  vaultId: string,
+  set: SetState,
+  origin: ReportOrigin = "user",
+) {
   if (report.pulled) {
     for (const key of PULL_INVALIDATION_KEYS) {
       void queryClient.invalidateQueries({ queryKey: key });
@@ -166,16 +188,25 @@ function applyReport(report: SyncReport, vaultId: string, set: SetState) {
     lastReport: report,
     errorCategory: null,
     errorMessage: null,
+    automatic: false,
   });
   set((state) => {
-    if (conflicted) return { activeVaultId: vaultId, conflictDialogOpen: true };
+    if (conflicted) {
+      if (origin === "background") return {};
+      return { activeVaultId: vaultId, conflictDialogOpen: true };
+    }
     // Only close the dialog if it was showing this vault's conflicts.
     if (state.activeVaultId !== vaultId) return {};
     return { conflictDialogOpen: false };
   });
 }
 
-function handleError(error: unknown, vaultId: string, set: SetState) {
+function handleError(
+  error: unknown,
+  vaultId: string,
+  set: SetState,
+  origin: ReportOrigin = "user",
+) {
   const { category, message } = parseLumaError(error);
   // A missing sync passphrase is recoverable in place; a locked device keystore
   // is a different condition with a different remedy, so it falls through to
@@ -186,8 +217,11 @@ function handleError(error: unknown, vaultId: string, set: SetState) {
       needsPassphrase: true,
       errorCategory: category,
       errorMessage: null,
+      automatic: false,
     });
-    set(() => ({ activeVaultId: vaultId, passphraseDialogOpen: true }));
+    if (origin === "user") {
+      set(() => ({ activeVaultId: vaultId, passphraseDialogOpen: true }));
+    }
     return;
   }
   const friendly =
@@ -198,6 +232,7 @@ function handleError(error: unknown, vaultId: string, set: SetState) {
     status: "error",
     errorCategory: category,
     errorMessage: friendly,
+    automatic: false,
   });
 }
 
@@ -213,6 +248,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       status: "syncing",
       errorCategory: null,
       errorMessage: null,
+      automatic: false,
     });
     try {
       applyReport(await runSyncNow(vaultId), vaultId, set);
@@ -247,6 +283,34 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       handleError(error, vaultId, set);
       patchVault(set, vaultId, { busy: false });
     }
+  },
+
+  applyAutoSyncEvent: (event) => {
+    const { vaultId, phase } = event;
+    if (phase === "started") {
+      patchVault(set, vaultId, {
+        status: "syncing",
+        errorCategory: null,
+        errorMessage: null,
+        automatic: true,
+      });
+      return;
+    }
+    if (phase === "completed" && event.report) {
+      applyReport(event.report, vaultId, set, "background");
+      return;
+    }
+    // A failed attempt carries the backend's category and message directly
+    // rather than a rejected promise, so rebuild the shape parseLumaError reads.
+    handleError(
+      {
+        category: event.errorCategory ?? "unknown",
+        message: event.errorMessage ?? "Automatic sync failed.",
+      },
+      vaultId,
+      set,
+      "background",
+    );
   },
 
   activate: (vaultIds) => {
@@ -293,3 +357,29 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       passphraseDialogOpen: false,
     })),
 }));
+
+/**
+ * Mirror the backend scheduler's activity into this store. Automatic syncs run
+ * in Rust (see `sync/auto.rs`) so they keep working while the window is hidden;
+ * these events are how the UI learns what happened. Nothing here starts a sync.
+ */
+export function startAutoSyncListener(): () => void {
+  let unlisten: (() => void) | undefined;
+  let cancelled = false;
+  void (async () => {
+    const un = await getCurrentWindow().listen<AutoSyncEvent>(
+      AUTO_SYNC_EVENT,
+      (event) => {
+        if (!event.payload?.vaultId) return;
+        useSyncStore.getState().applyAutoSyncEvent(event.payload);
+      },
+    );
+    if (cancelled) un();
+    else unlisten = un;
+  })();
+  return () => {
+    cancelled = true;
+    unlisten?.();
+    unlisten = undefined;
+  };
+}

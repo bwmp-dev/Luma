@@ -4,9 +4,10 @@ use crate::collaboration::CollaborationRuntimeState;
 use crate::errors::Result;
 use crate::keystore::KeystoreState;
 use crate::storage::vaults::default_id;
+use crate::sync::auto::AutoSyncState;
 use crate::sync::{
-    self, ConflictResolution, ExportSummary, ImportPreview, ImportSummary, SyncConfig,
-    SyncConfigureInput, SyncReport, SyncRuntimeState,
+    self, AutoSyncSettings, ConflictResolution, ExportSummary, ImportPreview, ImportSummary,
+    SyncConfig, SyncConfigureInput, SyncReport, SyncRuntimeState,
 };
 use crate::AppState;
 
@@ -109,6 +110,25 @@ pub async fn sync_configure(
         input,
     )
     .await
+}
+
+/// Replace this device's automatic sync schedule for one vault. The scheduler
+/// reads the row on its next tick, so there is nothing to restart.
+#[tauri::command]
+pub async fn sync_set_auto(
+    state: State<'_, AppState>,
+    vault_id: Option<String>,
+    settings: AutoSyncSettings,
+) -> Result<()> {
+    sync::set_auto_settings(&state.pool, &vault_id.unwrap_or_else(default_id), settings).await
+}
+
+/// Tell the scheduler the app came back to the foreground. Vaults with
+/// "sync when I come back" on pull once, subject to the same cooldown,
+/// conflict and key checks as any other automatic sync.
+#[tauri::command]
+pub fn sync_auto_focus(auto: State<'_, AutoSyncState>) {
+    auto.request_focus_sync();
 }
 
 #[tauri::command]

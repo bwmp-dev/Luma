@@ -25,6 +25,8 @@ import { useUpdaterStore } from "../stores/updaterStore";
 import { useCapabilityStore } from "../stores/capabilityStore";
 import { useCollabStore } from "../stores/collabStore";
 import { startAgentInboxListener } from "../stores/agentInboxStore";
+import { startAutoSyncListener } from "../stores/syncStore";
+import { syncAutoFocus } from "../lib/sync";
 import { startAgentSessionListener } from "../features/mcp/agentSessions";
 import {
   collabGetConfig,
@@ -182,6 +184,28 @@ export function useAppInit(): void {
   useEffect(() => startAgentInboxListener(), []);
 
   useEffect(() => startAgentSessionListener(), []);
+
+  // Automatic sync is scheduled in Rust so it keeps running with the window
+  // hidden; this only mirrors what it did into the sync store, and nudges it
+  // when the app comes back to the foreground. The backend applies the
+  // cooldown, so firing on both events (and on every switch) is safe.
+  useEffect(() => {
+    const stopListening = startAutoSyncListener();
+    const onForeground = () => {
+      if (document.visibilityState !== "visible") return;
+      void syncAutoFocus().catch(() => {
+        // Nothing to recover: the periodic schedule still applies.
+      });
+    };
+    onForeground();
+    document.addEventListener("visibilitychange", onForeground);
+    window.addEventListener("focus", onForeground);
+    return () => {
+      stopListening();
+      document.removeEventListener("visibilitychange", onForeground);
+      window.removeEventListener("focus", onForeground);
+    };
+  }, []);
 
   // Reflect any tunnels the backend already has running. Skipped on platforms
   // without the port-forwarding feature (mobile): its `tunnels_list` command is
