@@ -7,6 +7,7 @@ import { useUiStore } from "../../stores/uiStore";
 import { useSessionLogStore } from "../../stores/sessionLogStore";
 import { useSettings } from "../../hooks/useSettings";
 import { useTerminalGestures } from "../mobile/useTerminalGestures";
+import { useTerminalSelection } from "../mobile/useTerminalSelection";
 import { TerminalGesturePad } from "../mobile/TerminalGesturePad";
 import { SETTING_KEYS, type TerminalSession } from "../../types";
 import { parseLumaError } from "../../lib/hosts";
@@ -20,6 +21,7 @@ import { MAX_RECONNECT_ATTEMPTS } from "./reconnect";
 import { enableSshAgentForwarding } from "../../lib/ssh";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { useCapabilityStore } from "../../stores/capabilityStore";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 /*
  * A single split-pane leaf. Owns the host element for one managed terminal and
@@ -85,17 +87,29 @@ export function PaneView({
   const [forwardingBusy, setForwardingBusy] = useState(false);
   const [forwardingError, setForwardingError] = useState<string | null>(null);
   const isMobile = useCapabilityStore((state) => state.capabilities.isMobile);
+  const selectMode = useUiStore((s) => s.terminalSelectMode) && isMobile;
+  // The URL the context menu was opened over, resolved from the right-click
+  // point when the menu opens.
+  const [linkUrl, setLinkUrl] = useState<string | null>(null);
+  const contextPoint = useRef<{ x: number; y: number } | null>(null);
   // Touch gestures on the terminal itself, both default ON and mobile-only: a
   // long press opens the arrow pad, a double-tap sends Tab. They emit through
-  // terminalManager's synthetic-key path, so bytes stay out of React.
+  // terminalManager's synthetic-key path, so bytes stay out of React. Selection
+  // mode claims the same touches, so the two are mutually exclusive.
   const { data: settings } = useSettings();
   const gesturePad = useTerminalGestures({
     sessionId: session.id,
     hostRef,
-    arrowPad: isMobile && settings?.[SETTING_KEYS.gestureArrowPad] !== false,
+    arrowPad:
+      isMobile &&
+      !selectMode &&
+      settings?.[SETTING_KEYS.gestureArrowPad] !== false,
     doubleTapTab:
-      isMobile && settings?.[SETTING_KEYS.gestureDoubleTapTab] !== false,
+      isMobile &&
+      !selectMode &&
+      settings?.[SETTING_KEYS.gestureDoubleTapTab] !== false,
   });
+  useTerminalSelection({ sessionId: session.id, hostRef, enabled: selectMode });
 
   const beginLogging = (mode: "raw" | "asciicast") => {
     setLogError(null);
@@ -198,7 +212,28 @@ export function PaneView({
   // Terminal actions are routed through terminalManager so bytes never touch
   // React. Split/close/search focus this pane first so the active-session
   // targeting matches the toolbar buttons.
-  const paneActions: MenuAction[] = [
+  const paneActions: MenuAction[] = [];
+
+  // A URL under the pointer is offered explicitly: a link that wraps across
+  // rows is fiddly to click precisely, and the menu resolves the whole thing
+  // regardless of which row was hit.
+  if (linkUrl) {
+    paneActions.push(
+      {
+        label: "Open link",
+        icon: <Globe size={15} />,
+        onSelect: () => void openUrl(linkUrl),
+      },
+      {
+        label: "Copy link",
+        icon: <Copy size={15} />,
+        onSelect: () => void navigator.clipboard.writeText(linkUrl),
+      },
+      { separator: true },
+    );
+  }
+
+  paneActions.push(
     {
       label: "Copy",
       icon: <Copy size={15} />,
@@ -269,7 +304,7 @@ export function PaneView({
         openCollab();
       },
     },
-  ];
+  );
 
   // Attach a local file: uploaded to the SSH host over SFTP, escaped remote
   // path inserted at the prompt. Only offered for SSH-backed sessions.
@@ -466,6 +501,12 @@ export function PaneView({
         setHasSelection(terminalManager.hasSelection(session.id));
         setHasMarks(terminalManager.hasCommandMarks(session.id));
         setCwd(terminalManager.getCwd(session.id));
+        const point = contextPoint.current;
+        setLinkUrl(
+          point
+            ? terminalManager.urlAtPoint(session.id, point.x, point.y)
+            : null,
+        );
         if (!focused) onFocus();
       }}
     >
@@ -479,6 +520,11 @@ export function PaneView({
       )}
       onMouseDownCapture={() => {
         if (!focused) onFocus();
+      }}
+      // Recorded in the capture phase so it lands before Radix opens the menu
+      // and onOpenChange reads it.
+      onContextMenuCapture={(event) => {
+        contextPoint.current = { x: event.clientX, y: event.clientY };
       }}
     >
       {titleBar}

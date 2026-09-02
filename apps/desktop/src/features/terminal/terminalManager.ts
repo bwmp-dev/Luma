@@ -12,6 +12,15 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import "@xterm/xterm/css/xterm.css";
 
 import {
+  cellSpan,
+  indexOfCell,
+  logicalLineAt,
+  urlRangeAt,
+  wordRangeAt,
+  type Cell,
+} from "./bufferText";
+
+import {
   DEFAULT_KEYMAP,
   hasRequiredModifier,
   keymapChords,
@@ -1604,20 +1613,118 @@ export const terminalManager = {
     sessions.get(sessionId)?.term.focus();
   },
 
+  /** Drop focus without touching the selection. Touch selection uses this to
+   * keep the soft keyboard down while the user drags over the output. */
+  blur(sessionId: string): void {
+    sessions.get(sessionId)?.term.blur();
+  },
+
   /** Whether the terminal currently has a text selection (drives the enabled
    * state of the right-click "Copy" action). */
   hasSelection(sessionId: string): boolean {
     return sessions.get(sessionId)?.term.hasSelection() ?? false;
   },
 
+  /** The selected text, "" when nothing is selected. */
+  readSelection(sessionId: string): string {
+    return sessions.get(sessionId)?.term.getSelection() ?? "";
+  },
+
+  /** Subscribe to selection changes; returns the unsubscribe. */
+  onSelectionChange(sessionId: string, listener: () => void): () => void {
+    const disposable = sessions.get(sessionId)?.term.onSelectionChange(listener);
+    return () => disposable?.dispose();
+  },
+
+  clearSelection(sessionId: string): void {
+    sessions.get(sessionId)?.term.clearSelection();
+  },
+
+  /** Scroll the viewport by whole lines (negative scrolls back). */
+  scrollLines(sessionId: string, amount: number): void {
+    sessions.get(sessionId)?.term.scrollLines(amount);
+  },
+
+  /**
+   * The buffer cell under a viewport point, or null when the point misses the
+   * grid. Measured off `.xterm-screen`, which xterm sizes to exactly cols×rows,
+   * so this stays correct through any preview transform.
+   */
+  cellAtPoint(sessionId: string, clientX: number, clientY: number): Cell | null {
+    const term = sessions.get(sessionId)?.term;
+    const screen = term?.element?.querySelector<HTMLElement>(".xterm-screen");
+    if (!term || !screen) return null;
+    const rect = screen.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    const column = Math.floor(((clientX - rect.left) / rect.width) * term.cols);
+    const row = Math.floor(((clientY - rect.top) / rect.height) * term.rows);
+    return {
+      x: Math.min(Math.max(column, 0), term.cols - 1),
+      y:
+        Math.min(Math.max(row, 0), term.rows - 1) + term.buffer.active.viewportY,
+    };
+  },
+
+  /** Select every cell between two buffer positions, inclusive, in reading
+   * order regardless of which end the drag started from. */
+  selectCells(sessionId: string, from: Cell, to: Cell): void {
+    const term = sessions.get(sessionId)?.term;
+    if (!term) return;
+    const reversed = to.y < from.y || (to.y === from.y && to.x < from.x);
+    const start = reversed ? to : from;
+    const end = reversed ? from : to;
+    term.select(
+      start.x,
+      start.y,
+      (end.y - start.y) * term.cols + (end.x - start.x) + 1,
+    );
+  },
+
+  /**
+   * Select whatever `cell` sits inside — the whole URL when it is part of one,
+   * otherwise the whitespace-delimited run — following wrapped rows so a URL
+   * broken across lines still comes out whole.
+   */
+  selectAt(sessionId: string, cell: Cell): void {
+    const term = sessions.get(sessionId)?.term;
+    if (!term) return;
+    const line = logicalLineAt(term, cell.y);
+    if (!line) return;
+    const index = indexOfCell(line, cell);
+    if (index === -1) return;
+    const range = urlRangeAt(line, index) ?? wordRangeAt(line, index);
+    if (!range) {
+      term.clearSelection();
+      return;
+    }
+    const span = cellSpan(line, range, term.cols);
+    if (span) term.select(span.start.x, span.start.y, span.length);
+  },
+
+  /** The URL under a viewport point, without changing the selection. Backs the
+   * pane's "Open link" action, which works on wrapped links that are awkward to
+   * hit precisely. */
+  urlAtPoint(sessionId: string, clientX: number, clientY: number): string | null {
+    const term = sessions.get(sessionId)?.term;
+    const cell = this.cellAtPoint(sessionId, clientX, clientY);
+    if (!term || !cell) return null;
+    const line = logicalLineAt(term, cell.y);
+    if (!line) return null;
+    const index = indexOfCell(line, cell);
+    if (index === -1) return null;
+    const range = urlRangeAt(line, index);
+    return range ? line.text.slice(range[0], range[1]) : null;
+  },
+
   /** Copy the current selection to the clipboard, mirroring the Ctrl+Shift+C
-   * key handler. Terminal bytes never pass through React. */
-  copySelection(sessionId: string): void {
+   * key handler. Terminal bytes never pass through React. Touch selection passes
+   * `refocus: false` so copying does not raise the soft keyboard. */
+  copySelection(sessionId: string, refocus = true): void {
     const session = sessions.get(sessionId);
     if (!session) return;
     const selection = session.term.getSelection();
     if (selection) void navigator.clipboard.writeText(selection);
-    session.term.focus();
+    if (refocus) session.term.focus();
   },
 
   /** Paste clipboard text into the terminal, mirroring the Ctrl+Shift+V key
@@ -1632,11 +1739,11 @@ export const terminalManager = {
   },
 
   /** Select the entire terminal buffer. */
-  selectAll(sessionId: string): void {
+  selectAll(sessionId: string, refocus = true): void {
     const session = sessions.get(sessionId);
     if (!session) return;
     session.term.selectAll();
-    session.term.focus();
+    if (refocus) session.term.focus();
   },
 
   /** Clear the terminal viewport (keeps the current prompt line). */

@@ -41,6 +41,10 @@ type UiState = {
   openFleet: () => void;
   terminalSearchOpen: boolean;
   setTerminalSearchOpen: (open: boolean) => void;
+  /** Mobile terminal selection mode: one finger drags out a text selection
+   * instead of driving the arrow-pad gesture. The two are exclusive. */
+  terminalSelectMode: boolean;
+  setTerminalSelectMode: (on: boolean) => void;
   newTabIds: string[];
   activeNewTabId: string | null;
   openNewTab: () => void;
@@ -144,6 +148,8 @@ export const useUiStore = create<UiState>((set) => ({
   openFleet: () => set({ mainView: "fleet" }),
   terminalSearchOpen: false,
   setTerminalSearchOpen: (open) => set({ terminalSearchOpen: open }),
+  terminalSelectMode: false,
+  setTerminalSelectMode: (on) => set({ terminalSelectMode: on }),
   newTabIds: [],
   activeNewTabId: null,
   openNewTab: () =>

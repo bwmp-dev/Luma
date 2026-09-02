@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, Keyboard, Layers, Plus, X } from "lucide-react";
+import { ChevronLeft, Keyboard, Layers, Plus, TextSelect, X } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useSessionStore } from "../../stores/sessionStore";
 import { useUiStore } from "../../stores/uiStore";
 import { Workspace } from "../terminal/Workspace";
 import { MobileAccessoryBar } from "./MobileAccessoryBar";
+import { MobileSelectionBar } from "./MobileSelectionBar";
 import { useVisualViewportMetrics } from "./useVisualViewport";
 import { cn } from "../../lib/utils";
 
@@ -40,6 +41,8 @@ export function MobileTerminalView({
   const closeTab = useSessionStore((s) => s.closeTab);
   const searchOpen = useUiStore((s) => s.terminalSearchOpen);
   const setSearchOpen = useUiStore((s) => s.setTerminalSearchOpen);
+  const selectMode = useUiStore((s) => s.terminalSelectMode);
+  const setSelectMode = useUiStore((s) => s.setTerminalSelectMode);
   const [accessoryOpen, setAccessoryOpen] = useState(false);
 
   const { height, offsetTop } = useVisualViewportMetrics(activeSessionId);
@@ -53,6 +56,13 @@ export function MobileTerminalView({
   useEffect(() => {
     if (tabs.length === 0) onExit();
   }, [tabs.length, onExit]);
+
+  // Selection mode belongs to the terminal that is on screen: leaving the
+  // full-screen view (or losing the keys it needs) ends it.
+  useEffect(() => {
+    if (!terminalKeysAvailable) setSelectMode(false);
+  }, [terminalKeysAvailable, setSelectMode]);
+  useEffect(() => () => setSelectMode(false), [setSelectMode]);
 
   const title = activeSession?.title ?? "Terminal";
   const status = activeSession
@@ -94,6 +104,20 @@ export function MobileTerminalView({
         {terminalKeysAvailable && (
           <button
             type="button"
+            onClick={() => setSelectMode(!selectMode)}
+            aria-label={`${selectMode ? "Exit" : "Enter"} text selection`}
+            aria-pressed={selectMode}
+            className={cn(
+              "flex h-11 w-11 items-center justify-center rounded-md active:bg-raised",
+              selectMode ? "bg-raised text-accent" : "text-muted",
+            )}
+          >
+            <TextSelect size={19} />
+          </button>
+        )}
+        {terminalKeysAvailable && (
+          <button
+            type="button"
             onClick={() => setAccessoryOpen((open) => !open)}
             aria-label={`${accessoryOpen ? "Hide" : "Show"} terminal keys`}
             aria-pressed={accessoryOpen}
@@ -123,6 +147,13 @@ export function MobileTerminalView({
       <div className="relative min-h-0 flex-1">
         <Workspace />
       </div>
+
+      {terminalKeysAvailable && selectMode && activeSessionId ? (
+        <MobileSelectionBar
+          sessionId={activeSessionId}
+          onDone={() => setSelectMode(false)}
+        />
+      ) : null}
 
       {terminalKeysAvailable && accessoryOpen && activeSessionId ? (
         <MobileAccessoryBar sessionId={activeSessionId} />
