@@ -10,8 +10,9 @@ fn main() {
     tauri_build::try_build(attributes).expect("failed to build Tauri application");
 }
 
-/// The Live Activity and native menu bridges call `@_cdecl` functions that only
-/// exist once Xcode links the staticlib against the app target's Swift sources.
+/// The Live Activity, native menu and in-app browser bridges call `@_cdecl`
+/// functions that only exist once Xcode links the staticlib against the app
+/// target's Swift sources.
 /// Cargo builds a cdylib from the same crate and links it eagerly, so without
 /// this that unused artifact fails on the missing symbols.
 fn allow_undefined_swift_bridge_symbols() {
@@ -22,6 +23,7 @@ fn allow_undefined_swift_bridge_symbols() {
         "_luma_live_activity_sync",
         "_luma_live_activity_end",
         "_luma_menu_present",
+        "_luma_browser_present",
     ] {
         println!("cargo:rustc-link-arg=-Wl,-U,{symbol}");
     }

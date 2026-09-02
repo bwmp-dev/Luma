@@ -5,7 +5,7 @@ import {
   selectVault,
   useSyncStore,
 } from "./syncStore";
-import type { Conflict, SyncReport } from "../lib/sync";
+import type { AutoSyncEvent, Conflict, SyncReport } from "../lib/sync";
 
 const VAULT_A = "vault-a";
 const VAULT_B = "vault-b";
@@ -240,5 +240,76 @@ describe("syncStore vault isolation", () => {
 
     expect(useSyncStore.getState().byVault[VAULT_A]).toBeUndefined();
     expect(vaultState(VAULT_B).lastReport?.pushed).toBe(true);
+  });
+});
+
+describe("syncStore background schedule", () => {
+  function autoEvent(overrides: Partial<AutoSyncEvent> = {}): AutoSyncEvent {
+    return {
+      vaultId: VAULT_A,
+      reason: "change",
+      phase: "completed",
+      report: null,
+      errorCategory: null,
+      errorMessage: null,
+      ...overrides,
+    };
+  }
+
+  const apply = (event: AutoSyncEvent) =>
+    useSyncStore.getState().applyAutoSyncEvent(event);
+
+  it("marks the vault as syncing on the scheduler's behalf, then clears it", () => {
+    apply(autoEvent({ phase: "started" }));
+    expect(vaultState(VAULT_A).status).toBe("syncing");
+    expect(vaultState(VAULT_A).automatic).toBe(true);
+
+    apply(autoEvent({ report: report({ pushed: true, upToDate: false }) }));
+    expect(vaultState(VAULT_A).status).toBe("idle");
+    expect(vaultState(VAULT_A).automatic).toBe(false);
+    expect(vaultState(VAULT_A).lastReport?.pushed).toBe(true);
+  });
+
+  it("records background conflicts without raising a dialog over the user's work", () => {
+    apply(
+      autoEvent({
+        report: report({ conflicts: [conflict("a")], upToDate: false }),
+      }),
+    );
+
+    expect(vaultState(VAULT_A).status).toBe("conflict");
+    expect(vaultState(VAULT_A).conflicts).toHaveLength(1);
+    expect(useSyncStore.getState().conflictDialogOpen).toBe(false);
+    // The title bar still finds it, which is how the user is told.
+    expect(selectAggregateStatus(useSyncStore.getState())).toBe("conflict");
+  });
+
+  it("records a background passphrase failure without prompting", () => {
+    apply(
+      autoEvent({
+        phase: "failed",
+        errorCategory: "sync-passphrase-required",
+        errorMessage: "sync passphrase is not set",
+      }),
+    );
+
+    expect(vaultState(VAULT_A).needsPassphrase).toBe(true);
+    expect(useSyncStore.getState().passphraseDialogOpen).toBe(false);
+  });
+
+  it("surfaces a background failure's message on the vault that failed", () => {
+    apply(
+      autoEvent({
+        vaultId: VAULT_B,
+        reason: "pull-interval",
+        phase: "failed",
+        errorCategory: "sync-unavailable",
+        errorMessage: "the remote is unreachable",
+      }),
+    );
+
+    expect(vaultState(VAULT_B).status).toBe("error");
+    expect(vaultState(VAULT_B).errorMessage).toBe("the remote is unreachable");
+    expect(vaultState(VAULT_A).status).toBe("idle");
   });
 });

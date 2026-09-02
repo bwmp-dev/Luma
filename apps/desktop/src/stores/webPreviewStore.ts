@@ -9,6 +9,7 @@ import {
   type WebListener,
   type WebPreview,
 } from "../lib/webPreview";
+import { openInAppBrowser } from "../lib/inAppBrowser";
 import { parseLumaError } from "../lib/hosts";
 
 /*
@@ -106,11 +107,23 @@ export const useWebPreviewStore = create<WebPreviewState>((set, get) => ({
     }
   },
 
-  // Opening the browser is best-effort: the tunnel stays up and the dialog
-  // still shows the copyable local URL if the system handler fails.
+  /*
+   * Where a preview opens is not cosmetic. The tunnel serving it lives inside
+   * this app, so sending the SYSTEM browser to it on mobile backgrounds Luma,
+   * iOS suspends Luma, and the page hangs against a tunnel that stopped
+   * answering — the user asked to see their site and got a spinner. The in-app
+   * browser is presented by the app, so the app stays foreground and the tunnel
+   * keeps serving; the system handler is the fallback for platforms that have no
+   * in-app browser and, not coincidentally, do not suspend it either.
+   *
+   * Both are best-effort: the tunnel stays up and the dialog keeps showing the
+   * copyable local URL even if neither browser opens.
+   */
   launch: async (preview) => {
+    const url = previewUrl(preview);
+    if (await openInAppBrowser(url)) return;
     try {
-      await openUrl(previewUrl(preview));
+      await openUrl(url);
     } catch (error) {
       const { message } = parseLumaError(error);
       set({ openError: `Could not open the browser: ${message}` });

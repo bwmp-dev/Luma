@@ -5,7 +5,9 @@ import {
   syncDisable,
   syncGetConfig,
   syncListConfigs,
+  syncSetAuto,
   syncSetPassphrase,
+  type AutoSyncSettings,
   type SyncConfigureInput,
 } from "../lib/sync";
 
@@ -50,6 +52,19 @@ export function useConfigureSync(vaultId: string) {
   const invalidate = useInvalidateSyncConfig();
   return useMutation({
     mutationFn: (input: SyncConfigureInput) => syncConfigure(vaultId, input),
+    onSuccess: () => invalidate(),
+  });
+}
+
+/**
+ * Change this device's automatic schedule for one vault. The backend scheduler
+ * reads the row on its next tick, so there is nothing to restart here — only
+ * the config query to refresh.
+ */
+export function useSetAutoSync(vaultId: string) {
+  const invalidate = useInvalidateSyncConfig();
+  return useMutation({
+    mutationFn: (settings: AutoSyncSettings) => syncSetAuto(vaultId, settings),
     onSuccess: () => invalidate(),
   });
 }

@@ -3,21 +3,29 @@ import { open } from "@tauri-apps/plugin-dialog";
 import {
   AlertTriangle,
   Check,
+  CloudDownload,
   CloudOff,
+  CloudUpload,
   FolderOpen,
   KeyRound,
   Loader2,
   RefreshCw,
   ShieldAlert,
+  Timer,
 } from "lucide-react";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { normalizeDialogPath } from "../../lib/dialogPath";
 import { PassphrasePrompt } from "./PassphrasePrompt";
 import { parseLumaError } from "../../lib/hosts";
 import {
+  AUTO_INTERVAL_CHOICES,
   DEFAULT_LUMA_CLOUD_URL,
+  formatCadence,
   formatRelativeTime,
+  pushScheduleValue,
   truncateVersion,
+  withPushSchedule,
+  type AutoSyncSettings,
   type SyncConfig,
   type SyncConfigureInput,
   type SyncProvider,
@@ -25,6 +33,7 @@ import {
 import {
   useConfigureSync,
   useDisableSync,
+  useSetAutoSync,
   useSetSyncPassphrase,
   useSyncConfig,
 } from "../../hooks/useSync";
@@ -89,7 +98,7 @@ function SyncSectionBody({ vault, config }: { vault: Vault; config: SyncConfig }
   const runtime = useSyncStore((s) => selectVault(s, vaultId));
   const runSyncNow = useSyncStore((s) => s.syncNow);
   const resetSyncRuntime = useSyncStore((s) => s.reset);
-  const { status, lastReport, errorCategory, errorMessage } = runtime;
+  const { status, lastReport, errorCategory, errorMessage, automatic } = runtime;
 
   // Provider form state. Secrets (password / token) are never prefilled and are
   // cleared after a successful configure.
@@ -198,6 +207,7 @@ function SyncSectionBody({ vault, config }: { vault: Vault; config: SyncConfig }
         <StatusPanel
           config={config}
           status={status}
+          automatic={automatic}
           lastReportSummary={
             lastReport && status !== "syncing"
               ? summarizeReport(lastReport)
@@ -373,6 +383,9 @@ function SyncSectionBody({ vault, config }: { vault: Vault; config: SyncConfig }
           </div>
         )}
       </div>
+
+      {/* Automatic schedule ------------------------------------------------ */}
+      {config.enabled && <AutomaticSyncPanel vault={vault} config={config} />}
 
       {/* Passphrase management -------------------------------------------- */}
       <div className="space-y-2 rounded-lg border border-border bg-background p-3">
@@ -550,9 +563,196 @@ function SyncSectionBody({ vault, config }: { vault: Vault; config: SyncConfig }
   );
 }
 
+/**
+ * This device's automatic schedule. Two independent triggers feed the one
+ * bidirectional sync the backend performs: the upload side reacts to local
+ * saves, the download side polls for other devices' changes. Both are per
+ * device — a laptop that is awake all day and a phone on cellular want
+ * different answers — so nothing here is shared with the vault's other members.
+ */
+function AutomaticSyncPanel({
+  vault,
+  config,
+}: {
+  vault: Vault;
+  config: SyncConfig;
+}) {
+  const vaultId = vault.id;
+  const setAuto = useSetAutoSync(vaultId);
+  // While a change is in flight the pending value is what the user just chose,
+  // so the controls move immediately instead of snapping back until the config
+  // query refetches.
+  const auto =
+    setAuto.isPending && setAuto.variables ? setAuto.variables : config.auto;
+  const error = setAuto.isError ? parseLumaError(setAuto.error).message : null;
+  const update = (next: AutoSyncSettings) => setAuto.mutate(next);
+
+  // Automatic sync never prompts for a passphrase, so a vault whose passphrase
+  // is not on this device simply waits — worth saying, because the schedule
+  // would otherwise look broken. A managed vault has no passphrase to wait for:
+  // its key comes from Luma Cloud, sealed to this device.
+  const waitingForPassphrase =
+    vault.kind !== "managed" && !config.passphraseRemembered;
+
+  return (
+    <div className="space-y-3 rounded-lg border border-border bg-background p-3">
+      <div>
+        <p className="flex items-center gap-1.5 text-sm font-medium">
+          <Timer size={14} /> Automatic sync
+        </p>
+        <p className="text-xs text-muted">
+          Applies to this device only. Every sync is two-way — Luma reads the
+          remote before it writes — so either schedule below keeps both
+          directions current. Conflicts still wait for you to resolve them.
+        </p>
+      </div>
+
+      <ScheduleRow
+        id={`auto-push-${vaultId}`}
+        icon={<CloudUpload size={14} className="text-muted" />}
+        label="Send my changes"
+        hint="Uploads nothing when there is nothing to send."
+        value={pushScheduleValue(auto)}
+        onChange={(value) => update(withPushSchedule(auto, value))}
+        disabled={setAuto.isPending}
+        options={[
+          { value: "off", label: "Only when I press Sync now" },
+          { value: "on-change", label: "As soon as I save" },
+          ...AUTO_INTERVAL_CHOICES.map((minutes) => ({
+            value: String(minutes),
+            label: `Every ${formatCadence(minutes)}`,
+          })),
+        ]}
+      />
+
+      <ScheduleRow
+        id={`auto-pull-${vaultId}`}
+        icon={<CloudDownload size={14} className="text-muted" />}
+        label="Check for changes"
+        hint="Picks up what your other devices have pushed."
+        value={String(auto.pullIntervalMinutes)}
+        onChange={(value) =>
+          update({ ...auto, pullIntervalMinutes: Number(value) })
+        }
+        disabled={setAuto.isPending}
+        options={[
+          { value: "0", label: "Never on a schedule" },
+          ...AUTO_INTERVAL_CHOICES.map((minutes) => ({
+            value: String(minutes),
+            label: `Every ${formatCadence(minutes)}`,
+          })),
+        ]}
+      />
+
+      <div className="space-y-2 border-t border-border pt-3">
+        <ToggleRow
+          label="Check when Luma starts"
+          checked={auto.pullOnStart}
+          disabled={setAuto.isPending}
+          onClick={() => update({ ...auto, pullOnStart: !auto.pullOnStart })}
+        />
+        <ToggleRow
+          label="Check when Luma comes back to the foreground"
+          description="At most once every couple of minutes."
+          checked={auto.pullOnFocus}
+          disabled={setAuto.isPending}
+          onClick={() => update({ ...auto, pullOnFocus: !auto.pullOnFocus })}
+        />
+      </div>
+
+      {waitingForPassphrase && auto.pushMode !== "off" && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+          <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+          Automatic sync never asks for a passphrase. Until you remember this
+          vault's passphrase on this device, the schedule only runs after you
+          have entered it once this session.
+        </div>
+      )}
+      {error && (
+        <div
+          role="alert"
+          className="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger"
+        >
+          {error}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ScheduleRow({
+  id,
+  icon,
+  label,
+  hint,
+  value,
+  options,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  icon: React.ReactNode;
+  label: string;
+  hint: string;
+  value: string;
+  options: { value: string; label: string }[];
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="min-w-0">
+        <label htmlFor={id} className="flex items-center gap-1.5 text-sm">
+          {icon}
+          {label}
+        </label>
+        <p className="text-xs text-muted">{hint}</p>
+      </div>
+      <select
+        id={id}
+        value={value}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.value)}
+        className="rounded-md border border-border bg-surface px-2 py-1.5 text-xs outline-none focus:border-accent disabled:opacity-50"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function ToggleRow({
+  label,
+  description,
+  checked,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  description?: string;
+  checked: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <p className="text-sm">{label}</p>
+        {description && <p className="text-xs text-muted">{description}</p>}
+      </div>
+      <Toggle checked={checked} disabled={disabled} onClick={onClick} label={label} />
+    </div>
+  );
+}
+
 function StatusPanel({
   config,
   status,
+  automatic,
   lastReportSummary,
   privateKeysApplied,
   privateKeysSkippedLocked,
@@ -561,6 +761,8 @@ function StatusPanel({
 }: {
   config: SyncConfig;
   status: string;
+  /** True while the sync in progress was started by the schedule, not the user. */
+  automatic: boolean;
   lastReportSummary: string | null;
   privateKeysApplied: number;
   privateKeysSkippedLocked: number;
@@ -630,7 +832,8 @@ function StatusPanel({
       )}
       {syncing && (
         <div className="mt-2.5 flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted">
-          <Loader2 size={13} className="animate-spin" /> Contacting {provider}…
+          <Loader2 size={13} className="animate-spin" />{" "}
+          {automatic ? `Syncing on schedule with ${provider}…` : `Contacting ${provider}…`}
         </div>
       )}
     </div>

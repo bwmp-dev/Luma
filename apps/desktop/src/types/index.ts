@@ -200,9 +200,10 @@ export const SETTING_KEYS = {
    * synced. */
   gestureDoubleTapTab: "mobile.gestureDoubleTapTab",
   /** Mobile-only toggle: show a live read-only preview of each open session on
-   * the Connections list. Default ON. Every visible preview is a second xterm
-   * instance mirroring its session, so it is worth being able to switch off.
-   * Never synced. */
+   * the Connections list. Default ON. A preview is the session's own terminal
+   * parked in the card, so it costs no second xterm — but it does keep every
+   * listed session composited while the list is up, and some readers simply do
+   * not want their output on a list screen. Never synced. */
   connectionPreviews: "mobile.connectionPreviews",
   /** Device-local SFTP browser view preferences (sort field + direction, show
    * hidden files), serialized as JSON. Shared by the desktop dual-pane browser

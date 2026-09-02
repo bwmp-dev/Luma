@@ -295,6 +295,13 @@ export const SYNC_CONFIG = {
   lastRemoteVersion: null,
   passphraseSet: false,
   passphraseRemembered: false,
+  auto: {
+    pushMode: "on-change",
+    pushIntervalMinutes: 15,
+    pullIntervalMinutes: 15,
+    pullOnStart: true,
+    pullOnFocus: true,
+  },
 };
 
 /*

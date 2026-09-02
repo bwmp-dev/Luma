@@ -22,6 +22,7 @@
 //! tombstone resurrects it within a bundle; a tombstone wins ties. Across two
 //! devices, simultaneous object/delete changes remain conflicts.
 
+pub mod auto;
 pub mod managed;
 mod providers;
 pub mod vault_key;
@@ -29,7 +30,7 @@ pub mod vault_key;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use argon2::{Algorithm, Argon2, Params, Version};
 use base64::Engine;
@@ -102,6 +103,10 @@ pub(crate) const MAX_BLOB_BYTES: usize = 64 * 1024 * 1024;
 pub struct SyncRuntimeState {
     passphrase: Mutex<HashMap<String, VaultSecret>>,
     pending: Mutex<HashMap<String, PendingSync>>,
+    /// One transfer per vault at a time. Automatic syncs run on a background
+    /// task, so a scheduled sync and the user pressing "Sync now" can otherwise
+    /// overlap and race each other's baseline write.
+    transfers: Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>,
 }
 
 /// Keychain account for a vault's credential. The personal vault keeps the bare
@@ -345,6 +350,116 @@ pub enum ResolutionChoice {
     TakeRemote,
 }
 
+/// When local changes are pushed without the user asking.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AutoPushMode {
+    /// Never. Local changes wait for "Sync now".
+    Off,
+    /// Shortly after the last edit settles, so a save reaches the remote while
+    /// the user still remembers making it.
+    OnChange,
+    /// Batched onto a fixed cadence. Nothing is transferred on a tick that
+    /// finds no local changes.
+    Interval,
+}
+
+impl AutoPushMode {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::OnChange => "on-change",
+            Self::Interval => "interval",
+        }
+    }
+
+    /// Unknown values (a downgrade, a hand-edited database) fall back to `Off`
+    /// rather than erroring: an unreadable cadence must not make the vault
+    /// unsyncable, and doing nothing is the safe reading.
+    fn from_str(value: &str) -> Self {
+        match value {
+            "on-change" => Self::OnChange,
+            "interval" => Self::Interval,
+            _ => Self::Off,
+        }
+    }
+}
+
+/// Cadences offered for both directions. Anything else is rejected rather than
+/// clamped, so a typo cannot quietly become a one-minute polling loop against
+/// someone's WebDAV server.
+const AUTO_INTERVAL_CHOICES: &[u32] = &[5, 10, 15, 30, 60, 180, 360, 720, 1440];
+
+/// This device's automatic sync cadence for one vault. Never part of a bundle:
+/// see `migrations/0022_sync_auto.sql`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct AutoSyncSettings {
+    pub push_mode: AutoPushMode,
+    /// Only meaningful when `push_mode` is `Interval`.
+    pub push_interval_minutes: u32,
+    /// How often the remote is polled for other devices' changes; `0` is off.
+    pub pull_interval_minutes: u32,
+    /// Pull once shortly after the app starts.
+    pub pull_on_start: bool,
+    /// Pull when the app comes back to the foreground, no more than once every
+    /// `AUTO_FOCUS_COOLDOWN`.
+    pub pull_on_focus: bool,
+}
+
+impl Default for AutoSyncSettings {
+    /// Mirrors the column defaults in `migrations/0022_sync_auto.sql`. Used when
+    /// a vault has no `sync_state` row yet, so the settings form shows what
+    /// enabling sync would actually do.
+    fn default() -> Self {
+        Self {
+            push_mode: AutoPushMode::OnChange,
+            push_interval_minutes: 15,
+            pull_interval_minutes: 15,
+            pull_on_start: true,
+            pull_on_focus: true,
+        }
+    }
+}
+
+impl AutoSyncSettings {
+    fn validate(&self) -> Result<()> {
+        if self.push_mode == AutoPushMode::Interval
+            && !AUTO_INTERVAL_CHOICES.contains(&self.push_interval_minutes)
+        {
+            return Err(LumaError::InvalidInput(
+                "pushIntervalMinutes is not one of the offered cadences".into(),
+            ));
+        }
+        if self.pull_interval_minutes != 0
+            && !AUTO_INTERVAL_CHOICES.contains(&self.pull_interval_minutes)
+        {
+            return Err(LumaError::InvalidInput(
+                "pullIntervalMinutes is not one of the offered cadences".into(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Whether anything at all would happen without the user asking.
+    pub fn is_active(&self) -> bool {
+        self.push_mode != AutoPushMode::Off
+            || self.pull_interval_minutes != 0
+            || self.pull_on_start
+            || self.pull_on_focus
+    }
+}
+
+fn auto_settings_from_row(row: &sqlx::sqlite::SqliteRow) -> AutoSyncSettings {
+    AutoSyncSettings {
+        push_mode: AutoPushMode::from_str(&row.get::<String, _>("auto_push_mode")),
+        push_interval_minutes: row.get::<i64, _>("auto_push_interval_minutes").max(0) as u32,
+        pull_interval_minutes: row.get::<i64, _>("auto_pull_interval_minutes").max(0) as u32,
+        pull_on_start: row.get::<i64, _>("auto_pull_on_start") != 0,
+        pull_on_focus: row.get::<i64, _>("auto_pull_on_focus") != 0,
+    }
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SyncConfigureInput {
@@ -374,9 +489,10 @@ pub struct SyncConfig {
     pub last_remote_version: Option<String>,
     pub passphrase_set: bool,
     pub passphrase_remembered: bool,
+    pub auto: AutoSyncSettings,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncReport {
     pub pulled: bool,
@@ -396,6 +512,13 @@ struct StoredSyncState {
     gist_id: Option<String>,
     cloud_url: Option<String>,
     last_remote_version: Option<String>,
+    /// `local_change_stamp` as of the bundle this device last pushed. The
+    /// automatic scheduler compares it against the current stamp to decide
+    /// whether there is anything to send, which is far cheaper than assembling
+    /// a bundle, and it survives a restart because it lives here rather than in
+    /// the runtime.
+    #[serde(default)]
+    local_stamp: Option<String>,
     #[serde(default)]
     baseline: BTreeMap<String, String>,
 }
@@ -601,11 +724,14 @@ async fn config_for_vault(
     vault_id: &str,
     cloud_signed_in: bool,
 ) -> Result<SyncConfig> {
-    let row =
-        sqlx::query("SELECT provider, last_synced_at, state FROM sync_state WHERE vault_id = ?1")
-            .bind(vault_id)
-            .fetch_optional(pool)
-            .await?;
+    let row = sqlx::query(
+        "SELECT provider, last_synced_at, state, auto_push_mode, auto_push_interval_minutes,
+                auto_pull_interval_minutes, auto_pull_on_start, auto_pull_on_focus
+         FROM sync_state WHERE vault_id = ?1",
+    )
+    .bind(vault_id)
+    .fetch_optional(pool)
+    .await?;
     let provider: Option<String> = row.as_ref().and_then(|row| row.get("provider"));
     let passphrase_set =
         runtime.passphrase.lock().unwrap().contains_key(vault_id) || provider.is_some();
@@ -627,7 +753,45 @@ async fn config_for_vault(
         passphrase_remembered: credential_get(pool, keystore_state, &passphrase_account)
             .await
             .is_ok(),
+        // A vault with no row has never been configured; showing the defaults
+        // it *would* get is more useful than showing "off" for everything.
+        auto: row.as_ref().map(auto_settings_from_row).unwrap_or_default(),
     })
+}
+
+/// Replace this device's automatic cadence for one vault. Requires a configured
+/// provider: a cadence with nothing to sync to would be a setting the user
+/// cannot see the effect of.
+pub async fn set_auto_settings(
+    pool: &SqlitePool,
+    vault_id: &str,
+    settings: AutoSyncSettings,
+) -> Result<()> {
+    vaults::require(pool, vault_id).await?;
+    settings.validate()?;
+    let updated = sqlx::query(
+        "UPDATE sync_state
+            SET auto_push_mode = ?2,
+                auto_push_interval_minutes = ?3,
+                auto_pull_interval_minutes = ?4,
+                auto_pull_on_start = ?5,
+                auto_pull_on_focus = ?6
+          WHERE vault_id = ?1",
+    )
+    .bind(vault_id)
+    .bind(settings.push_mode.as_str())
+    .bind(i64::from(settings.push_interval_minutes))
+    .bind(i64::from(settings.pull_interval_minutes))
+    .bind(settings.pull_on_start)
+    .bind(settings.pull_on_focus)
+    .execute(pool)
+    .await?;
+    if updated.rows_affected() == 0 {
+        return Err(LumaError::SyncUnavailable(
+            "choose a sync provider before setting an automatic schedule".into(),
+        ));
+    }
+    Ok(())
 }
 
 pub async fn configure(
@@ -800,6 +964,10 @@ pub async fn sync_now(
     vault_id: &str,
 ) -> Result<SyncReport> {
     vaults::require(pool, vault_id).await?;
+    // Held for the whole transfer: a scheduled sync and a manual one that
+    // interleaved would each write a baseline computed without the other.
+    let transfer = transfer_lock(runtime, vault_id);
+    let _guard = transfer.lock().await;
     let (provider_name, mut stored) = load_enabled_config(pool, vault_id).await?;
     let secret = current_secret(
         pool,
@@ -834,11 +1002,17 @@ pub async fn sync_now(
     )
     .await?;
     let remote = provider.download().await?;
+    // Read *before* the bundle is assembled, deliberately. A save that lands
+    // between the two is then still counted as unsynced, costing one extra
+    // round trip; reading it afterwards would record a change as pushed that
+    // this bundle does not contain.
+    let mut stamp = local_change_stamp(pool, vault_id).await?;
     let local = assemble_bundle(pool, keystore_state, &secret, vault_id).await?;
 
     let Some(remote) = remote else {
         let blob = encrypt_bundle(&local, &secret)?;
         let uploaded = provider.upload(&blob, None).await?;
+        stored.local_stamp = Some(stamp);
         update_after_upload(
             pool,
             &provider_name,
@@ -906,7 +1080,13 @@ pub async fn sync_now(
         });
     }
 
+    // A pull rewrites local rows, so the stamp read before the merge no longer
+    // describes what is on disk.
+    if pulled {
+        stamp = local_change_stamp(pool, vault_id).await?;
+    }
     let merged = assemble_bundle(pool, keystore_state, &secret, vault_id).await?;
+    stored.local_stamp = Some(stamp);
     let compare_private_keys = private_key_sync_active(pool, keystore_state, vault_id).await?;
     let needs_push =
         !bundles_have_same_content(&merged, &remote_bundle, &secret, compare_private_keys)?;
@@ -981,6 +1161,8 @@ pub async fn sync_resolve(
     resolutions: &[ConflictResolution],
 ) -> Result<SyncReport> {
     vaults::require(pool, vault_id).await?;
+    let transfer = transfer_lock(runtime, vault_id);
+    let _guard = transfer.lock().await;
     let pending = runtime
         .pending
         .lock()
@@ -1079,7 +1261,9 @@ pub async fn sync_resolve(
         vault_id,
     )
     .await?;
+    let stamp = local_change_stamp(pool, vault_id).await?;
     let merged = assemble_bundle(pool, keystore_state, &secret, vault_id).await?;
+    stored.local_stamp = Some(stamp);
     let blob = encrypt_bundle(&merged, &secret)?;
     let uploaded = provider
         .upload(&blob, Some(&pending.remote_version))
@@ -3517,6 +3701,155 @@ async fn clear_credential(
     }
 }
 
+/// A cheap fingerprint of everything this vault would contribute to a bundle.
+///
+/// It is a *trigger*, not a decision: an equal stamp means "do not bother
+/// contacting the remote", while a different one only means "look properly".
+/// `sync_now` still compares real content before it uploads anything, so a
+/// false positive costs one round trip and nothing else.
+///
+/// Only counts and timestamp aggregates are read, so this stays a few index
+/// scans and can run on a short timer. Timestamps have one-second resolution,
+/// which is why the sum is included as well as the maximum: editing an older
+/// row up to a second another row already occupies moves the sum even when it
+/// leaves the maximum alone.
+pub async fn local_change_stamp(pool: &SqlitePool, vault_id: &str) -> Result<String> {
+    // Ephemeral quick-connect hosts are excluded from bundles, so they must not
+    // register as a change here either.
+    let mut sql = String::from(
+        "SELECT COUNT(*) AS n, COALESCE(MAX(updated_at),0) AS hi, COALESCE(SUM(updated_at),0) AS total
+           FROM hosts WHERE vault_id = ?1 AND is_ephemeral = 0
+         UNION ALL SELECT COUNT(*), COALESCE(MAX(updated_at),0), COALESCE(SUM(updated_at),0)
+           FROM host_groups WHERE vault_id = ?1
+         UNION ALL SELECT COUNT(*), COALESCE(MAX(updated_at),0), COALESCE(SUM(updated_at),0)
+           FROM key_references WHERE vault_id = ?1
+         UNION ALL SELECT COUNT(*), COALESCE(MAX(updated_at),0), COALESCE(SUM(updated_at),0)
+           FROM identities WHERE vault_id = ?1
+         UNION ALL SELECT COUNT(*), COALESCE(MAX(updated_at),0), COALESCE(SUM(updated_at),0)
+           FROM snippets WHERE vault_id = ?1
+         UNION ALL SELECT COUNT(*), COALESCE(MAX(deleted_at),0), COALESCE(SUM(deleted_at),0)
+           FROM tombstones WHERE vault_id = ?1",
+    );
+    // Terminal profiles and settings ride along with the personal vault only —
+    // matching `assemble_bundle_inner`'s `device_scoped`.
+    if vault_id == PERSONAL_VAULT_ID {
+        sql.push_str(
+            " UNION ALL SELECT COUNT(*), COALESCE(MAX(updated_at),0), COALESCE(SUM(updated_at),0)
+                FROM terminal_profiles
+              UNION ALL SELECT COUNT(*), COALESCE(MAX(updated_at),0), COALESCE(SUM(updated_at),0)
+                FROM settings WHERE key <> ?2",
+        );
+    }
+
+    let mut query = sqlx::query(&sql).bind(vault_id);
+    if vault_id == PERSONAL_VAULT_ID {
+        query = query.bind(settings::WORKSPACE_SNAPSHOT_KEY);
+    }
+    let rows = query.fetch_all(pool).await?;
+
+    let mut hasher = Sha256::new();
+    for row in &rows {
+        hasher.update(row.get::<i64, _>("n").to_le_bytes());
+        hasher.update(row.get::<i64, _>("hi").to_le_bytes());
+        hasher.update(row.get::<i64, _>("total").to_le_bytes());
+    }
+    Ok(format!("{:x}", hasher.finalize())[..32].to_string())
+}
+
+/// The lock that serializes transfers for one vault, created on first use.
+/// Vaults never contend with each other: one stalled remote must not hold up
+/// another vault's sync.
+fn transfer_lock(runtime: &SyncRuntimeState, vault_id: &str) -> Arc<tokio::sync::Mutex<()>> {
+    runtime
+        .transfers
+        .lock()
+        .unwrap()
+        .entry(vault_id.to_string())
+        .or_default()
+        .clone()
+}
+
+/// Whether this vault is waiting on the user to resolve conflicts. The
+/// scheduler skips those: another automatic sync would re-report the same
+/// conflicts and never push.
+pub fn has_pending_conflicts(runtime: &SyncRuntimeState, vault_id: &str) -> bool {
+    runtime
+        .pending
+        .lock()
+        .unwrap()
+        .get(vault_id)
+        .is_some_and(|pending| !pending.conflicts.is_empty())
+}
+
+/// One vault as the scheduler sees it: its cadence, when it last synced, and
+/// enough to answer "is there anything to push?" without a second query for the
+/// row. Assembled by [`auto_sync_candidates`].
+pub struct AutoSyncCandidate {
+    pub vault_id: String,
+    pub settings: AutoSyncSettings,
+    /// Unix seconds of the last completed sync; `None` when it has never run.
+    pub last_synced_at: Option<i64>,
+    /// [`local_change_stamp`] as of the bundle this device last pushed.
+    pushed_stamp: Option<String>,
+}
+
+impl AutoSyncCandidate {
+    /// Whether this vault holds local changes that have not reached the remote.
+    /// A `true` here only means "worth looking" — `sync_now` compares real
+    /// content before it uploads.
+    pub async fn has_local_changes(&self, pool: &SqlitePool) -> Result<bool> {
+        let stamp = local_change_stamp(pool, &self.vault_id).await?;
+        Ok(self.pushed_stamp.as_deref() != Some(stamp.as_str()))
+    }
+}
+
+/// Every vault with a configured provider, in one query. A vault with no
+/// provider has nowhere to sync to and is not returned at all.
+pub async fn auto_sync_candidates(pool: &SqlitePool) -> Result<Vec<AutoSyncCandidate>> {
+    let rows = sqlx::query(
+        "SELECT vault_id, last_synced_at, state, auto_push_mode, auto_push_interval_minutes,
+                auto_pull_interval_minutes, auto_pull_on_start, auto_pull_on_focus
+         FROM sync_state WHERE provider IS NOT NULL",
+    )
+    .fetch_all(pool)
+    .await?;
+    let mut candidates = Vec::with_capacity(rows.len());
+    for row in &rows {
+        candidates.push(AutoSyncCandidate {
+            vault_id: row.get("vault_id"),
+            settings: auto_settings_from_row(row),
+            last_synced_at: row.get("last_synced_at"),
+            // An unreadable state blob is not worth aborting the whole schedule
+            // for: treating the vault as dirty makes the next sync re-derive
+            // everything, which is what a manual sync would have done too.
+            pushed_stamp: parse_stored_state(row.get("state"))
+                .ok()
+                .and_then(|stored| stored.local_stamp),
+        });
+    }
+    Ok(candidates)
+}
+
+/// Whether this vault's key can be obtained without asking the user. A
+/// passphrase vault needs one already loaded (from the keychain at startup, or
+/// typed this session); a managed vault fetches its content key from Luma Cloud
+/// sealed to this device, so it only needs the account to be usable.
+///
+/// The scheduler refuses to run without this: an automatic sync that popped a
+/// passphrase prompt would be worse than not syncing.
+pub async fn secret_available_unattended(
+    pool: &SqlitePool,
+    runtime: &SyncRuntimeState,
+    vault_id: &str,
+) -> Result<bool> {
+    if cached_secret(runtime, vault_id).is_some() {
+        return Ok(true);
+    }
+    Ok(vaults::get(pool, vault_id)
+        .await?
+        .is_some_and(|vault| vault.kind == vaults::MANAGED_KIND))
+}
+
 fn cached_secret(runtime: &SyncRuntimeState, vault_id: &str) -> Option<VaultSecret> {
     runtime.passphrase.lock().unwrap().get(vault_id).cloned()
 }
@@ -5177,5 +5510,256 @@ mod tests {
             .await
             .unwrap();
         assert!(hosts::get(&pool, &victim).await.unwrap().is_some());
+    }
+
+    #[tokio::test]
+    async fn the_change_stamp_moves_with_saves_and_ignores_the_workspace_snapshot() {
+        let pool = crate::storage::init_in_memory().await.unwrap();
+        let vault = shared_vault(&pool, "Infra", false).await;
+
+        let empty = local_change_stamp(&pool, &vault).await.unwrap();
+        let host = seed_host(&pool, &vault, "web-1").await;
+        let after_create = local_change_stamp(&pool, &vault).await.unwrap();
+        assert_ne!(empty, after_create);
+
+        hosts::delete(&pool, &host).await.unwrap();
+        let after_delete = local_change_stamp(&pool, &vault).await.unwrap();
+        assert_ne!(after_create, after_delete);
+        // A tombstone is a change in its own right, not a return to empty.
+        assert_ne!(empty, after_delete);
+
+        // Vaults are independent: another vault's save is not this one's.
+        let other = shared_vault(&pool, "Client X", false).await;
+        seed_host(&pool, &other, "db-1").await;
+        assert_eq!(
+            after_delete,
+            local_change_stamp(&pool, &vault).await.unwrap()
+        );
+
+        // The workspace snapshot is bundled but is rewritten on every tab
+        // change, so it must not read as a save; a real setting still does.
+        let personal_before = local_change_stamp(&pool, PERSONAL_VAULT_ID).await.unwrap();
+        crate::storage::settings::set(
+            &pool,
+            crate::storage::settings::WORKSPACE_SNAPSHOT_KEY,
+            &serde_json::json!({"tabs": []}),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            personal_before,
+            local_change_stamp(&pool, PERSONAL_VAULT_ID).await.unwrap()
+        );
+        crate::storage::settings::set(&pool, "terminal.fontSize", &serde_json::json!(14))
+            .await
+            .unwrap();
+        assert_ne!(
+            personal_before,
+            local_change_stamp(&pool, PERSONAL_VAULT_ID).await.unwrap()
+        );
+    }
+
+    #[tokio::test]
+    async fn a_synced_vault_stops_reporting_local_changes_until_the_next_save() {
+        let root = temporary_directory();
+        let app_data_dir = root.join("app-data");
+        let folder = root.join("remote");
+        fs::create_dir_all(&app_data_dir).unwrap();
+        fs::create_dir_all(&folder).unwrap();
+
+        let pool = crate::storage::init_in_memory().await.unwrap();
+        let runtime = SyncRuntimeState::default();
+        let keystore_state = KeystoreState::default();
+        let collab = crate::collaboration::CollaborationRuntimeState::default();
+        // Registers this installation's device id, which every bundle carries.
+        initialize(&pool, &runtime, &keystore_state).await.unwrap();
+        let vault = shared_vault(&pool, "Infra", false).await;
+        configure(
+            &pool,
+            &runtime,
+            &keystore_state,
+            &app_data_dir,
+            &vault,
+            local_folder_input(&folder),
+        )
+        .await
+        .unwrap();
+        set_passphrase(
+            &pool,
+            &runtime,
+            &keystore_state,
+            &vault,
+            "correct horse battery staple".into(),
+            false,
+        )
+        .await
+        .unwrap();
+        seed_host(&pool, &vault, "web-1").await;
+
+        async fn candidate(pool: &SqlitePool, vault_id: &str) -> AutoSyncCandidate {
+            auto_sync_candidates(pool)
+                .await
+                .unwrap()
+                .into_iter()
+                .find(|candidate| candidate.vault_id == vault_id)
+                .expect("a configured vault is a scheduler candidate")
+        }
+
+        let before = candidate(&pool, &vault).await;
+        assert!(before.has_local_changes(&pool).await.unwrap());
+        assert!(before.last_synced_at.is_none());
+
+        sync_now(
+            &pool,
+            &runtime,
+            &keystore_state,
+            &collab,
+            &app_data_dir,
+            &vault,
+        )
+        .await
+        .unwrap();
+
+        let after = candidate(&pool, &vault).await;
+        assert!(!after.has_local_changes(&pool).await.unwrap());
+        assert!(after.last_synced_at.is_some());
+
+        seed_host(&pool, &vault, "web-2").await;
+        assert!(candidate(&pool, &vault)
+            .await
+            .has_local_changes(&pool)
+            .await
+            .unwrap());
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[tokio::test]
+    async fn auto_settings_round_trip_and_reject_cadences_the_ui_does_not_offer() {
+        let root = temporary_directory();
+        let app_data_dir = root.join("app-data");
+        let folder = root.join("remote");
+        fs::create_dir_all(&app_data_dir).unwrap();
+        fs::create_dir_all(&folder).unwrap();
+
+        let pool = crate::storage::init_in_memory().await.unwrap();
+        let runtime = SyncRuntimeState::default();
+        let keystore_state = KeystoreState::default();
+        let vault = shared_vault(&pool, "Infra", false).await;
+
+        // A schedule needs somewhere to sync to.
+        assert_eq!(
+            set_auto_settings(&pool, &vault, AutoSyncSettings::default())
+                .await
+                .unwrap_err()
+                .category(),
+            "sync-unavailable"
+        );
+
+        configure(
+            &pool,
+            &runtime,
+            &keystore_state,
+            &app_data_dir,
+            &vault,
+            local_folder_input(&folder),
+        )
+        .await
+        .unwrap();
+
+        let chosen = AutoSyncSettings {
+            push_mode: AutoPushMode::Interval,
+            push_interval_minutes: 30,
+            pull_interval_minutes: 60,
+            pull_on_start: false,
+            pull_on_focus: false,
+        };
+        set_auto_settings(&pool, &vault, chosen).await.unwrap();
+        assert_eq!(
+            get_config(&pool, &runtime, &keystore_state, &vault)
+                .await
+                .unwrap()
+                .auto,
+            chosen
+        );
+
+        // Changing the provider rewrites the stored state, and the cadence has
+        // to survive that.
+        configure(
+            &pool,
+            &runtime,
+            &keystore_state,
+            &app_data_dir,
+            &vault,
+            local_folder_input(&folder),
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            get_config(&pool, &runtime, &keystore_state, &vault)
+                .await
+                .unwrap()
+                .auto,
+            chosen
+        );
+
+        for rejected in [
+            AutoSyncSettings {
+                push_mode: AutoPushMode::Interval,
+                push_interval_minutes: 1,
+                ..chosen
+            },
+            AutoSyncSettings {
+                pull_interval_minutes: 7,
+                ..chosen
+            },
+        ] {
+            assert_eq!(
+                set_auto_settings(&pool, &vault, rejected)
+                    .await
+                    .unwrap_err()
+                    .category(),
+                "invalid-input"
+            );
+        }
+        // A zero pull interval is "off", not an unoffered cadence.
+        set_auto_settings(
+            &pool,
+            &vault,
+            AutoSyncSettings {
+                pull_interval_minutes: 0,
+                ..chosen
+            },
+        )
+        .await
+        .unwrap();
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[tokio::test]
+    async fn a_vault_without_a_loaded_key_is_never_synced_unattended() {
+        let pool = crate::storage::init_in_memory().await.unwrap();
+        let runtime = SyncRuntimeState::default();
+        let keystore_state = KeystoreState::default();
+        let vault = shared_vault(&pool, "Infra", false).await;
+
+        assert!(!secret_available_unattended(&pool, &runtime, &vault)
+            .await
+            .unwrap());
+
+        set_passphrase(
+            &pool,
+            &runtime,
+            &keystore_state,
+            &vault,
+            "correct horse battery staple".into(),
+            false,
+        )
+        .await
+        .unwrap();
+        assert!(secret_available_unattended(&pool, &runtime, &vault)
+            .await
+            .unwrap());
     }
 }

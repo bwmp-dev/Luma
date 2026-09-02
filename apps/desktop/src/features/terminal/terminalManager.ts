@@ -217,14 +217,36 @@ const bundledTerminalFontReady =
  * every prompt-jump / copy-output action becomes a no-op.
  */
 
-/** What a preview mirror copies: the session it renders, and the callback that
- * re-fits its card. Held on the mirror so any code that touches a preview can
- * reach the terminal it is a copy of. */
-type PreviewLink = {
-  sourceId: string;
-  /** Re-fit the card after the copied rendering changed shape (the source was
-   * resized, or its font size changed under it). */
-  onGridChange: () => void;
+/**
+ * A live session currently parked in a preview card rather than on a full
+ * screen.
+ *
+ * There is no second terminal behind a preview: the card is handed the
+ * session's OWN xterm element, scaled down by a CSS transform. A preview
+ * therefore cannot drift from the terminal it shows — it is that terminal, with
+ * the same buffer, grid, renderer and glyphs. The lease records what the card
+ * needs to keep that element scaled and anchored, and marks the session as one
+ * whose grid must not be refit: the card's box is not the terminal's box.
+ */
+type PreviewLease = {
+  /** The card the element is parked in. Held here rather than read back off the
+   * element's parent, so a fit pass always measures the box that was leased. */
+  host: HTMLElement;
+  /** Uniform scale currently applied to the element. It renders at the
+   * terminal's real size and is shrunk by this, so the card shows the
+   * terminal's own rendering instead of a smaller re-render of it. */
+  scale: number;
+  /** Ask the card to re-fit. Called whenever what it is showing may have moved
+   * under it and nothing watching the card itself would notice: an Appearance
+   * font change (new cell metrics), and every chunk of output (a new last
+   * written row, which is what the card is anchored on). */
+  onChange: () => void;
+  /** Drops the output subscription that drives those refits. */
+  unsubscribe: () => void;
+  /** `disableStdin` as the session had it before the lease. A parked terminal is
+   * decorative, so it is made read-only for the duration — nothing on a preview
+   * card may reach the PTY — and this is restored on release. */
+  stdinDisabled: boolean;
 };
 
 /** One command cycle bounded by OSC 133 markers. */
@@ -399,17 +421,11 @@ type ManagedSession = {
    * output (viewer/controller of a shared terminal) and forwards local typing to
    * `onInput` instead of a PTY. */
   display: boolean;
-  /** Set on a preview mirror (a display session created by `mirrorSession`),
-   * naming the session it copies. Its grid and font size are owned by that
-   * session, so the global font/grid plumbing — `configure`,
-   * `applyTerminalStyle`, `fitSession` — deliberately leaves it alone and
-   * follows the source instead. Null for every other session. */
-  previewOf: PreviewLink | null;
-  /** Uniform CSS scale currently applied to a preview mirror's element. A
-   * preview renders at the SAME font size as the terminal it mirrors and is
-   * shrunk by this transform, so the card shows the terminal's own rendering at
-   * a smaller size rather than a different, tinier one. 1 everywhere else. */
-  previewScale: number;
+  /** Set while this session's terminal is parked in a preview card (see
+   * `previewSession`). Its grid belongs to the full screen it was sized for, not
+   * to the card, so `fitSession` refuses to refit it while this is set. Null for
+   * a session that is not currently being previewed. */
+  preview: PreviewLease | null;
   /** For a display session, where locally-typed input is delivered (the collab
    * client encrypts it as terminal.input for the owner). Null for viewers with no
    * control lease and for normal backend sessions. */
@@ -422,21 +438,15 @@ type ManagedSession = {
 // but notify the backing PTY only after the layout has briefly settled.
 const BACKEND_RESIZE_DEBOUNCE_MS = 100;
 
-// How much of a source session's buffer a preview mirror is seeded with. A
-// preview card shows a dozen or so rows, so this only needs to cover the visible
-// grid plus a little slack.
-const PREVIEW_SEED_LINES = 60;
-
-/** Smallest scale a preview will shrink to. Below this the miniature stops being
- * readable, so a very wide source is clipped at the right edge instead — the
- * start of each line, which is where the prompt and command live. A scale rather
- * than a pixel floor, so a reader who has picked a larger terminal font gets a
- * proportionally larger miniature: 0.35 is ~5px at the default 14. */
+/** Smallest scale a preview will shrink to. Below this the terminal stops being
+ * readable, so a very wide grid is clipped at the right edge instead — the start
+ * of each line, which is where the prompt and command live. A scale rather than
+ * a pixel floor, so a reader who has picked a larger terminal font gets a
+ * proportionally larger preview: 0.35 is ~5px at the default 14. */
 const MIN_PREVIEW_SCALE = 0.35;
 
-/** A preview is never drawn LARGER than the terminal it mirrors: once the card
- * can hold the source's grid outright, the miniature simply is the terminal at
- * its own size. */
+/** A preview is never drawn LARGER than the terminal itself: once the card can
+ * hold the whole grid outright, it simply shows the terminal at its own size. */
 const MAX_PREVIEW_SCALE = 1;
 
 type ManagerConfig = {
@@ -514,63 +524,89 @@ function dropOverflowingRow(session: ManagedSession): void {
 }
 
 /**
- * Re-copy every live mirror's render settings from the session it previews, and
- * ask its card to refit.
+ * Ask every card currently holding a live session to refit.
  *
- * A preview is the source's rendering scaled down, so it has to use the source's
- * font — not the configured one, which a detached or pre-change session may not
- * be using either. This runs after any global style change, once the sources
- * have already been updated, because a mirror is only correct relative to the
- * terminal it copies.
+ * Run after a global style change has been applied to the sessions themselves: a
+ * font change alters cell metrics, so the rendering a card is scaling just
+ * changed shape while the card's own box did not — which nothing else would
+ * notice.
  */
-function syncPreviews(): void {
+function notifyPreviews(): void {
   for (const session of sessions.values()) {
-    const link = session.previewOf;
-    if (!link || session.disposed) continue;
-    const source = sessions.get(link.sourceId);
-    if (!source) continue;
-    const fontFamily = source.term.options.fontFamily;
-    const fontSize = (source.term.options.fontSize as number) ?? config.fontSize;
-    if (
-      session.term.options.fontFamily === fontFamily &&
-      session.term.options.fontSize === fontSize
-    ) {
-      continue;
-    }
-    session.term.options.fontFamily = fontFamily;
-    session.term.options.fontSize = fontSize;
-    link.onGridChange();
+    if (session.disposed) continue;
+    session.preview?.onChange();
   }
 }
 
 /**
- * Draw a preview mirror at `scale`, anchored to its top-left so the newest
- * output stays where the card expects it.
+ * Draw a leased session's element scaled into its card, slid up by `offsetY` so
+ * the newest output is what the card shows.
  *
- * The transform is on the .xterm element, so xterm itself keeps laying out and
- * rasterizing at the real terminal's font size and only the finished rendering
- * is shrunk — which is what makes the card a scaled copy of the terminal instead
- * of a second, smaller terminal.
+ * The transform sits on the .xterm element, so xterm keeps laying out and
+ * rasterizing at the terminal's real grid and font — through the very WebGL
+ * renderer the terminal is drawn with, because this IS the terminal — and only
+ * the finished rendering is shrunk. That is what makes the card a photograph of
+ * the session rather than a second, smaller terminal.
  *
- * The element is also sized to the grid it contains rather than to the host. A
- * transform does not affect layout, so a percentage size here would leave the
- * .xterm box (and with it the absolutely-positioned viewport, whose stylesheet
- * default is opaque black) larger than the rows that fill it — a black band
- * under the output in a light theme. Pinning it to the grid means the viewport
- * ends exactly where the last row does.
+ * A phone session is tall and narrow while its card is short and wide, so its
+ * output almost never fits. Shrinking until it did would leave the text
+ * unreadable, and dropping rows would resize the PTY, so the element is
+ * translated up and the card clips it: the last lines of the real session, at
+ * the real session's size. The element is taken out of flow so a grid many times
+ * the card's height cannot affect the card's layout.
  */
 function applyPreviewScale(
   session: ManagedSession,
   scale: number,
-  grid: { width: number; height: number },
+  offsetY: number,
 ): void {
   const element = session.term.element;
-  if (!element) return;
-  session.previewScale = scale;
+  const lease = session.preview;
+  if (!element || !lease) return;
+  lease.scale = scale;
+  element.style.position = "absolute";
+  element.style.left = "0";
+  element.style.top = "0";
   element.style.transformOrigin = "top left";
-  element.style.transform = scale === 1 ? "" : `scale(${scale})`;
-  element.style.width = `${grid.width}px`;
-  element.style.height = `${grid.height}px`;
+  // translate is listed first so it applies in the card's own pixels: the
+  // element is scaled about its top-left, then slid up by the overflow.
+  element.style.transform = `translateY(${offsetY}px) scale(${scale})`;
+}
+
+/** Undo applyPreviewScale, handing the element back with the geometry a
+ * full-screen pane expects. */
+function clearPreviewScale(session: ManagedSession): void {
+  const element = session.term.element;
+  if (!element) return;
+  element.style.position = "";
+  element.style.left = "";
+  element.style.top = "";
+  element.style.transformOrigin = "";
+  element.style.transform = "";
+}
+
+/**
+ * Index of the lowest viewport row a session has actually put something on.
+ *
+ * That is rarely the bottom of the grid: a shell that has printed ten lines into
+ * a fifty-row screen leaves forty of them empty, and a preview card anchored on
+ * the grid would faithfully photograph the emptiness. Anchoring here instead
+ * puts the newest output against the bottom of the card whether or not the
+ * session has filled its screen — the same lines a reader sees at a glance on
+ * the full-screen terminal.
+ *
+ * Never reported above the cursor row, which is where the next output lands even
+ * while it is still blank, so a card does not crop off the prompt being typed
+ * at.
+ */
+function lastContentRow(term: Terminal): number {
+  const buffer = term.buffer.active;
+  const cursor = Math.max(0, Math.min(buffer.cursorY, term.rows - 1));
+  for (let row = term.rows - 1; row > cursor; row -= 1) {
+    const line = buffer.getLine(buffer.baseY + row);
+    if (line && line.translateToString(true).trim() !== "") return row;
+  }
+  return cursor;
 }
 
 /** Pixel size of the grid a terminal currently renders, or null before it has
@@ -1172,14 +1208,10 @@ export const terminalManager = {
     const previous = config;
     config = { ...config, ...partial };
     for (const session of sessions.values()) {
-      // A preview copies its source's rendering, so it takes the font size from
-      // that session rather than from config — syncPreviews below.
-      if (
-        !session.previewOf &&
-        partial.fontSize !== undefined &&
-        partial.fontSize !== previous.fontSize
-      ) {
+      if (partial.fontSize !== undefined && partial.fontSize !== previous.fontSize) {
         session.term.options.fontSize = partial.fontSize;
+        // A previewed session keeps the grid it was sized for; fitSession
+        // declines it and notifyPreviews below refits its card instead.
         this.fitSession(sessionIdOf(session));
       }
       if (partial.scrollback !== undefined && partial.scrollback !== previous.scrollback) {
@@ -1189,7 +1221,7 @@ export const terminalManager = {
         session.term.options.theme = currentTheme();
       }
     }
-    syncPreviews();
+    notifyPreviews();
   },
 
   /**
@@ -1216,21 +1248,18 @@ export const terminalManager = {
     if (style.fontSize !== undefined) config.fontSize = style.fontSize;
     for (const session of sessions.values()) {
       if (schemeChanged) session.term.options.theme = currentTheme();
-      // A preview keeps its source's grid and font, so neither the configured
-      // font nor a refit applies here; syncPreviews copies both from the source
-      // once every source has been updated.
-      if (session.previewOf) continue;
       if (style.fontFamily !== undefined) {
         session.term.options.fontFamily = config.fontFamily;
       }
       if (style.fontSize !== undefined) session.term.options.fontSize = config.fontSize;
       // Font changes alter cell metrics, so the grid must be refit; a scheme-only
-      // change does not, but refitting is cheap and safe.
+      // change does not, but refitting is cheap and safe. A previewed session is
+      // declined by fitSession — its card refits instead, via notifyPreviews.
       if (style.fontFamily !== undefined || style.fontSize !== undefined) {
         this.fitSession(session.id);
       }
     }
-    syncPreviews();
+    notifyPreviews();
   },
 
   defaultShellRef(): ShellRef | undefined {
@@ -1459,8 +1488,7 @@ export const terminalManager = {
       onModifierConsumed: null,
       outputTap: null,
       display: false,
-      previewOf: null,
-      previewScale: 1,
+      preview: null,
       onInput: null,
     };
     sessions.set(sessionId, session);
@@ -1519,12 +1547,12 @@ export const terminalManager = {
    * Mount the terminal into a host element (tab activation).
    *
    * `focus: false` is for a surface that must not take focus when it appears —
-   * a preview mirror, which would otherwise pull focus off the screen it sits on
+   * a preview card, which would otherwise pull focus off the screen it sits on
    * (and, on mobile, could raise the soft keyboard). `accelerated: false` keeps
-   * it off the WebGL renderer; see the call site below. `fit: false` leaves the
-   * grid alone instead of resizing it to the host: a preview mirror renders the
-   * SOURCE's grid at the source's size and is scaled into its card by
-   * fitPreview, so fitting it to the host is what would break the copy.
+   * it off the WebGL renderer. `fit: false` leaves the grid alone instead of
+   * resizing it to the host: a previewed session renders the grid its PTY is
+   * sized for and is scaled into its card by fitPreview, so fitting it to the
+   * card is exactly what would break the preview.
    */
   attach(
     sessionId: string,
@@ -1549,9 +1577,10 @@ export const terminalManager = {
       // initialization failures and disposes itself on context loss, leaving
       // xterm's built-in renderer as the automatic fallback.
       //
-      // Previews opt out: a webview allows only a handful of live WebGL
-      // contexts, and spending them on decorative miniatures risks evicting the
-      // context of the terminal the user is actually working in.
+      // A preview card is not an exception: it holds a real session, whose
+      // context it already owns wherever it is shown. That is why previewing
+      // costs no extra WebGL contexts — the scarce resource a webview rations —
+      // and why a card is rasterized by the same renderer as the full screen.
       if (options.accelerated !== false) void loadWebgl(session.term);
 
       void bundledTerminalFontReady.then(() => {
@@ -1597,10 +1626,10 @@ export const terminalManager = {
   fitSession(sessionId: string): void {
     const session = sessions.get(sessionId);
     if (!session?.term.element?.isConnected) return;
-    // A preview mirror's grid belongs to the session it mirrors; refitting it
-    // to its own card is what would re-wrap the output. It fits by scaling the
-    // rendering instead — see fitPreview.
-    if (session.previewOf) return;
+    // A previewed session is parked in a card that is nothing like the screen its
+    // PTY is sized for. Fitting it there would re-wrap the output and resize the
+    // shell to the card; the card fits by scaling the rendering — see fitPreview.
+    if (session.preview) return;
     try {
       session.fit.fit();
       dropOverflowingRow(session);
@@ -2030,8 +2059,7 @@ export const terminalManager = {
       onModifierConsumed: null,
       outputTap: null,
       display: true,
-      previewOf: null,
-      previewScale: 1,
+      preview: null,
       onInput: options.onInput ?? null,
     };
     sessions.set(sessionId, session);
@@ -2056,87 +2084,71 @@ export const terminalManager = {
   },
 
   /**
-   * Mirror a live session into a second, read-only terminal so another surface
-   * can show what it is doing — the mobile Connections list previews each open
-   * session this way.
+   * Park a live session's terminal in a preview card — how the mobile
+   * Connections list shows what each open session is doing.
    *
-   * The mirror is a display session with no backend: it is seeded with the tail
-   * of the source's buffer and then fed the very same output bytes the source
-   * receives. Both halves run inside the manager, so a preview never puts
-   * terminal bytes on a React path; the caller only attaches a host element.
+   * There is no mirror and no copy. The card is handed the session's OWN xterm
+   * element, read-only and scaled down by `fitPreview`, so what a card shows is
+   * the terminal: the same buffer, the same grid, the same renderer, the same
+   * glyphs, the same cursor, the same theme. A copy would have to reproduce the
+   * source's wrap points, alternate-screen state and scroll region to stay
+   * honest, and would still rasterize through a second renderer with its own
+   * font fallback — showing the terminal itself cannot diverge from it.
    *
-   * The mirror adopts the SOURCE's column count and font size, and never refits
-   * to its own container (`attach` is called with `fit: false`). That is what
-   * makes a preview the terminal rather than an approximation of it: xterm
-   * rasterizes the identical grid at the identical size, so every line wraps
-   * where it wrapped in the real session, right-aligned prompt segments stay
-   * right-aligned, and a full-screen TUI addressing absolute cursor positions
-   * lands where it meant to. `fitPreview` then scales that rendering down to the
-   * card with a CSS transform, instead of re-rendering it smaller.
+   * This is safe because the mobile shell never renders one session in two
+   * places at once: the full-screen view and the Connections list swap, so the
+   * element is free whenever a card asks for it, and React runs the card's
+   * release before the full-screen pane attaches.
    *
-   * @param previewId Id for the mirror; must not collide with a real session.
-   * @param sourceId The live session to mirror.
-   * @returns a teardown that stops mirroring and disposes the mirror. Safe to
-   * call when the source does not exist: nothing is created and teardown no-ops.
+   * While leased, the session is read-only (`disableStdin`, restored on release)
+   * so nothing on a decorative card can reach the PTY, and its grid is frozen —
+   * `fitSession` refuses to fit a card-sized box onto a terminal whose shell is
+   * sized for the whole screen.
+   *
+   * @param sessionId The live session to show.
+   * @param host The card element to park it in. Must clip its overflow and
+   * establish a containing block: the element is positioned inside it.
+   * @returns a release that hands the element back and restores the session.
+   * No-ops for a session the manager does not know yet — one still connecting;
+   * the caller retries when its status changes — and for one already leased.
    */
-  mirrorSession(
-    previewId: string,
-    sourceId: string,
+  previewSession(
+    sessionId: string,
+    host: HTMLElement,
     options: {
-      lines?: number;
-      /** Called after the rendering this mirror copies changed shape — the
-       * source was resized, or the terminal font changed under both. The caller
-       * re-runs fitPreview: the copied rendering changed while the card did not,
-       * which no ResizeObserver on the host would notice. */
-      onGridChange?: () => void;
+      /** Called whenever the card needs to re-fit — new output, or an
+       * Appearance font change. The caller re-runs fitPreview. */
+      onChange?: () => void;
     } = {},
   ): () => void {
-    const source = sessions.get(sourceId);
-    if (!source || sessions.has(previewId)) return () => {};
-    // No onInput: createDisplaySession then sets disableStdin, so the mirror is
-    // read-only and cannot send anything to the source's PTY.
-    this.createDisplaySession(previewId);
-    const mirror = sessions.get(previewId);
-    if (!mirror) return () => {};
-    const onGridChange = options.onGridChange ?? (() => {});
-    // Marks this a preview: from here on the global font/grid plumbing skips it
-    // and copies from `sourceId` instead.
-    mirror.previewOf = { sourceId, onGridChange };
-    // Adopt the source's COLUMNS before seeding: xterm wraps as it writes, so a
-    // seed written into the default 80-column grid would already be re-wrapped
-    // by the time the resize arrived. Rows are left as they are — fitPreview
-    // sets them from the card once this is attached.
-    mirror.term.resize(source.term.cols, mirror.term.rows);
-    // And the source's FONT: the preview is that rendering scaled, so it has to
-    // start from the same cell metrics. Read off the source rather than config,
-    // which a detached window or a pre-change session may not be using.
-    mirror.term.options.fontFamily = source.term.options.fontFamily;
-    mirror.term.options.fontSize =
-      (source.term.options.fontSize as number) ?? config.fontSize;
-    // Each serialized line closes its own SGR state, so slicing to a tail keeps
-    // colors intact and spares the mirror a full scrollback replay.
-    const seed = this.getBufferText(sourceId);
-    const lines = options.lines ?? PREVIEW_SEED_LINES;
-    const tail = seed.split("\r\n").slice(-lines).join("\r\n");
-    this.writeOutput(previewId, tail);
-    const unsubscribe = this.subscribeOutput(sourceId, (bytes) =>
-      this.writeOutput(previewId, bytes),
-    );
-    // Rotating the phone or opening the session full-screen re-fits the source;
-    // a mirror still on the old column count would wrap differently from the
-    // terminal it claims to show. Only columns follow — the mirror's row count
-    // belongs to the card it fills (see fitPreview), so carrying the source's
-    // rows across would undo the fit on every resize.
-    const resized = source.term.onResize(({ cols }) => {
-      const current = sessions.get(previewId);
-      if (!current || current.disposed || current.term.cols === cols) return;
-      current.term.resize(cols, current.term.rows);
-      onGridChange();
-    });
+    const session = sessions.get(sessionId);
+    if (!session || session.disposed || session.preview) return () => {};
+    const onChange = options.onChange ?? (() => {});
+    session.preview = {
+      host,
+      scale: 1,
+      onChange,
+      // A card is anchored on the session's last written row, so it has to
+      // re-anchor as the session writes. The subscription lives here rather than
+      // in the card so output still never crosses into React: the callback is
+      // handed no bytes, only the fact that some arrived.
+      unsubscribe: this.subscribeOutput(sessionId, () => onChange()),
+      stdinDisabled: session.term.options.disableStdin === true,
+    };
+    session.term.options.disableStdin = true;
+    // fit: false — the card's box is not the terminal's box, and fitting to it
+    // would re-wrap the output and resize the shell. focus: false — a decorative
+    // card must not pull focus off the screen it sits on.
+    this.attach(sessionId, host, { focus: false, fit: false });
     return () => {
-      resized.dispose();
-      unsubscribe();
-      this.dispose(previewId);
+      // Guarded on the host: a release that arrives after the card was replaced
+      // must not strip the lease its successor took out.
+      if (session.preview?.host !== host) return;
+      session.preview.unsubscribe();
+      session.term.options.disableStdin = session.preview.stdinDisabled;
+      session.preview = null;
+      clearPreviewScale(session);
+      this.detach(sessionId);
     };
   },
 
@@ -2148,50 +2160,47 @@ export const terminalManager = {
     return currentTheme().background ?? DARK_THEME.background ?? "#000000";
   },
 
-  /** The scale a preview mirror is currently drawn at, or null when it is not a
-   * live preview. Lets a caller detect that a fitPreview pass changed nothing
-   * and stop iterating. */
-  previewScale(previewId: string): number | null {
-    const session = sessions.get(previewId);
-    if (!session?.previewOf) return null;
-    return session.previewScale;
+  /** The scale a card is currently drawing its session at, or null when the
+   * session is not parked in one. Lets a caller detect that a fitPreview pass
+   * changed nothing and stop iterating. */
+  previewScale(sessionId: string): number | null {
+    return sessions.get(sessionId)?.preview?.scale ?? null;
   },
 
   /**
-   * Fit a preview mirror to its card by SCALING THE WHOLE TERMINAL DOWN, rather
-   * than re-rendering it smaller.
+   * Fit a previewed session to its card by SCALING the terminal, never by
+   * reshaping it.
    *
-   * The mirror keeps the source's columns AND the source's font size, so xterm
-   * lays out and rasterizes exactly what the real terminal does — same cell
-   * metrics, same wrap points, same glyphs. A CSS transform then shrinks that
-   * rendering to the card. The card is therefore a photograph of the terminal,
-   * which is what "1:1" means here; re-fitting the font instead would give a
-   * differently-hinted, differently-rounded grid that only resembles it.
+   * The session keeps the grid and font its shell is running under, so xterm
+   * lays out and rasterizes precisely what the full-screen terminal does — same
+   * cell metrics, same wrap points, same glyph fallback, same renderer. A CSS
+   * transform then shrinks that finished rendering onto the card. This is what
+   * "1:1" means: the card holds a photograph of the terminal, not a second
+   * terminal re-rendered at a card-sized font, which would round its cells
+   * differently and wrap somewhere else.
    *
-   * The scale comes from width alone: the source's columns are what decide every
-   * wrap point, so they must fit. Rows are then set to whatever the scaled card
-   * can show, because a phone terminal is tall and narrow while its card is
-   * short and wide — demanding the rows fit too would drive the scale to the
-   * floor. Rows do not affect wrapping, so the preview shows the tail of the
-   * session (the most recent output, which is what the card is read for) at a
-   * legible size. The cost is that a full-screen TUI is cropped to its last N
-   * lines rather than shown whole.
+   * The scale comes from width alone, because columns decide every wrap point
+   * and so must fit. The grid is then almost always taller than the card — a
+   * phone session is tall and narrow while its card is short and wide — so the
+   * element is anchored to the card's BOTTOM and clipped: the card shows the
+   * most recent rows, which is what it is read for. Demanding the height fit too
+   * would drive the scale to the floor, and trimming rows would resize the
+   * shell. The cost is that a full-screen TUI is cropped to its last lines
+   * rather than shown whole.
    *
-   * The scale is clamped to MIN_PREVIEW_SCALE, so a very wide source stops
+   * The scale is clamped to MIN_PREVIEW_SCALE, so a very wide grid stops
    * shrinking and is clipped at the right edge instead of becoming a grey smear,
    * and to MAX_PREVIEW_SCALE so a narrow grid in a wide card is never drawn
    * larger than the terminal itself.
    *
-   * Returns the scale applied, or null when nothing could be measured yet (not a
-   * preview, not attached, or laid out to zero).
-   *
-   * @param maxRows Row ceiling for the mirrored grid. Rows are cheap to render
-   * but not free, and a card only needs the tail.
+   * Returns the scale applied, or null when nothing could be measured yet (not
+   * previewed, not opened, or laid out to zero).
    */
-  fitPreview(previewId: string, maxRows: number): number | null {
-    const session = sessions.get(previewId);
-    const host = session?.term.element?.parentElement;
-    if (!session?.previewOf || !host) return null;
+  fitPreview(sessionId: string): number | null {
+    const session = sessions.get(sessionId);
+    const lease = session?.preview;
+    if (!session || !lease) return null;
+    const host = lease.host;
     const style = window.getComputedStyle(host);
     const availableWidth =
       host.clientWidth -
@@ -2206,28 +2215,31 @@ export const terminalManager = {
     if (!grid) return null;
 
     // The grid is measured through the transform already applied, so divide it
-    // back out to get the unscaled width the terminal renders at.
-    const naturalWidth = grid.width / session.previewScale;
-    const naturalCellHeight = grid.height / session.previewScale / session.term.rows;
-    if (naturalWidth <= 0 || naturalCellHeight <= 0) return null;
+    // back out to get the size the terminal actually renders at.
+    const naturalWidth = grid.width / lease.scale;
+    const naturalHeight = grid.height / lease.scale;
+    if (naturalWidth <= 0 || naturalHeight <= 0) return null;
 
     const scale = Math.max(
       MIN_PREVIEW_SCALE,
       Math.min(MAX_PREVIEW_SCALE, availableWidth / naturalWidth),
     );
-
-    // Rows the card can show at this scale. Measured in unscaled pixels, since
-    // that is the space the grid is laid out in before the transform.
-    const rows = Math.max(
-      1,
-      Math.min(maxRows, Math.floor(availableHeight / scale / naturalCellHeight)),
-    );
-    applyPreviewScale(session, scale, {
-      width: naturalWidth,
-      height: naturalCellHeight * rows,
-    });
-    // Columns are never touched here: that is the whole contract of a mirror.
-    if (rows !== session.term.rows) session.term.resize(session.term.cols, rows);
+    // Anchor on the written rows, not on the grid: a session that has not filled
+    // its screen has empty rows below its last line, and a card aligned to the
+    // grid would show those instead of the output.
+    const cellHeight = naturalHeight / session.term.rows;
+    const contentHeight = (lastContentRow(session.term) + 1) * cellHeight;
+    // How much of the output does not fit, rounded UP to a whole row. A terminal
+    // never draws half a row, so neither may a card: taking the overflow exactly
+    // would leave a band of clipped glyphs along the top edge, which reads as a
+    // rendering fault rather than as a cropped terminal. Rounding up hides that
+    // row outright and leaves under a row of the terminal's own background below
+    // the last line instead — the way a session with a spare line looks anyway.
+    const rowHeight = cellHeight * scale;
+    const overflow = contentHeight * scale - availableHeight;
+    const offsetY = overflow <= 0 ? 0 : -Math.ceil(overflow / rowHeight) * rowHeight;
+    applyPreviewScale(session, scale, offsetY);
+    // The grid itself is never touched here: that is the whole contract.
     return scale;
   },
 
@@ -2264,6 +2276,11 @@ export const terminalManager = {
     // Leave any broadcast group before teardown so a disposed session can never
     // be a fan-out target and a two-pane group collapses cleanly to none.
     detachFromBroadcast(session);
+    // Drop any preview lease first: a card whose session was closed under it
+    // releases into a terminal that no longer exists, and must not try to
+    // restore render state on it.
+    session.preview?.unsubscribe();
+    session.preview = null;
     session.disposed = true;
     session.queuedInput.length = 0;
     session.pendingInput.length = 0;

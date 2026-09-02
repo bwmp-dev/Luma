@@ -92,7 +92,7 @@ export function MobileTerminalSettingsScreen({ onBack }: { onBack: () => void })
       <Section title="Connections">
         <Field
           label="Live session previews"
-          hint="Shows what each open session is doing on the Connections list. Each visible preview mirrors its terminal, so turning this off saves battery."
+          hint="Shows what each open session is doing on the Connections list. Each card draws its session's live terminal, so turning this off saves battery."
         >
           <Toggle
             checked={connectionPreviews}

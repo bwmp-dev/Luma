@@ -698,7 +698,7 @@ describe("terminalManager buffer snapshot", () => {
   });
 });
 
-describe("terminalManager preview mirror", () => {
+describe("terminalManager session previews", () => {
   /** Stub the PTY backend, create a local session, and return its terminal plus
    * the data channel the backend would push output through. */
   async function createLocalWithOutput(id: string): Promise<{
@@ -722,418 +722,428 @@ describe("terminalManager preview mirror", () => {
     };
   }
 
-  /** The terminal the mirror created (the most recent one). */
-  function newestTerminal(): Terminal {
-    return createdTerminals[createdTerminals.length - 1];
-  }
-
-  it("seeds the mirror with the source's buffer, then streams its live output", async () => {
-    const { term, emit } = await createLocalWithOutput("mirror-src");
-    term.setLine(0, "hello");
-    term.setLine(1, "world");
-
-    const stop = terminalManager.mirrorSession("preview:mirror-src", "mirror-src");
-    const mirror = newestTerminal();
-
-    expect(mirror.writes).toEqual(["hello\r\nworld"]);
-
-    emit("later output");
-    expect(mirror.writes).toEqual(["hello\r\nworld", "later output"]);
-
-    stop();
-    terminalManager.dispose("mirror-src");
-  });
-
-  it("seeds only the tail of a long buffer", async () => {
-    const { term } = await createLocalWithOutput("mirror-tail");
-    for (let line = 0; line < 10; line += 1) term.setLine(line, `line ${line}`);
-
-    const stop = terminalManager.mirrorSession("preview:mirror-tail", "mirror-tail", {
-      lines: 3,
-    });
-
-    expect(newestTerminal().writes).toEqual(["line 7\r\nline 8\r\nline 9"]);
-
-    stop();
-    terminalManager.dispose("mirror-tail");
-  });
-
-  it("is read-only, so a preview can never type into the source", async () => {
-    await createLocalWithOutput("mirror-ro");
-
-    const stop = terminalManager.mirrorSession("preview:mirror-ro", "mirror-ro");
-
-    expect(newestTerminal().options.disableStdin).toBe(true);
-
-    stop();
-    terminalManager.dispose("mirror-ro");
-  });
-
-  it("stops streaming and disposes the mirror on teardown", async () => {
-    const { emit } = await createLocalWithOutput("mirror-stop");
-    const stop = terminalManager.mirrorSession("preview:mirror-stop", "mirror-stop");
-    const mirror = newestTerminal();
-
-    stop();
-    mirror.writes.length = 0;
-    emit("after teardown");
-
-    expect(mirror.writes).toEqual([]);
-    // The id is released, so re-mirroring the same session (scrolling the card
-    // back into view) builds a fresh terminal instead of hitting the duplicate
-    // guard and silently showing nothing.
-    const restarted = terminalManager.mirrorSession("preview:mirror-stop", "mirror-stop");
-    expect(newestTerminal()).not.toBe(mirror);
-
-    restarted();
-    terminalManager.dispose("mirror-stop");
-  });
-
-  it("no-ops for a session that does not exist yet", () => {
-    const before = createdTerminals.length;
-
-    const stop = terminalManager.mirrorSession("preview:absent", "absent");
-    stop();
-
-    expect(createdTerminals.length).toBe(before);
-  });
-
-  it("does not mirror twice into the same preview id", async () => {
-    const { emit } = await createLocalWithOutput("mirror-dupe");
-    const stop = terminalManager.mirrorSession("preview:mirror-dupe", "mirror-dupe");
-    const mirror = newestTerminal();
-    const after = createdTerminals.length;
-
-    const second = terminalManager.mirrorSession("preview:mirror-dupe", "mirror-dupe");
-    second();
-
-    // The duplicate created nothing, and its teardown left the first mirror
-    // alive rather than disposing a terminal it does not own.
-    expect(createdTerminals.length).toBe(after);
-    mirror.writes.length = 0;
-    emit("still live");
-    expect(mirror.writes).toEqual(["still live"]);
-
-    stop();
-    terminalManager.dispose("mirror-dupe");
-  });
-
-  it("adopts the source's columns before seeding, so the preview wraps identically", async () => {
-    const { term } = await createLocalWithOutput("mirror-grid");
-    term.resize(140, 40);
-
-    const stop = terminalManager.mirrorSession("preview:mirror-grid", "mirror-grid");
-    const mirror = newestTerminal();
-
-    // Not the 80 columns a fresh Terminal starts at: matching the source is what
-    // makes the seeded text break where the real session broke it.
-    expect(mirror.cols).toBe(140);
-
-    stop();
-    terminalManager.dispose("mirror-grid");
-  });
-
-  it("follows the source's columns when the real terminal is resized", async () => {
-    const { term } = await createLocalWithOutput("mirror-follow");
-    const gridChanges: number[] = [];
-    const stop = terminalManager.mirrorSession("preview:mirror-follow", "mirror-follow", {
-      onGridChange: () => gridChanges.push(1),
-    });
-    const mirror = newestTerminal();
-    // A fit already gave the mirror the row count its card can show.
-    mirror.resize(mirror.cols, 12);
-
-    // Rotating the device or opening the session full-screen refits the source.
-    term.resize(100, 30);
-
-    expect(mirror.cols).toBe(100);
-    // Rows belong to the card, not the source: taking the source's 30 back here
-    // would undo the fit on every resize.
-    expect(mirror.rows).toBe(12);
-    expect(gridChanges).toHaveLength(1);
-
-    stop();
-    terminalManager.dispose("mirror-follow");
-  });
-
-  it("stops following the source once the preview is torn down", async () => {
-    const { term } = await createLocalWithOutput("mirror-unfollow");
-    const stop = terminalManager.mirrorSession(
-      "preview:mirror-unfollow",
-      "mirror-unfollow",
-    );
-    const mirror = newestTerminal();
-
-    stop();
-    term.resize(120, 50);
-
-    // The disposed mirror keeps whatever grid it had; the handler is gone rather
-    // than resizing a terminal that no longer exists.
-    expect(mirror.cols).not.toBe(120);
-
-    terminalManager.dispose("mirror-unfollow");
-  });
-
-  it("leaves a preview's columns alone when fitSession is called on it", async () => {
-    const { term } = await createLocalWithOutput("mirror-nofit");
-    term.resize(140, 40);
-    const stop = terminalManager.mirrorSession("preview:mirror-nofit", "mirror-nofit");
-    const mirror = newestTerminal();
-
+  /** A preview card of the given pixel box. jsdom performs no layout, so the box
+   * is stubbed the way the fit-overflow suite does it. */
+  function card(size: { width: number; height: number }): HTMLElement {
     const host = document.createElement("div");
     document.body.appendChild(host);
-    terminalManager.attach("preview:mirror-nofit", host, {
-      focus: false,
-      accelerated: false,
-      fit: false,
+    Object.defineProperty(host, "clientWidth", {
+      value: size.width,
+      configurable: true,
     });
-    // Refitting to the small card is exactly what would re-wrap the output.
-    terminalManager.fitSession("preview:mirror-nofit");
+    Object.defineProperty(host, "clientHeight", {
+      value: size.height,
+      configurable: true,
+    });
+    return host;
+  }
 
-    expect(mirror.cols).toBe(140);
+  /**
+   * Report `grid` as the pixel size the session's terminal renders at. A preview
+   * is measured THROUGH its transform, so — like a browser — the stub multiplies
+   * by whatever scale is currently applied.
+   */
+  function stubRendering(
+    sessionId: string,
+    term: Terminal,
+    grid: { width: number; height: number },
+  ): void {
+    const screen = term.element?.querySelector(".xterm-screen") as HTMLElement;
+    screen.getBoundingClientRect = () => {
+      const scale = terminalManager.previewScale(sessionId) ?? 1;
+      return { width: grid.width * scale, height: grid.height * scale } as DOMRect;
+    };
+  }
 
-    terminalManager.detach("preview:mirror-nofit");
-    host.remove();
-    stop();
-    terminalManager.dispose("mirror-nofit");
-  });
-
-  it("keeps a preview's font size equal to the session it mirrors", async () => {
-    const { term } = await createLocalWithOutput("mirror-font");
-    const stop = terminalManager.mirrorSession("preview:mirror-font", "mirror-font");
-    const mirror = newestTerminal();
-
-    terminalManager.configure({ fontSize: 20 });
-    expect(mirror.options.fontSize).toBe(term.options.fontSize);
-    terminalManager.applyTerminalStyle({ fontSize: 22 });
-    expect(mirror.options.fontSize).toBe(term.options.fontSize);
-
-    // A copy of the terminal's rendering has to be drawn at the terminal's size;
-    // it is the CARD that adapts, by scaling that rendering (fitPreview).
-    expect(mirror.options.fontSize).toBe(22);
-
-    stop();
-    terminalManager.dispose("mirror-font");
-    terminalManager.configure({ fontSize: 14 });
-    terminalManager.applyTerminalStyle({ fontSize: 14 });
-  });
-});
-
-describe("terminalManager preview fit", () => {
-  /** Mirror a source into a host of the given pixel box, with the mirror's
-   * rendering measuring `grid` at scale 1. jsdom does no layout, so both are
-   * stubbed the way the fit-overflow suite does it — and since a preview is
-   * measured THROUGH its transform, the stub reports the grid multiplied by
-   * whatever scale is currently applied, the way a browser would. */
+  /**
+   * Park a live session in a card and report the rendering it measures.
+   *
+   * The session is given a written last row first: a card is anchored on the
+   * output, not on the grid, so a terminal with an empty buffer would legitimately
+   * report nothing to scroll to and every geometry assertion below would be about
+   * a blank screen rather than about the fit.
+   */
   async function previewInto(
     id: string,
     host: { width: number; height: number },
     grid: { width: number; height: number },
-    onGridChange?: () => void,
-  ): Promise<{ mirror: Terminal; previewId: string; stop: () => void }> {
-    setInvoke((cmd) => {
-      if (cmd === "pty_spawn") return { sessionId: `${id}-backend`, shellName: "bash" };
-      if (cmd === "pty_kill" || cmd === "pty_resize") return undefined;
-      throw new Error(`unexpected ${cmd}`);
-    });
-    await terminalManager.createSession(id, { kind: "local", ref: undefined }, callbacks());
-    const previewId = `preview:${id}`;
-    const stop = terminalManager.mirrorSession(previewId, id, { onGridChange });
-    const mirror = createdTerminals[createdTerminals.length - 1];
-
-    const element = document.createElement("div");
-    document.body.appendChild(element);
-    Object.defineProperty(element, "clientWidth", {
-      value: host.width,
-      configurable: true,
-    });
-    Object.defineProperty(element, "clientHeight", {
-      value: host.height,
-      configurable: true,
-    });
-    terminalManager.attach(previewId, element, {
-      focus: false,
-      accelerated: false,
-      fit: false,
-    });
-    const screen = mirror.element?.querySelector(".xterm-screen") as HTMLElement;
-    const rows = mirror.rows;
-    screen.getBoundingClientRect = () => {
-      const scale = terminalManager.previewScale(previewId) ?? 1;
-      // Height tracks the row count the same way a real render does, so a fit
-      // pass that added rows measures the taller grid on the next pass.
-      return {
-        width: grid.width * scale,
-        height: (grid.height / rows) * mirror.rows * scale,
-      } as DOMRect;
-    };
-    return { mirror, previewId, stop };
+    onChange?: () => void,
+  ): Promise<{
+    term: Terminal;
+    host: HTMLElement;
+    release: () => void;
+    emit: (data: string) => void;
+  }> {
+    const { term, emit } = await createLocalWithOutput(id);
+    term.setLine(term.rows - 1, "$ the last line of output");
+    const element = card(host);
+    const release = terminalManager.previewSession(id, element, { onChange });
+    stubRendering(id, term, grid);
+    return { term, host: element, release, emit };
   }
 
-  it("scales the rendering until the source's columns fit, keeping those columns", async () => {
+  /** The `transform` currently drawing a previewed session into its card. */
+  function transformOf(term: Terminal): string {
+    return term.element?.style.transform ?? "";
+  }
+
+  it("shows the session's own terminal rather than building a second one", async () => {
+    const { term, emit } = await createLocalWithOutput("preview-same");
+    const before = createdTerminals.length;
+    const host = card({ width: 300, height: 150 });
+
+    const release = terminalManager.previewSession("preview-same", host);
+
+    // No mirror was constructed, and the element in the card is the session's.
+    expect(createdTerminals.length).toBe(before);
+    expect(host.contains(term.element as HTMLElement)).toBe(true);
+    // So live output needs no forwarding: it lands in the terminal the card
+    // holds because that is the terminal it was always going to land in.
+    emit("live output");
+    expect(term.writes).toEqual(["live output"]);
+
+    release();
+    host.remove();
+    terminalManager.dispose("preview-same");
+  });
+
+  it("makes a parked session read-only, and gives its input back on release", async () => {
+    const { term } = await createLocalWithOutput("preview-ro");
+    const host = card({ width: 300, height: 150 });
+
+    const release = terminalManager.previewSession("preview-ro", host);
+    // A card is decorative: nothing tapped or typed on one may reach the PTY.
+    expect(term.options.disableStdin).toBe(true);
+
+    release();
+    expect(term.options.disableStdin).toBe(false);
+
+    host.remove();
+    terminalManager.dispose("preview-ro");
+  });
+
+  it("hands the element back on release", async () => {
+    const { term, host, release } = await previewInto(
+      "preview-release",
+      { width: 300, height: 150 },
+      { width: 600, height: 900 },
+    );
+    terminalManager.fitPreview("preview-release");
+    expect(transformOf(term)).not.toBe("");
+
+    release();
+
+    // Detached and unstyled: the full-screen pane that claims it next attaches a
+    // terminal with the geometry it expects, not one still scaled into a card.
+    expect(host.contains(term.element as HTMLElement)).toBe(false);
+    expect(transformOf(term)).toBe("");
+    expect(term.element?.style.position).toBe("");
+    expect(terminalManager.previewScale("preview-release")).toBeNull();
+
+    host.remove();
+    terminalManager.dispose("preview-release");
+  });
+
+  it("no-ops for a session that does not exist yet", async () => {
+    const before = createdTerminals.length;
+    const host = card({ width: 300, height: 150 });
+
+    const release = terminalManager.previewSession("preview-absent", host);
+    release();
+
+    expect(createdTerminals.length).toBe(before);
+    // Crucially the card was not parked for a later session to claim: a session
+    // that attached itself to a card on creation would fit its shell to it.
+    await createLocalWithOutput("preview-absent");
+    expect(host.childElementCount).toBe(0);
+    expect(terminalManager.previewScale("preview-absent")).toBeNull();
+
+    host.remove();
+    terminalManager.dispose("preview-absent");
+  });
+
+  it("does not lease the same session to a second card", async () => {
+    const { term } = await createLocalWithOutput("preview-dupe");
+    const first = card({ width: 300, height: 150 });
+    const second = card({ width: 300, height: 150 });
+
+    const release = terminalManager.previewSession("preview-dupe", first);
+    const duplicate = terminalManager.previewSession("preview-dupe", second);
+    duplicate();
+
+    // The duplicate took nothing and its release gave nothing back: the element
+    // is still in the first card, still read-only.
+    expect(first.contains(term.element as HTMLElement)).toBe(true);
+    expect(term.options.disableStdin).toBe(true);
+
+    release();
+    first.remove();
+    second.remove();
+    terminalManager.dispose("preview-dupe");
+  });
+
+  it("refuses to refit a parked session, so a card cannot resize the shell", async () => {
+    const { term, host, release } = await previewInto(
+      "preview-nofit",
+      { width: 300, height: 150 },
+      { width: 600, height: 900 },
+    );
+    term.resize(140, 40);
+
+    // The card is nothing like the screen the shell is sized for; fitting the
+    // grid to it would re-wrap the output and resize the PTY.
+    terminalManager.fitSession("preview-nofit");
+    terminalManager.fitPreview("preview-nofit");
+
+    expect(term.cols).toBe(140);
+    expect(term.rows).toBe(40);
+
+    release();
+    host.remove();
+    terminalManager.dispose("preview-nofit");
+  });
+
+  it("scales the rendering until the terminal's width fits the card", async () => {
     // A rendering twice as wide as the card is drawn at half size. Neither the
-    // column count — what decides every wrap point — nor the font it renders at
-    // is touched, so the card holds the terminal's own output, shrunk.
-    const { mirror, previewId, stop } = await previewInto(
+    // grid nor the font it renders at is touched, so the card holds the
+    // terminal's own output, shrunk.
+    const { term, host, release } = await previewInto(
       "fit-preview",
       { width: 300, height: 400 },
       { width: 600, height: 400 },
     );
 
-    expect(terminalManager.fitPreview(previewId, 60)).toBe(0.5);
-    expect(mirror.options.fontSize).toBe(14);
-    expect(mirror.cols).toBe(80);
+    expect(terminalManager.fitPreview("fit-preview")).toBe(0.5);
+    expect(term.options.fontSize).toBe(14);
+    expect(term.cols).toBe(80);
+    expect(term.rows).toBe(24);
 
-    stop();
+    release();
+    host.remove();
     terminalManager.dispose("fit-preview");
   });
 
-  it("renders the mirror at the source's font size, not the configured one", async () => {
-    setInvoke((cmd) => {
-      if (cmd === "pty_spawn") return { sessionId: "font-copy-backend", shellName: "bash" };
-      if (cmd === "pty_kill" || cmd === "pty_resize") return undefined;
-      throw new Error(`unexpected ${cmd}`);
-    });
-    await terminalManager.createSession(
-      "font-copy",
-      { kind: "local", ref: undefined },
-      callbacks(),
-    );
-    const source = createdTerminals[createdTerminals.length - 1];
-    // A detached window, or a session opened before the setting changed, can
-    // render at a size the manager's config no longer holds.
-    source.options.fontSize = 18;
-
-    const stop = terminalManager.mirrorSession("preview:font-copy", "font-copy");
-    const mirror = createdTerminals[createdTerminals.length - 1];
-
-    expect(mirror.options.fontSize).toBe(18);
-
-    stop();
-    terminalManager.dispose("font-copy");
-  });
-
-  it("follows the source's font size when Appearance changes it", async () => {
-    const changes: number[] = [];
-    const { mirror, stop } = await previewInto(
-      "fit-preview-restyle",
-      { width: 300, height: 400 },
-      { width: 600, height: 400 },
-      () => changes.push(1),
+  it("anchors the last written row, so the card shows the most recent output", async () => {
+    // 900px of output at half scale is 450 on screen, in a 150px card: the last
+    // 150px — the newest lines — are what the card is read for, so the element
+    // is slid up by the 300px above them rather than shrunk until it all fit.
+    const { term, host, release } = await previewInto(
+      "fit-preview-tail",
+      { width: 300, height: 150 },
+      { width: 600, height: 900 },
     );
 
-    terminalManager.applyTerminalStyle({ fontSize: 20 });
+    expect(terminalManager.fitPreview("fit-preview-tail")).toBe(0.5);
+    expect(transformOf(term)).toBe("translateY(-300px) scale(0.5)");
+    // Positioned out of flow: a grid three times the card's height must not
+    // stretch the card that clips it.
+    expect(term.element?.style.position).toBe("absolute");
 
-    // The preview copies the terminal's rendering, so it has to be drawn at the
-    // terminal's new size — and its card has to refit, since the rendering it
-    // scales just changed shape.
-    expect(mirror.options.fontSize).toBe(20);
-    expect(changes.length).toBeGreaterThan(0);
-
-    stop();
-    terminalManager.dispose("fit-preview-restyle");
-    terminalManager.applyTerminalStyle({ fontSize: 14 });
+    release();
+    host.remove();
+    terminalManager.dispose("fit-preview-tail");
   });
 
-  it("fills the card with rows instead of shrinking further to fit them", async () => {
-    // 24 rows over 400px is a 16.67px cell; at half scale that is 8.33px on
-    // screen, so a 400px-tall card shows 48 rows. A phone session is far taller
-    // than its card, and shrinking until every row fit would leave the text
-    // unreadable — the preview shows the tail at a legible size instead.
-    const { mirror, previewId, stop } = await previewInto(
-      "fit-preview-rows",
+  it("leaves output that fits at the top of the card", async () => {
+    const { term, host, release } = await previewInto(
+      "fit-preview-short",
       { width: 300, height: 400 },
       { width: 600, height: 400 },
     );
 
-    terminalManager.fitPreview(previewId, 60);
+    // 400px of output at half scale is 200 in a 400px card; sliding it down to
+    // the bottom would open a gap above the first row.
+    terminalManager.fitPreview("fit-preview-short");
+    expect(transformOf(term)).toBe("translateY(0px) scale(0.5)");
 
-    expect(mirror.rows).toBe(48);
-    expect(mirror.cols).toBe(80);
-
-    stop();
-    terminalManager.dispose("fit-preview-rows");
+    release();
+    host.remove();
+    terminalManager.dispose("fit-preview-short");
   });
 
-  it("caps the mirrored grid at the caller's row ceiling", async () => {
-    // The card only shows the tail, so rows past the ceiling would be laid out
-    // and immediately scrolled out of sight.
-    const { mirror, previewId, stop } = await previewInto(
-      "fit-preview-rowcap",
-      { width: 300, height: 400 },
-      { width: 600, height: 400 },
+  it("anchors the output, not the grid, when the session has not filled its screen", async () => {
+    // A shell that has printed six lines into a 24-row screen leaves 18 empty.
+    // Anchoring on the grid would faithfully photograph that emptiness — the
+    // card would be blank while the session plainly is not.
+    const { term, host, release } = await previewInto(
+      "fit-preview-unfilled",
+      { width: 300, height: 150 },
+      { width: 600, height: 900 },
+    );
+    term.lines.clear();
+    for (let row = 0; row < 6; row += 1) term.setLine(row, `line ${row}`);
+
+    terminalManager.fitPreview("fit-preview-unfilled");
+
+    // Six of 24 rows over 900px is 225px of output; at half scale that is 112.5
+    // in a 150px card, so it all fits and sits at the top.
+    expect(transformOf(term)).toBe("translateY(0px) scale(0.5)");
+
+    release();
+    host.remove();
+    terminalManager.dispose("fit-preview-unfilled");
+  });
+
+  it("keeps the prompt in view on a row that is still blank", async () => {
+    const { term, host, release } = await previewInto(
+      "fit-preview-cursor",
+      { width: 300, height: 150 },
+      { width: 600, height: 900 },
+    );
+    term.lines.clear();
+    // Nothing written yet on the row the cursor sits on: the reader is looking
+    // at a prompt, which the card must not crop off as empty.
+    term.cursorY = 11;
+
+    terminalManager.fitPreview("fit-preview-cursor");
+
+    // 12 of 24 rows over 900px is 450px; at half scale, 225 in a 150px card.
+    expect(transformOf(term)).toBe("translateY(-75px) scale(0.5)");
+
+    release();
+    host.remove();
+    terminalManager.dispose("fit-preview-cursor");
+  });
+
+  it("re-anchors as the session writes, without the card changing size", async () => {
+    const fits: number[] = [];
+    const { host, release, emit } = await previewInto(
+      "fit-preview-live",
+      { width: 300, height: 150 },
+      { width: 600, height: 900 },
+      () => fits.push(1),
+    );
+    fits.length = 0;
+
+    emit("a new line of output\r\n");
+
+    // Nothing about the card changed, so a ResizeObserver on it would see
+    // nothing — but the row the card is anchored on just moved.
+    expect(fits).toHaveLength(1);
+
+    release();
+    emit("more output nobody is showing");
+    // The subscription goes with the lease: a released card is not still being
+    // asked to refit a terminal it no longer holds.
+    expect(fits).toHaveLength(1);
+
+    host.remove();
+    terminalManager.dispose("fit-preview-live");
+  });
+
+  it("crops to whole rows, never to a band of half-drawn glyphs", async () => {
+    // 900px of output at half scale is 450 in a 100px card, so 350px has to go —
+    // 18.67 rows of 18.75. Sliding by exactly 350 would leave two thirds of a row
+    // of clipped text along the top edge; the whole row goes instead.
+    const { term, host, release } = await previewInto(
+      "fit-preview-rowsnap",
+      { width: 300, height: 100 },
+      { width: 600, height: 900 },
     );
 
-    terminalManager.fitPreview(previewId, 30);
+    terminalManager.fitPreview("fit-preview-rowsnap");
 
-    expect(mirror.rows).toBe(30);
+    expect(transformOf(term)).toBe("translateY(-356.25px) scale(0.5)");
 
-    stop();
-    terminalManager.dispose("fit-preview-rowcap");
+    release();
+    host.remove();
+    terminalManager.dispose("fit-preview-rowsnap");
   });
 
-  it("never draws a preview larger than the terminal it mirrors", async () => {
-    // A rendering far narrower than the card could scale up 4x; a preview is a
-    // copy, so it stops at the terminal's own size.
-    const { previewId, stop } = await previewInto(
+  it("never draws a preview larger than the terminal itself", async () => {
+    // A rendering far narrower than the card could scale up 4x; the card shows
+    // the terminal, so it stops at the terminal's own size.
+    const { host, release } = await previewInto(
       "fit-preview-cap",
       { width: 400, height: 400 },
       { width: 100, height: 100 },
     );
 
-    expect(terminalManager.fitPreview(previewId, 60)).toBe(1);
+    expect(terminalManager.fitPreview("fit-preview-cap")).toBe(1);
 
-    stop();
+    release();
+    host.remove();
     terminalManager.dispose("fit-preview-cap");
   });
 
   it("clamps at the readable floor rather than shrinking to a smear", async () => {
-    const { previewId, stop } = await previewInto(
+    const { host, release } = await previewInto(
       "fit-preview-floor",
       { width: 20, height: 400 },
       { width: 2000, height: 400 },
     );
 
-    // 20/2000 would be 0.01; the wide source is clipped at the right edge
-    // instead.
-    expect(terminalManager.fitPreview(previewId, 60)).toBe(0.35);
+    // 20/2000 would be 0.01; the wide grid is clipped at the right edge instead,
+    // keeping the start of each line — where the prompt and command live.
+    expect(terminalManager.fitPreview("fit-preview-floor")).toBe(0.35);
 
-    stop();
+    release();
+    host.remove();
     terminalManager.dispose("fit-preview-floor");
   });
 
   it("reports the scale unchanged once it fits, so a caller stops iterating", async () => {
-    // Card and rendering are the same width, so the preview is already drawn at
-    // 1:1; 24 rows over 400px also exactly fills the card, so nothing changes.
-    const { previewId, stop } = await previewInto(
+    const { host, release } = await previewInto(
       "fit-preview-settled",
       { width: 400, height: 400 },
       { width: 400, height: 400 },
     );
 
-    expect(terminalManager.fitPreview(previewId, 24)).toBe(1);
-    expect(terminalManager.previewScale(previewId)).toBe(1);
-    expect(terminalManager.fitPreview(previewId, 24)).toBe(1);
+    expect(terminalManager.fitPreview("fit-preview-settled")).toBe(1);
+    expect(terminalManager.previewScale("fit-preview-settled")).toBe(1);
+    expect(terminalManager.fitPreview("fit-preview-settled")).toBe(1);
 
-    stop();
+    release();
+    host.remove();
     terminalManager.dispose("fit-preview-settled");
   });
 
-  it("does nothing for a real session, which fits by grid instead", async () => {
-    setInvoke((cmd) => {
-      if (cmd === "pty_spawn") return { sessionId: "real-backend", shellName: "bash" };
-      if (cmd === "pty_kill") return undefined;
-      throw new Error(`unexpected ${cmd}`);
-    });
-    await terminalManager.createSession(
-      "fit-preview-real",
-      { kind: "local", ref: undefined },
-      callbacks(),
+  it("asks the card to refit when Appearance changes the font", async () => {
+    const changes: number[] = [];
+    const { term, host, release } = await previewInto(
+      "fit-preview-restyle",
+      { width: 300, height: 400 },
+      { width: 600, height: 400 },
+      () => changes.push(1),
     );
+    changes.length = 0;
 
-    expect(terminalManager.fitPreview("fit-preview-real", 60)).toBeNull();
+    terminalManager.applyTerminalStyle({ fontSize: 20 });
+
+    // The session is real, so it takes the new size like any other; its card has
+    // to refit because the rendering it scales just changed shape underneath it.
+    expect(term.options.fontSize).toBe(20);
+    expect(changes.length).toBeGreaterThan(0);
+
+    release();
+    host.remove();
+    terminalManager.dispose("fit-preview-restyle");
+    terminalManager.applyTerminalStyle({ fontSize: 14 });
+  });
+
+  it("does nothing for a session that is not in a card", async () => {
+    await createLocalWithOutput("fit-preview-real");
+
+    expect(terminalManager.fitPreview("fit-preview-real")).toBeNull();
     expect(terminalManager.previewScale("fit-preview-real")).toBeNull();
 
     terminalManager.dispose("fit-preview-real");
+  });
+
+  it("survives the session being closed while its card still holds it", async () => {
+    const { host, release } = await previewInto(
+      "preview-closed",
+      { width: 300, height: 150 },
+      { width: 600, height: 900 },
+    );
+
+    // Closing a session from the card's own context menu disposes it before the
+    // list has unmounted the card.
+    terminalManager.dispose("preview-closed");
+
+    expect(() => release()).not.toThrow();
+    expect(terminalManager.fitPreview("preview-closed")).toBeNull();
+
+    host.remove();
   });
 });

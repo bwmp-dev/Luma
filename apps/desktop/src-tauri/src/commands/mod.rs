@@ -28,6 +28,7 @@ mod collaboration;
 mod docker;
 mod hosts;
 mod import;
+mod in_app_browser;
 mod keystore;
 mod known_hosts;
 #[cfg(any(target_os = "android", target_os = "ios"))]
@@ -60,6 +61,7 @@ pub use collaboration::*;
 pub use docker::*;
 pub use hosts::*;
 pub use import::*;
+pub use in_app_browser::*;
 pub use keystore::*;
 pub use known_hosts::*;
 #[cfg(any(target_os = "android", target_os = "ios"))]

@@ -1,41 +1,29 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { terminalManager } from "../terminal/terminalManager";
 import { useTerminalStyleStore } from "../../stores/terminalStyleStore";
 import { cn } from "../../lib/utils";
 
 /*
- * A live, read-only miniature of an open session, shown on the Connections card
- * for that session. terminalManager.mirrorSession does all the work: it creates
- * a display-only terminal seeded with the tail of the source's buffer and feeds
- * it the same output bytes the source receives. This component only owns the
- * host element and the lifetime — no terminal bytes pass through React.
+ * A live, read-only window onto an open session, shown on its Connections card.
  *
- * The mirror keeps the SOURCE's grid AND the source's font size rather than
- * refitting to the card, so xterm rasterizes exactly what the terminal
- * rasterizes: same wrap points, same right-aligned prompt segments, same TUI
- * layout, same glyphs. fitPreview then scales that rendering into the card with
- * a CSS transform — the terminal itself, drawn smaller, rather than a second
- * terminal re-rendered at a tiny font.
+ * There is no miniature and no mirror: terminalManager.previewSession parks the
+ * session's OWN terminal in this box, scaled down by a CSS transform and
+ * anchored to the bottom, so the card shows the real thing — the same buffer,
+ * grid, theme, WebGL renderer and glyphs as the full-screen session, just
+ * smaller and cropped to its last rows. Nothing here can diverge from the
+ * terminal because there is nothing here but the terminal.
  *
- * A mirror is a second xterm instance, so one is only kept alive while its card
- * is actually on screen: scrolling a card out of view tears its mirror down, and
- * scrolling back re-seeds a fresh one from the source's current buffer. That
- * keeps the cost proportional to what is visible rather than to how many
- * sessions are open.
+ * That works because the mobile shell never renders a session in two places at
+ * once (MobileLayout swaps the full-screen view and the list), and React runs
+ * this component's cleanup before the full-screen pane's effect claims the
+ * element back. This component only owns the box and the lifetime; no terminal
+ * bytes pass through React.
  */
 
-/** Rendered off the visible edge so a card just below the fold is already warm
- * by the time it scrolls in. */
-const PRELOAD_MARGIN = "200px";
-
-/** Row ceiling for the mirrored grid. The card shows the tail of the session, so
- * more rows than this are laid out and immediately scrolled out of sight. */
-const MAX_PREVIEW_ROWS = 60;
-
 /** fitPreview measures the rendering currently on screen, so a pass taken before
- * the webfont or a row resize has landed can be slightly off. Re-running it
- * converges within a pass or two; this only bounds the loop so a pathological
- * case (metrics that never settle) cannot spin every frame forever. */
+ * the webfont has landed can be slightly off. Re-running it converges within a
+ * pass or two; this only bounds the loop so a pathological case (metrics that
+ * never settle) cannot spin every frame forever. */
 const MAX_FIT_PASSES = 4;
 
 export function MobileTerminalPreview({
@@ -45,81 +33,48 @@ export function MobileTerminalPreview({
 }: {
   sessionId: string;
   /** The session's status. Used only as an effect dependency: a session is
-   * listed while it is still connecting (before the manager has a terminal to
-   * mirror) and a reconnect resets the source's buffer, so both transitions must
-   * re-seed the mirror rather than leave it blank or stale. */
+   * listed while it is still connecting, before the manager has a terminal to
+   * park here, so the preview has to be retried once it does. */
   status: string;
   className?: string;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
-  // The card is wider and taller than the grid it holds (the mirror keeps the
-  // source's columns, and only whole rows fit), so the box has to carry the
-  // terminal's own background or the leftover reads as a frame around the
-  // output instead of as part of the terminal. Subscribed rather than read once:
-  // the manager owns the resolved theme, but only the store re-renders when the
-  // user picks a different scheme.
+  // The card is taller and wider than the rows it can show, so the box has to
+  // carry the terminal's own background or the leftover reads as a frame around
+  // the output instead of as part of it. Subscribed rather than read once: the
+  // manager owns the resolved theme, but only the store re-renders when the user
+  // picks a different scheme.
   useTerminalStyleStore((state) => state.schemeId);
   const background = terminalManager.terminalBackground();
 
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    // No IntersectionObserver (older webview): keep the mirror always on rather
-    // than never showing a preview at all.
-    if (typeof IntersectionObserver === "undefined") {
-      setVisible(true);
-      return;
-    }
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) setVisible(entry.isIntersecting);
-      },
-      { rootMargin: PRELOAD_MARGIN },
-    );
-    observer.observe(host);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    const host = hostRef.current;
-    if (!host || !visible) return;
-    const previewId = `preview:${sessionId}`;
     let frame: number | null = null;
     // Each pass measures what is actually rendered and applies one correction,
-    // so passes are chained across frames — a row resize only shows up in the
+    // so passes are chained across frames — a transform only shows up in the
     // next frame's metrics — until fitPreview reports the scale unchanged.
     const scheduleFit = (pass = 0) => {
       if (frame !== null) cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         frame = null;
-        const before = terminalManager.previewScale(previewId);
-        const after = terminalManager.fitPreview(previewId, MAX_PREVIEW_ROWS);
+        const before = terminalManager.previewScale(sessionId);
+        const after = terminalManager.fitPreview(sessionId);
         if (after !== null && after !== before && pass + 1 < MAX_FIT_PASSES) {
           scheduleFit(pass + 1);
         }
       });
     };
 
-    const stopMirror = terminalManager.mirrorSession(previewId, sessionId, {
-      // The source's grid changed shape (rotation, or the session being opened
-      // full-screen) while this card's box did not, so nothing else would
-      // prompt a refit.
-      onGridChange: scheduleFit,
+    const release = terminalManager.previewSession(sessionId, host, {
+      // What the card shows moved under it — new output, or an Appearance font
+      // change — while the card's own box did not, so nothing else here would
+      // prompt a refit. Coalesced by scheduleFit to at most one pass a frame.
+      onChange: () => scheduleFit(),
     });
-    // Mirror first, then attach: attaching an id the manager does not know yet
-    // parks the host for the session to claim later, which would bypass the
-    // options below.
-    terminalManager.attach(previewId, host, {
-      focus: false,
-      accelerated: false,
-      // The mirror owns the source's grid; refitting it to this card is exactly
-      // what would re-wrap the output and make the preview stop matching.
-      fit: false,
-    });
-    // The card's width is known only after layout, and the bundled font can
-    // still be loading (which changes cell metrics), so fit on every box change
-    // rather than once at mount.
+    // The card's width is known only after layout, and the bundled font can still
+    // be loading (which changes cell metrics), so fit on every box change rather
+    // than once at mount.
     // Wrapped rather than passed directly: ResizeObserver hands its callback an
     // entry list, which would arrive as scheduleFit's pass counter.
     const observer = new ResizeObserver(() => scheduleFit());
@@ -129,20 +84,21 @@ export function MobileTerminalPreview({
     return () => {
       if (frame !== null) cancelAnimationFrame(frame);
       observer.disconnect();
-      terminalManager.detach(previewId);
-      stopMirror();
+      release();
     };
-  }, [sessionId, visible, status]);
+  }, [sessionId, status]);
 
   return (
     <div
       ref={hostRef}
       aria-hidden="true"
-      // The mirror is decorative: the card's own button carries the label and
-      // the tap target, so the preview must not swallow touches meant for it.
+      // The preview is decorative: the card's own button carries the label and
+      // the tap target, so it must not swallow touches meant for it.
       style={{ background }}
       className={cn(
-        "luma-terminal-preview pointer-events-none overflow-hidden",
+        // `relative` is the containing block the parked element is positioned
+        // in, and the clip that turns an oversized grid into its last rows.
+        "luma-terminal-preview pointer-events-none relative overflow-hidden",
         className,
       )}
     />

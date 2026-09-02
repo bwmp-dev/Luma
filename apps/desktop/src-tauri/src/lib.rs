@@ -124,6 +124,12 @@ pub fn run() {
             &app.state::<keystore::KeystoreState>(),
         ))?;
         app.manage(sync_state);
+        // Automatic sync: the schedule lives in `sync_state`, so the supervisor
+        // needs nothing but a handle. It only ever acts on vaults whose key is
+        // already available, which is why it can start before the user has
+        // touched anything.
+        app.manage(sync::auto::AutoSyncState::default());
+        sync::auto::spawn(app.handle().clone());
         // Anonymous product analytics: opt-out, app/version/platform only. An
         // absent consent value means the user has not been asked yet, so
         // nothing is collected until the prompt is answered. Reads settings
@@ -292,6 +298,7 @@ pub fn run() {
         commands::tunnel_start,
         commands::tunnel_stop,
         commands::tunnels_list,
+        commands::browser_open_in_app,
         commands::sftp_connect,
         commands::sftp_disconnect,
         commands::sftp_sessions,
@@ -374,6 +381,8 @@ pub fn run() {
         commands::sync_get_config,
         commands::sync_list_configs,
         commands::sync_configure,
+        commands::sync_set_auto,
+        commands::sync_auto_focus,
         commands::sync_set_passphrase,
         commands::sync_disable,
         commands::sync_now,
@@ -449,6 +458,7 @@ pub fn run() {
         commands::tunnel_stop,
         commands::tunnels_list,
         commands::menu_present,
+        commands::browser_open_in_app,
         commands::sftp_connect,
         commands::sftp_disconnect,
         commands::sftp_sessions,
@@ -518,6 +528,8 @@ pub fn run() {
         commands::sync_get_config,
         commands::sync_list_configs,
         commands::sync_configure,
+        commands::sync_set_auto,
+        commands::sync_auto_focus,
         commands::sync_set_passphrase,
         commands::sync_disable,
         commands::sync_now,

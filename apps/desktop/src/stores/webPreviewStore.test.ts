@@ -127,8 +127,49 @@ describe("web preview store", () => {
     expect(state.previews).toEqual({});
   });
 
-  it("keeps the tunnel when the browser handler fails", async () => {
-    setInvoke(() => preview());
+  it("opens the preview in the in-app browser where there is one", async () => {
+    /* The tunnel is served by this process, so leaving for the system browser
+       gets the app suspended on iOS and the page never finishes loading. When
+       the app can present a browser itself, that is the only one used. */
+    const commands: string[] = [];
+    setInvoke((cmd) => {
+      commands.push(cmd);
+      if (cmd === "browser_open_in_app") return undefined;
+      return preview();
+    });
+
+    await useWebPreviewStore.getState().open("host-1", 5173);
+
+    expect(commands).toContain("browser_open_in_app");
+    expect(openUrl).not.toHaveBeenCalled();
+    expect(useWebPreviewStore.getState().openError).toBeNull();
+  });
+
+  it("falls back to the system browser where there is no in-app one", async () => {
+    // Desktop, and Android: the command errors, and nothing is lost by leaving
+    // for the system browser because neither platform suspends the app.
+    setInvoke((cmd) => {
+      if (cmd === "browser_open_in_app") {
+        throw { category: "invalid-input", message: "only available on iOS" };
+      }
+      return preview();
+    });
+
+    await useWebPreviewStore.getState().open("host-1", 5173);
+
+    expect(openUrl).toHaveBeenCalledWith("http://127.0.0.1:49152/");
+    // The in-app browser being unavailable is the expected case off iOS, not a
+    // failure worth showing anyone.
+    expect(useWebPreviewStore.getState().openError).toBeNull();
+  });
+
+  it("keeps the tunnel when neither browser opens", async () => {
+    setInvoke((cmd) => {
+      // No in-app browser here, so the launch falls through to the system
+      // handler -- which then has nothing registered for the URL either.
+      if (cmd === "browser_open_in_app") throw new Error("no in-app browser");
+      return preview();
+    });
     vi.mocked(openUrl).mockRejectedValueOnce(new Error("no handler"));
 
     await useWebPreviewStore.getState().open("host-1", 5173);
