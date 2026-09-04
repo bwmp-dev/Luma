@@ -1,8 +1,8 @@
 //! Automatic web-server discovery and preview.
 //!
-//! Discovery runs a single batched `sh -c` script over an SSH exec channel
-//! (same convention as `server_stats`) to enumerate listening TCP sockets, then
-//! filters them down to plausible HTTP services. Preview opens a normal local
+//! Discovery runs an OS-appropriate command over an SSH exec channel to
+//! enumerate listening TCP sockets, then filters them down to plausible HTTP
+//! services. Preview opens a normal local
 //! SSH forward through `TunnelManager`, bound to 127.0.0.1 on an OS-assigned
 //! port, so previews ride the existing tunnel lifecycle (including the
 //! `kill_all` on application exit).
@@ -72,10 +72,21 @@ impl WebPreviewManager {
         host_id: &str,
     ) -> Result<WebPreviewDiscovery> {
         validate_host_id(host_id)?;
+        let remote_os = crate::ssh::effective_host(pool, host_id).await?.os_id;
         let (mut config, _) = connection_config(pool, keystore_state, host_id).await?;
         config.startup_command = None;
         let connection = crate::ssh::authenticated_handle(&config).await?;
-        let output = run_discovery_script(&connection).await;
+        let is_windows = match remote_os.as_deref() {
+            Some("windows") => true,
+            Some(os_id) if os_id != "unknown" => false,
+            _ => detect_windows(&connection).await?,
+        };
+        let command = if is_windows {
+            windows_discovery_command().to_string()
+        } else {
+            unix_discovery_script()
+        };
+        let output = run_discovery_command(&connection, &command).await;
         let _ = connection
             .disconnect(
                 russh::Disconnect::ByApplication,
@@ -250,7 +261,7 @@ fn normalize_remote_bind(remote_bind: Option<String>) -> Result<String> {
 /// `===LUMA:<name>===`; stderr is silenced so a missing tool degrades to an
 /// empty section. Single line, no single quotes, so it survives any remote
 /// login shell inside `sh -c '...'`.
-fn discovery_script() -> String {
+fn unix_discovery_script() -> String {
     const SECTIONS: &[(&str, &str)] = &[
         ("ss", "ss -tlnp"),
         ("netstat", "netstat -tlnp"),
@@ -265,14 +276,26 @@ fn discovery_script() -> String {
     format!("sh -c '{body}'")
 }
 
-async fn run_discovery_script(connection: &AuthenticatedConnection) -> Result<String> {
+fn windows_discovery_command() -> &'static str {
+    r#"cmd.exe /d /s /c "echo ===LUMA:windows===& netstat -ano -p tcp""#
+}
+
+async fn detect_windows(connection: &AuthenticatedConnection) -> Result<bool> {
+    let output = run_discovery_command(connection, "cmd.exe /d /c ver").await?;
+    Ok(crate::ssh::normalize_uname(&output).os_id == "windows")
+}
+
+async fn run_discovery_command(
+    connection: &AuthenticatedConnection,
+    command: &str,
+) -> Result<String> {
     let operation = async {
         let mut channel = connection
             .channel_open_session()
             .await
             .map_err(exec_error)?;
         channel
-            .exec(true, discovery_script().as_bytes())
+            .exec(true, command.as_bytes())
             .await
             .map_err(exec_error)?;
         let mut output = Vec::new();
@@ -309,7 +332,7 @@ mod tests {
 
     #[test]
     fn script_is_single_line_and_single_quote_free() {
-        let script = discovery_script();
+        let script = unix_discovery_script();
         assert!(script.starts_with("sh -c '"));
         assert!(script.ends_with('\''));
         assert!(!script.contains('\n'));
@@ -385,6 +408,16 @@ mod tests {
         assert!(remove_preview(&manager.previews, "t1"));
         assert!(manager.find("host-a", 8080).is_none());
         assert_eq!(manager.list().len(), 2);
+    }
+
+    #[test]
+    fn windows_discovery_uses_only_native_commands() {
+        let command = windows_discovery_command();
+        assert!(command.starts_with("cmd.exe "));
+        assert!(command.contains("netstat -ano -p tcp"));
+        for unix_only in ["sh -c", "ss -", "/proc/"] {
+            assert!(!command.contains(unix_only), "{unix_only}");
+        }
     }
 
     #[test]

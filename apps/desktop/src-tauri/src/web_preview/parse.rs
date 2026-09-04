@@ -1,6 +1,7 @@
 //! Defensive parsers for the remote listener-discovery script output.
 //!
-//! The script emits three sections (`ss`, `netstat`, `proctcp`); each parser
+//! Discovery emits an OS-specific section (`windows`, or the Unix `ss`,
+//! `netstat`, and `proctcp` fallbacks); each parser
 //! is a pure function over strings so it can be unit tested with canned
 //! fixtures. The first source that yields any listeners wins — `ss` is most
 //! informative, `/proc/net/tcp` is the last resort.
@@ -72,6 +73,7 @@ pub(crate) fn parse_discovery(output: &str) -> WebPreviewDiscovery {
     let sections = crate::server_stats::split_sections(output);
     let section = |name: &str| sections.get(name).map(String::as_str).unwrap_or("");
     let raw = [
+        parse_windows_netstat(section("windows")),
         parse_ss(section("ss")),
         parse_netstat(section("netstat")),
         parse_proc_tcp(section("proctcp")),
@@ -82,6 +84,29 @@ pub(crate) fn parse_discovery(output: &str) -> WebPreviewDiscovery {
     WebPreviewDiscovery {
         listeners: finalize(raw),
     }
+}
+
+/// Windows `netstat -ano -p tcp` output. The native command provides the PID
+/// but not the process name without a second process enumeration.
+fn parse_windows_netstat(section: &str) -> Vec<RawListener> {
+    section
+        .lines()
+        .filter_map(|line| {
+            let columns = line.split_whitespace().collect::<Vec<_>>();
+            if !columns.first()?.eq_ignore_ascii_case("TCP")
+                || !columns.get(3)?.eq_ignore_ascii_case("LISTENING")
+            {
+                return None;
+            }
+            let (bind_address, port) = split_address_port(columns.get(1)?)?;
+            Some(RawListener {
+                port,
+                bind_address,
+                pid: columns.get(4).and_then(|pid| pid.parse().ok()),
+                process: None,
+            })
+        })
+        .collect()
 }
 
 /// Dedups by port (v4 + v6 wildcard binds show up twice), drops well-known
@@ -332,6 +357,26 @@ mod tests {
         assert_eq!(listeners[0].kind.as_deref(), Some("vite"));
         assert_eq!(listeners[1].process.as_deref(), Some("webpack"));
         assert_eq!(listeners[1].kind.as_deref(), Some("webpack"));
+    }
+
+    #[test]
+    fn parses_windows_netstat() {
+        let output = "===LUMA:windows===\r\n\
+            Active Connections\r\n\r\n\
+              Proto  Local Address          Foreign Address        State           PID\r\n\
+              TCP    127.0.0.1:5173         0.0.0.0:0              LISTENING       4242\r\n\
+              TCP    0.0.0.0:8080           0.0.0.0:0              LISTENING       99\r\n\
+              TCP    [::]:8080              [::]:0                 LISTENING       99\r\n\
+              TCP    127.0.0.1:9000         127.0.0.1:50000        ESTABLISHED     7\r\n";
+        let listeners = discovery(output);
+        assert_eq!(listeners.len(), 2);
+        assert_eq!(listeners[0].port, 5173);
+        assert_eq!(listeners[0].bind_address, "127.0.0.1");
+        assert_eq!(listeners[0].pid, Some(4242));
+        assert_eq!(listeners[0].kind.as_deref(), Some("vite"));
+        assert_eq!(listeners[1].port, 8080);
+        assert_eq!(listeners[1].bind_address, "0.0.0.0");
+        assert_eq!(listeners[1].pid, Some(99));
     }
 
     #[test]

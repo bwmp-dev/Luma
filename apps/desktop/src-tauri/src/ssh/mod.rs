@@ -42,6 +42,7 @@ pub use known_hosts::{
     status as host_key_status, trust as trust_host_key, validate_host_id, KnownHostsEntry,
     SshHostKeyStatus,
 };
+pub(crate) use remote_os::normalize_uname;
 pub use remote_os::SshRemoteOs;
 pub use tunnels::{
     tunnel_connection_config, TunnelExit, TunnelInfo, TunnelManager, TunnelStartResponse,

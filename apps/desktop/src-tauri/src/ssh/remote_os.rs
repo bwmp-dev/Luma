@@ -132,7 +132,7 @@ fn normalize_os_token(value: &str) -> Option<&'static str> {
     }
 }
 
-pub(super) fn normalize_uname(value: &str) -> SshRemoteOs {
+pub(crate) fn normalize_uname(value: &str) -> SshRemoteOs {
     let value = value.trim();
     let normalized = value.to_ascii_lowercase();
     let is_windows = normalized.contains("windows")
