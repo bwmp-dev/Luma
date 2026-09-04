@@ -245,8 +245,6 @@ jobs:
           ref: ${{ needs.release-please.outputs.tag_name }}
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: 11
 
       - uses: actions/setup-node@v4
         with:
