@@ -188,6 +188,9 @@ impl SftpManager {
             .remove(session_id)
             .ok_or_else(|| LumaError::InvalidInput("unknown SFTP session".into()))?;
         self.cancel_session_transfers(session_id);
+        self.transfer_records.lock().unwrap().retain(|_, record| {
+            record.session_id != session_id && record.dest_session_id.as_deref() != Some(session_id)
+        });
         let _ = session.client.close().await;
         let _ = session
             .embedded
@@ -246,6 +249,17 @@ impl SftpManager {
             .get(transfer_id)
             .ok_or_else(|| LumaError::InvalidInput("unknown transfer".into()))?;
         let _ = transfer.cancel.send(true);
+        Ok(())
+    }
+
+    pub fn forget_transfers(&self, transfer_ids: &[String]) -> Result<()> {
+        for transfer_id in transfer_ids {
+            validate_identifier(transfer_id, "transferId")?;
+        }
+        let mut records = self.transfer_records.lock().unwrap();
+        for transfer_id in transfer_ids {
+            records.remove(transfer_id);
+        }
         Ok(())
     }
 

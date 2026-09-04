@@ -163,6 +163,14 @@ pub async fn sftp_cancel(manager: State<'_, SftpManager>, transfer_id: String) -
     manager.cancel_transfer(&transfer_id)
 }
 
+#[tauri::command]
+pub async fn sftp_forget_transfers(
+    manager: State<'_, SftpManager>,
+    transfer_ids: Vec<String>,
+) -> Result<()> {
+    manager.forget_transfers(&transfer_ids)
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TerminalAttachUploadResponse {

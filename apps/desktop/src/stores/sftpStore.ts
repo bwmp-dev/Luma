@@ -17,6 +17,7 @@ import {
   sftpCopy,
   sftpDisconnect,
   sftpDownload,
+  sftpForgetTransfers,
   sftpRetry,
   sftpUpload,
   type SftpEntry,
@@ -896,10 +897,18 @@ export const useSftpStore = create<SftpState>((set, get) => {
       void retryExisting(record);
     },
 
-    clearFinished: () =>
+    clearFinished: () => {
+      const finishedIds = get()
+        .transfers.filter((transfer) => isTerminal(transfer.state))
+        .map((transfer) => transfer.transferId)
+        .filter((transferId) => !transferId.startsWith("failed-"));
+      if (finishedIds.length > 0) {
+        void sftpForgetTransfers(finishedIds).catch(() => {});
+      }
       set((state) => ({
-        transfers: state.transfers.filter((t) => t.state === "running"),
-      })),
+        transfers: state.transfers.filter((transfer) => !isTerminal(transfer.state)),
+      }));
+    },
   };
 });
 

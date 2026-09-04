@@ -24,6 +24,8 @@ use crate::errors::{LumaError, Result};
 const TRANSFER_CHUNK_BYTES: usize = 256 * 1024;
 const PROGRESS_INTERVAL: Duration = Duration::from_millis(100);
 const PROGRESS_BYTE_INTERVAL: u64 = 1024 * 1024;
+const MAX_RETAINED_TRANSFER_RECORDS: usize = 128;
+const MAX_RETAINED_TRANSFER_ENTRIES: usize = 100_000;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -171,6 +173,7 @@ pub(crate) struct TransferRecord {
     descriptor: TransferDescriptor,
     retry: Arc<Mutex<RetryState>>,
     is_retry: bool,
+    created_at: Instant,
 }
 
 impl TransferRecord {
@@ -202,6 +205,7 @@ impl TransferRecord {
                 checkpoints: HashMap::new(),
             })),
             is_retry: false,
+            created_at: Instant::now(),
         }
     }
 
@@ -225,6 +229,7 @@ impl TransferRecord {
             descriptor: self.descriptor.clone(),
             retry: Arc::clone(&self.retry),
             is_retry: true,
+            created_at: Instant::now(),
         })
     }
 
@@ -303,6 +308,23 @@ impl TransferRecord {
         let mut state = self.retry.lock().unwrap();
         state.phase = phase;
         state.retryable = retryable;
+    }
+
+    fn is_running(&self) -> bool {
+        self.retry.lock().unwrap().phase == TransferPhase::Running
+    }
+
+    fn is_retryable(&self) -> bool {
+        let state = self.retry.lock().unwrap();
+        state.phase != TransferPhase::Running && state.retryable
+    }
+
+    fn retained_entry_count(&self) -> usize {
+        let state = self.retry.lock().unwrap();
+        state.completed_files.len()
+            + state.completed_directories.len()
+            + state.skipped_entries.len()
+            + state.checkpoints.len()
     }
 }
 
@@ -473,7 +495,9 @@ pub async fn sftp_retry(
         None => None,
     };
     let record = Arc::new(previous.for_retry()?);
-    launch_transfer(manager, client, dest_client, record, on_progress)
+    let response = launch_transfer(manager, client, dest_client, record, on_progress)?;
+    manager.transfer_records.lock().unwrap().remove(transfer_id);
+    Ok(response)
 }
 
 fn launch_transfer(
@@ -511,6 +535,7 @@ fn launch_transfer(
         .insert(transfer_id.clone(), Arc::clone(&record));
 
     let transfers = Arc::clone(&manager.transfers);
+    let transfer_records = Arc::clone(&manager.transfer_records);
     let task_transfer_id = transfer_id.clone();
     tokio::spawn(async move {
         run_transfer_attempt(
@@ -523,8 +548,49 @@ fn launch_transfer(
         )
         .await;
         transfers.lock().unwrap().remove(&task_transfer_id);
+        finish_transfer_record(&transfer_records, &task_transfer_id, &record);
     });
     Ok(TransferStartResponse { transfer_id })
+}
+
+fn finish_transfer_record(
+    transfer_records: &Mutex<HashMap<String, Arc<TransferRecord>>>,
+    transfer_id: &str,
+    record: &TransferRecord,
+) {
+    let mut records = transfer_records.lock().unwrap();
+    if !record.is_retryable() {
+        records.remove(transfer_id);
+    }
+    prune_transfer_records(
+        &mut records,
+        MAX_RETAINED_TRANSFER_RECORDS,
+        MAX_RETAINED_TRANSFER_ENTRIES,
+    );
+}
+
+fn prune_transfer_records(
+    records: &mut HashMap<String, Arc<TransferRecord>>,
+    max_records: usize,
+    max_entries: usize,
+) {
+    while records.len() > max_records
+        || records
+            .values()
+            .map(|record| record.retained_entry_count())
+            .fold(0usize, usize::saturating_add)
+            > max_entries
+    {
+        let Some(oldest) = records
+            .iter()
+            .filter(|(_, record)| !record.is_running())
+            .min_by_key(|(_, record)| record.created_at)
+            .map(|(id, _)| id.clone())
+        else {
+            break;
+        };
+        records.remove(&oldest);
+    }
 }
 
 fn register_active_transfer(
@@ -3099,6 +3165,62 @@ mod tests {
 
         assert!(matches!(error, LumaError::InvalidInput(_)));
         assert_eq!(transfers.len(), 1);
+    }
+
+    #[test]
+    fn finished_transfer_records_are_removed_or_bounded() {
+        let records = Mutex::new(HashMap::new());
+        let completed = Arc::new(TransferRecord::new(
+            "session".into(),
+            TransferDestination::Remote {
+                host_id: "host".into(),
+                path: "/completed".into(),
+            },
+            TransferDescriptor::Upload {
+                local_path: PathBuf::from("source"),
+                remote_path: "/completed".into(),
+                is_directory: false,
+            },
+        ));
+        completed.finish(TransferPhase::Completed, false);
+        records
+            .lock()
+            .unwrap()
+            .insert("completed".into(), Arc::clone(&completed));
+        finish_transfer_record(&records, "completed", &completed);
+        assert!(records.lock().unwrap().is_empty());
+
+        for index in 0..=MAX_RETAINED_TRANSFER_RECORDS {
+            let path = format!("/failed-{index}");
+            let record = Arc::new(TransferRecord::new(
+                "session".into(),
+                TransferDestination::Remote {
+                    host_id: "host".into(),
+                    path: path.clone(),
+                },
+                TransferDescriptor::Upload {
+                    local_path: PathBuf::from("source"),
+                    remote_path: path,
+                    is_directory: false,
+                },
+            ));
+            record.finish(TransferPhase::Failed, true);
+            let id = index.to_string();
+            records
+                .lock()
+                .unwrap()
+                .insert(id.clone(), Arc::clone(&record));
+            finish_transfer_record(&records, &id, &record);
+        }
+        assert_eq!(records.lock().unwrap().len(), MAX_RETAINED_TRANSFER_RECORDS);
+
+        let retained = records.lock().unwrap().values().next().cloned().unwrap();
+        retained.mark_file_completed("retained.txt".into());
+        let mut records = records.lock().unwrap();
+        records.clear();
+        records.insert("entry-heavy".into(), retained);
+        prune_transfer_records(&mut records, MAX_RETAINED_TRANSFER_RECORDS, 0);
+        assert!(records.is_empty());
     }
 
     #[tokio::test]

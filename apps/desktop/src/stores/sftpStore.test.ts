@@ -95,6 +95,7 @@ describe("SFTP transfer queue transitions", () => {
         channel = args.onProgress;
         return { transferId: "up-1" };
       }
+      if (cmd === "sftp_forget_transfers") return undefined;
       throw new Error(`unexpected ${cmd}`);
     });
 
@@ -127,6 +128,9 @@ describe("SFTP transfer queue transitions", () => {
 
     useSftpStore.getState().clearFinished();
     expect(transfers().find((t) => t.transferId === "up-1")).toBeUndefined();
+    expect(invoke).toHaveBeenCalledWith("sftp_forget_transfers", {
+      transferIds: ["up-1"],
+    });
   });
 
   it("records resumedFrom from a resumed transfer's first event and keeps it sticky", async () => {

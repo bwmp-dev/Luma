@@ -240,6 +240,10 @@ export function sftpCancel(transferId: string): Promise<void> {
   return invoke<void>("sftp_cancel", { transferId });
 }
 
+export function sftpForgetTransfers(transferIds: string[]): Promise<void> {
+  return invoke<void>("sftp_forget_transfers", { transferIds });
+}
+
 /**
  * Retry the failed / incomplete entries of a finished transfer. Returns a NEW
  * transferId that owns the retry — the caller must rebind its queue row to it
