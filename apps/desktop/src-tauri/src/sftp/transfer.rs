@@ -81,6 +81,21 @@ pub(super) enum TransferDescriptor {
     },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum TransferDestination {
+    Local(String),
+    Remote { host_id: String, path: String },
+}
+
+impl TransferDestination {
+    fn local(path: &Path) -> Self {
+        let path = path.to_string_lossy().into_owned();
+        #[cfg(windows)]
+        let path = path.to_lowercase();
+        Self::Local(path)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TransferPhase {
     Running,
@@ -152,24 +167,31 @@ pub(crate) struct TransferRecord {
     pub session_id: String,
     /// The receiving session of a remote-to-remote copy; `None` otherwise.
     pub dest_session_id: Option<String>,
+    destination: TransferDestination,
     descriptor: TransferDescriptor,
     retry: Arc<Mutex<RetryState>>,
     is_retry: bool,
 }
 
 impl TransferRecord {
-    fn new(session_id: String, descriptor: TransferDescriptor) -> Self {
-        Self::with_destination(session_id, None, descriptor)
+    fn new(
+        session_id: String,
+        destination: TransferDestination,
+        descriptor: TransferDescriptor,
+    ) -> Self {
+        Self::with_destination(session_id, None, destination, descriptor)
     }
 
     fn with_destination(
         session_id: String,
         dest_session_id: Option<String>,
+        destination: TransferDestination,
         descriptor: TransferDescriptor,
     ) -> Self {
         Self {
             session_id,
             dest_session_id,
+            destination,
             descriptor,
             retry: Arc::new(Mutex::new(RetryState {
                 phase: TransferPhase::Running,
@@ -199,6 +221,7 @@ impl TransferRecord {
         Ok(Self {
             session_id: self.session_id.clone(),
             dest_session_id: self.dest_session_id.clone(),
+            destination: self.destination.clone(),
             descriptor: self.descriptor.clone(),
             retry: Arc::clone(&self.retry),
             is_retry: true,
@@ -303,6 +326,10 @@ pub async fn sftp_upload(
     }
     let record = Arc::new(TransferRecord::new(
         session_id.to_string(),
+        TransferDestination::Remote {
+            host_id: manager.host_id(session_id)?,
+            path: remote_path.clone(),
+        },
         TransferDescriptor::Upload {
             local_path,
             remote_path,
@@ -364,6 +391,10 @@ pub async fn sftp_copy(
     let record = Arc::new(TransferRecord::with_destination(
         source_session_id.to_string(),
         Some(dest_session_id.to_string()),
+        TransferDestination::Remote {
+            host_id: manager.host_id(dest_session_id)?,
+            path: dest_path.clone(),
+        },
         TransferDescriptor::Copy {
             source_path,
             dest_path,
@@ -412,6 +443,7 @@ pub async fn sftp_download(
     }
     let record = Arc::new(TransferRecord::new(
         session_id.to_string(),
+        TransferDestination::local(&local_path),
         TransferDescriptor::Download {
             remote_path,
             local_path,
@@ -459,13 +491,19 @@ fn launch_transfer(
             session_ids.push(dest_session_id);
         }
     }
-    manager.transfers.lock().unwrap().insert(
+    let active = ActiveTransfer {
+        session_ids,
+        cancel,
+        destination: record.destination.clone(),
+    };
+    if let Err(error) = register_active_transfer(
+        &mut manager.transfers.lock().unwrap(),
         transfer_id.clone(),
-        ActiveTransfer {
-            session_ids,
-            cancel,
-        },
-    );
+        active,
+    ) {
+        record.finish(TransferPhase::Failed, true);
+        return Err(error);
+    }
     manager
         .transfer_records
         .lock()
@@ -487,6 +525,23 @@ fn launch_transfer(
         transfers.lock().unwrap().remove(&task_transfer_id);
     });
     Ok(TransferStartResponse { transfer_id })
+}
+
+fn register_active_transfer(
+    transfers: &mut HashMap<String, ActiveTransfer>,
+    transfer_id: String,
+    transfer: ActiveTransfer,
+) -> Result<()> {
+    if transfers
+        .values()
+        .any(|active| active.destination == transfer.destination)
+    {
+        return Err(LumaError::InvalidInput(
+            "another transfer is already writing to this destination".into(),
+        ));
+    }
+    transfers.insert(transfer_id, transfer);
+    Ok(())
 }
 
 async fn run_transfer_attempt(
@@ -2812,6 +2867,10 @@ mod tests {
     fn retry_records_share_completed_entry_state() {
         let original = TransferRecord::new(
             "session".into(),
+            TransferDestination::Remote {
+                host_id: "host".into(),
+                path: "/destination".into(),
+            },
             TransferDescriptor::Upload {
                 local_path: PathBuf::from("source"),
                 remote_path: "/destination".into(),
@@ -2833,6 +2892,10 @@ mod tests {
         let original = TransferRecord::with_destination(
             "source-session".into(),
             Some("dest-session".into()),
+            TransferDestination::Remote {
+                host_id: "dest-host".into(),
+                path: "/to/tree".into(),
+            },
             TransferDescriptor::Copy {
                 source_path: "/from/tree".into(),
                 dest_path: "/to/tree".into(),
@@ -3003,6 +3066,41 @@ mod tests {
         tokio::fs::remove_dir_all(directory).await.unwrap();
     }
 
+    #[test]
+    fn active_transfers_reject_duplicate_destinations() {
+        let destination = TransferDestination::Remote {
+            host_id: "host".into(),
+            path: "/destination".into(),
+        };
+        let (first_cancel, _) = watch::channel(false);
+        let mut transfers = HashMap::new();
+        register_active_transfer(
+            &mut transfers,
+            "first".into(),
+            ActiveTransfer {
+                session_ids: vec!["session-one".into()],
+                cancel: first_cancel,
+                destination: destination.clone(),
+            },
+        )
+        .unwrap();
+
+        let (second_cancel, _) = watch::channel(false);
+        let error = register_active_transfer(
+            &mut transfers,
+            "second".into(),
+            ActiveTransfer {
+                session_ids: vec!["session-two".into()],
+                cancel: second_cancel,
+                destination,
+            },
+        )
+        .unwrap_err();
+
+        assert!(matches!(error, LumaError::InvalidInput(_)));
+        assert_eq!(transfers.len(), 1);
+    }
+
     #[tokio::test]
     async fn successful_directory_cleanup_removes_owned_orphan_partial() {
         let directory = std::env::temp_dir().join(format!(
@@ -3014,6 +3112,7 @@ mod tests {
         tokio::fs::write(&partial, b"partial").await.unwrap();
         let record = TransferRecord::new(
             "session".into(),
+            TransferDestination::local(&directory),
             TransferDescriptor::Download {
                 remote_path: "/source".into(),
                 local_path: directory.clone(),

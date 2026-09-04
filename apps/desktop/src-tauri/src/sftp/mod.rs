@@ -89,6 +89,12 @@ impl<T> SessionStore<T> {
         self.entries.get(session_id).map(|stored| &stored.value)
     }
 
+    fn host_id(&self, session_id: &str) -> Option<&str> {
+        self.entries
+            .get(session_id)
+            .map(|stored| stored.host_id.as_str())
+    }
+
     /// Lowest-sorting open session for a host, so repeated lookups pick the
     /// same one rather than an arbitrary map entry.
     fn session_id_for_host(&self, host_id: &str) -> Option<String> {
@@ -135,6 +141,7 @@ pub(super) struct ActiveTransfer {
     /// copy lists both ends so disconnecting either one cancels it.
     pub session_ids: Vec<String>,
     pub cancel: watch::Sender<bool>,
+    pub(in crate::sftp) destination: transfer::TransferDestination,
 }
 
 #[derive(Default)]
@@ -219,6 +226,16 @@ impl SftpManager {
             .unwrap()
             .get(session_id)
             .map(|session| Arc::clone(&session.client))
+            .ok_or_else(|| LumaError::InvalidInput("unknown SFTP session".into()))
+    }
+
+    pub(super) fn host_id(&self, session_id: &str) -> Result<String> {
+        validate_identifier(session_id, "sftpSessionId")?;
+        self.sessions
+            .lock()
+            .unwrap()
+            .host_id(session_id)
+            .map(str::to_owned)
             .ok_or_else(|| LumaError::InvalidInput("unknown SFTP session".into()))
     }
 

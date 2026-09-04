@@ -21,6 +21,9 @@ pub(crate) fn picker_path(value: &str) -> Option<PathBuf> {
     if !is_file_url {
         return Some(PathBuf::from(value));
     }
+    if value.get(5..7) != Some("//") {
+        return None;
+    }
 
     let url = tauri::Url::parse(value).ok()?;
     if url.scheme() != "file" || url.query().is_some() || url.fragment().is_some() {
