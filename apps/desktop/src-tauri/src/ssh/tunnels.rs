@@ -61,7 +61,7 @@ impl TunnelManager {
         &self,
         config: SshConnectionConfig,
         port_forward: PortForward,
-        on_exit: impl FnOnce(TunnelExit) + Send + 'static,
+        on_exit: impl FnOnce(&str, TunnelExit) + Send + 'static,
     ) -> Result<TunnelStartResponse> {
         let tunnel_id = uuid::Uuid::new_v4().to_string();
         let (stop, stop_rx) = watch::channel(false);
@@ -102,7 +102,7 @@ impl TunnelManager {
         let task = tokio::spawn(async move {
             let exit = run_tunnel(connection, worker, stop_rx).await;
             tunnels.lock().unwrap().remove(&task_id);
-            on_exit(exit);
+            on_exit(&task_id, exit);
         });
         if let Some(tunnel) = self.tunnels.lock().unwrap().get_mut(&tunnel_id) {
             tunnel.task = Some(task);

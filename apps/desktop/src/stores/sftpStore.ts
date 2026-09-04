@@ -81,6 +81,7 @@ export type TransferEntryOutcome = {
  * with many unreadable files would otherwise grow this list without bound, and
  * it is rendered in an expandable list — the count below it stays exact. */
 const MAX_ENTRY_OUTCOMES = 500;
+const MAX_FINISHED_TRANSFERS = 128;
 
 export type TransferRecord = {
   transferId: string;
@@ -176,7 +177,7 @@ type SftpState = {
   /** Current local directory (canonical); null until the first listing. */
   localPath: string | null;
 
-  /** Ordered transfer queue; finished rows persist until cleared. */
+  /** Ordered transfer queue; running rows plus a bounded finished history. */
   transfers: TransferRecord[];
 
   /** Files held by the last "Copy", or null when nothing is on the clipboard.
@@ -281,6 +282,37 @@ function sideForSession(
 }
 
 export const useSftpStore = create<SftpState>((set, get) => {
+  function forgetTransferRecords(records: TransferRecord[]) {
+    const transferIds = records
+      .map((record) => record.transferId)
+      .filter((transferId) => !transferId.startsWith("failed-"));
+    if (transferIds.length > 0) {
+      void sftpForgetTransfers(transferIds).catch(() => {});
+    }
+  }
+
+  function pruneFinishedHistory() {
+    const finished = get().transfers.filter((transfer) =>
+      isTerminal(transfer.state),
+    );
+    const removeCount = finished.length - MAX_FINISHED_TRANSFERS;
+    if (removeCount <= 0) return;
+
+    // An event can finish before its invoke returns. Keep that metadata-less
+    // stub until registerTransfer merges it, or it would be recreated as running.
+    const removed = finished
+      .filter((transfer) => transfer.name !== "")
+      .slice(0, removeCount);
+    if (removed.length === 0) return;
+    const removedIds = new Set(removed.map((transfer) => transfer.transferId));
+    set((state) => ({
+      transfers: state.transfers.filter(
+        (transfer) => !removedIds.has(transfer.transferId),
+      ),
+    }));
+    forgetTransferRecords(removed);
+  }
+
   /**
    * Apply a streamed progress event to the matching (or a stub) record.
    *
@@ -413,6 +445,7 @@ export const useSftpStore = create<SftpState>((set, get) => {
         (t) => t.transferId === progress.transferId,
       );
       if (record && record.targetDir) invalidateTarget(record);
+      pruneFinishedHistory();
     }
   }
 
@@ -461,6 +494,7 @@ export const useSftpStore = create<SftpState>((set, get) => {
     if (record && isTerminal(record.state) && record.targetDir) {
       invalidateTarget(record);
     }
+    if (record && isTerminal(record.state)) pruneFinishedHistory();
   }
 
   /** Add a synthetic failed row when the invoke itself rejects (pre-start).
@@ -489,6 +523,7 @@ export const useSftpStore = create<SftpState>((set, get) => {
         },
       ],
     }));
+    pruneFinishedHistory();
   }
 
   /** Dispatch to the invoke matching the endpoint pair. */
@@ -607,6 +642,7 @@ export const useSftpStore = create<SftpState>((set, get) => {
             : t,
         ),
       }));
+      pruneFinishedHistory();
     }
   }
 
@@ -898,13 +934,10 @@ export const useSftpStore = create<SftpState>((set, get) => {
     },
 
     clearFinished: () => {
-      const finishedIds = get()
-        .transfers.filter((transfer) => isTerminal(transfer.state))
-        .map((transfer) => transfer.transferId)
-        .filter((transferId) => !transferId.startsWith("failed-"));
-      if (finishedIds.length > 0) {
-        void sftpForgetTransfers(finishedIds).catch(() => {});
-      }
+      const finished = get().transfers.filter((transfer) =>
+        isTerminal(transfer.state),
+      );
+      forgetTransferRecords(finished);
       set((state) => ({
         transfers: state.transfers.filter((transfer) => !isTerminal(transfer.state)),
       }));

@@ -10,7 +10,7 @@
 mod parse;
 
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use russh::ChannelMsg;
@@ -61,7 +61,7 @@ pub struct WebPreview {
 /// on explicit close and when the underlying tunnel exits.
 #[derive(Default)]
 pub struct WebPreviewManager {
-    previews: Mutex<HashMap<String, WebPreview>>,
+    previews: Arc<Mutex<HashMap<String, WebPreview>>>,
 }
 
 impl WebPreviewManager {
@@ -118,7 +118,13 @@ impl WebPreviewManager {
             remote_port: None,
         };
 
-        let started = match tunnels.start(config, port_forward, |_exit| {}).await {
+        let previews = Arc::clone(&self.previews);
+        let started = match tunnels
+            .start(config, port_forward, move |tunnel_id, _exit| {
+                remove_preview(&previews, tunnel_id);
+            })
+            .await
+        {
             Ok(started) => started,
             Err(error) => {
                 // A concurrent open may have won the race inside TunnelManager;
@@ -148,6 +154,17 @@ impl WebPreviewManager {
             .lock()
             .unwrap()
             .insert(preview.tunnel_id.clone(), preview.clone());
+        if !tunnels
+            .list()
+            .iter()
+            .any(|tunnel| tunnel.tunnel_id == preview.tunnel_id)
+        {
+            remove_preview(&self.previews, &preview.tunnel_id);
+            return Err(LumaError::SshConnection {
+                category: "host-unreachable",
+                message: "Web preview tunnel closed during startup".into(),
+            });
+        }
         tracing::info!(
             host_id = %host_id,
             remote_port = port,
@@ -158,7 +175,7 @@ impl WebPreviewManager {
     }
 
     pub async fn close(&self, tunnels: &TunnelManager, tunnel_id: &str) -> Result<()> {
-        let known = self.previews.lock().unwrap().remove(tunnel_id).is_some();
+        let known = remove_preview(&self.previews, tunnel_id);
         match tunnels.stop(tunnel_id).await {
             Ok(()) => Ok(()),
             // The tunnel may already have exited on its own; closing a preview
@@ -192,6 +209,10 @@ impl WebPreviewManager {
             .find(|preview| preview.host_id == host_id && preview.port == port)
             .cloned()
     }
+}
+
+fn remove_preview(previews: &Mutex<HashMap<String, WebPreview>>, tunnel_id: &str) -> bool {
+    previews.lock().unwrap().remove(tunnel_id).is_some()
 }
 
 fn preview_forward_id(host_id: &str, port: u16) -> String {
@@ -361,6 +382,9 @@ mod tests {
         assert_eq!(previews[2].tunnel_id, "t2");
         assert_eq!(manager.find("host-a", 8080).unwrap().tunnel_id, "t1");
         assert!(manager.find("host-a", 9999).is_none());
+        assert!(remove_preview(&manager.previews, "t1"));
+        assert!(manager.find("host-a", 8080).is_none());
+        assert_eq!(manager.list().len(), 2);
     }
 
     #[test]

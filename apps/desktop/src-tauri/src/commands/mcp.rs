@@ -82,6 +82,7 @@ pub async fn mcp_grant_delete(
     mcp_grants::delete(&state.pool, &id).await?;
     mcp.taps().unshare_all(Some(&id));
     mcp.approvals().deny_all();
+    mcp.forget_grant(&id);
     // Deleting the last grant closes the endpoint.
     mcp.sync_lifecycle(&app).await?;
     Ok(())

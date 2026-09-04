@@ -3864,6 +3864,12 @@ pub fn cache_vault_secret(runtime: &SyncRuntimeState, vault_id: &str, secret: Va
         .insert(vault_id.to_string(), secret);
 }
 
+pub fn forget_vault(runtime: &SyncRuntimeState, vault_id: &str) {
+    runtime.passphrase.lock().unwrap().remove(vault_id);
+    runtime.pending.lock().unwrap().remove(vault_id);
+    runtime.transfers.lock().unwrap().remove(vault_id);
+}
+
 /// The secret this vault is encrypted under.
 ///
 /// A passphrase vault can only get one from the user, so a cache miss is a
@@ -4152,6 +4158,31 @@ mod tests {
 
     fn content_key_secret(byte: u8) -> VaultSecret {
         VaultSecret::ContentKey(Zeroizing::new([byte; vault_key::CONTENT_KEY_LEN]))
+    }
+
+    #[test]
+    fn forgetting_a_vault_drops_all_runtime_state() {
+        let runtime = SyncRuntimeState::default();
+        cache_vault_secret(&runtime, "vault-a", content_key_secret(7));
+        runtime.pending.lock().unwrap().insert(
+            "vault-a".into(),
+            PendingSync {
+                provider: "folder".into(),
+                remote_version: "version".into(),
+                remote_states: BTreeMap::new(),
+                remote_encrypted_key_secrets: Vec::new(),
+                remote_encrypted_identity_secrets: Vec::new(),
+                conflicts: Vec::new(),
+            },
+        );
+        let transfer = transfer_lock(&runtime, "vault-a");
+
+        forget_vault(&runtime, "vault-a");
+
+        assert!(!runtime.passphrase.lock().unwrap().contains_key("vault-a"));
+        assert!(!runtime.pending.lock().unwrap().contains_key("vault-a"));
+        assert!(!runtime.transfers.lock().unwrap().contains_key("vault-a"));
+        assert_eq!(Arc::strong_count(&transfer), 1);
     }
 
     #[test]

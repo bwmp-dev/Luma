@@ -88,6 +88,20 @@ beforeEach(() => {
 });
 
 describe("SFTP transfer queue transitions", () => {
+  it("keeps finished transfer history bounded", async () => {
+    setInvoke(() => {
+      throw new Error("could not start");
+    });
+
+    upload(Array.from({ length: 205 }, (_, index) => file(`${index}.txt`)));
+    await flush();
+
+    expect(transfers()).toHaveLength(128);
+    expect(transfers().every((transfer) => transfer.state === "failed")).toBe(
+      true,
+    );
+  });
+
   it("moves a transfer running -> completed and clears it on clearFinished", async () => {
     let channel: unknown;
     setInvoke((cmd, args) => {

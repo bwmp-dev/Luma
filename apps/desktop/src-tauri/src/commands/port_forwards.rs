@@ -55,7 +55,7 @@ pub async fn tunnel_start(
     let config =
         ssh::tunnel_connection_config(&state.pool, &keystore_state, &port_forward.host_id).await?;
     tunnels
-        .start(config, port_forward, move |exit| {
+        .start(config, port_forward, move |_tunnel_id, exit| {
             let _ = on_exit.send(exit);
         })
         .await

@@ -33,8 +33,14 @@ pub async fn vault_update(
 }
 
 #[tauri::command]
-pub async fn vault_delete(state: State<'_, AppState>, id: String) -> Result<()> {
-    vaults::delete(&state.pool, &id).await
+pub async fn vault_delete(
+    state: State<'_, AppState>,
+    sync_state: State<'_, SyncRuntimeState>,
+    id: String,
+) -> Result<()> {
+    vaults::delete(&state.pool, &id).await?;
+    sync::forget_vault(&sync_state, &id);
+    Ok(())
 }
 
 /// Create a vault whose key Luma Cloud distributes to member devices. The

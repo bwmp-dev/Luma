@@ -233,6 +233,10 @@ impl McpState {
         self.shared.activity()
     }
 
+    pub(crate) fn forget_grant(&self, grant_id: &str) {
+        self.shared.semaphores.lock().unwrap().remove(grant_id);
+    }
+
     fn port(&self) -> Option<u16> {
         self.server
             .lock()
@@ -416,6 +420,17 @@ mod tests {
         assert!(Arc::ptr_eq(&first, &shared.semaphore_for("grant-a")));
         assert!(!Arc::ptr_eq(&first, &shared.semaphore_for("grant-b")));
         assert_eq!(first.available_permits(), MAX_CONCURRENT_PER_GRANT);
+    }
+
+    #[test]
+    fn deleting_a_grant_drops_its_concurrency_budget() {
+        let state = McpState::default();
+        let held = state.shared.semaphore_for("grant-a");
+        state.forget_grant("grant-a");
+        let replacement = state.shared.semaphore_for("grant-a");
+
+        assert!(!Arc::ptr_eq(&held, &replacement));
+        assert_eq!(state.shared.semaphores.lock().unwrap().len(), 1);
     }
 
     #[test]
