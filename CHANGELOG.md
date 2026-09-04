@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.17.1](https://github.com/bwmp-dev/Luma/compare/v0.17.0...v0.17.1) (2026-09-04)
+
+
+### Bug Fixes
+
+* **sftp:** bound retained transfer records ([e0151c1](https://github.com/bwmp-dev/Luma/commit/e0151c144bcae58dc4d07f03d6a3d95d7b159985))
+
 ## [0.17.0](https://github.com/bwmp-dev/Luma/compare/v0.16.0...v0.17.0) (2026-09-04)
 
 
