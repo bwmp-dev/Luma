@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrent as getCurrentDeepLinks } from "@tauri-apps/plugin-deep-link";
 import { terminalManager } from "../features/terminal/terminalManager";
 import { startLatencyMonitor } from "../features/terminal/latencyMonitor";
 import { useUiStore } from "../stores/uiStore";
@@ -118,6 +119,46 @@ function handleVaultDeepLink(url: string): boolean {
   return true;
 }
 
+let initialDeepLinks: Promise<string[] | null> | null = null;
+let initialDeepLinksHandled = false;
+
+function dispatchDeepLink(url: string): void {
+  if (handleVaultDeepLink(url)) return;
+  void handleJoinDeepLink(url);
+}
+
+export function startDeepLinkListener(): () => void {
+  let unlisten: (() => void) | undefined;
+  let cancelled = false;
+  let liveUrlsDuringStartup: Set<string> | null = new Set();
+
+  void (async () => {
+    const un = await getCurrentWindow().listen<string>("deep-link", (event) => {
+      liveUrlsDuringStartup?.add(event.payload);
+      dispatchDeepLink(event.payload);
+    });
+    if (cancelled) {
+      un();
+      return;
+    }
+    unlisten = un;
+
+    initialDeepLinks ??= getCurrentDeepLinks().catch(() => null);
+    const urls = await initialDeepLinks;
+    if (cancelled || initialDeepLinksHandled) return;
+    initialDeepLinksHandled = true;
+    for (const url of urls ?? []) {
+      if (!liveUrlsDuringStartup.has(url)) dispatchDeepLink(url);
+    }
+    liveUrlsDuringStartup = null;
+  })();
+
+  return () => {
+    cancelled = true;
+    unlisten?.();
+  };
+}
+
 /**
  * Shared application initialization, extracted from Layout so both the desktop
  * and mobile shells run exactly the same startup wiring: terminal config, theme,
@@ -161,23 +202,8 @@ export function useAppInit(): void {
   }, []);
 
   // Subscribe once to `luma://…` deep links delivered as a window event,
-  // cleaning up the listener on unmount.
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    let cancelled = false;
-    void (async () => {
-      const un = await getCurrentWindow().listen<string>("deep-link", (event) => {
-        if (handleVaultDeepLink(event.payload)) return;
-        void handleJoinDeepLink(event.payload);
-      });
-      if (cancelled) un();
-      else unlisten = un;
-    })();
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, []);
+  // and query the URL that launched a fully closed app.
+  useEffect(() => startDeepLinkListener(), []);
 
   // Subscribe once to backend `agent-event` notifications (Agent Inbox),
   // mirroring the `deep-link`/`ssh-remote-os` listener wiring.

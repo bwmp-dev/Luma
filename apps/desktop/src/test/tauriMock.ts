@@ -15,6 +15,7 @@ export type InvokeHandler = (
 ) => unknown | Promise<unknown>;
 
 let handler: InvokeHandler | null = null;
+let currentDeepLinks: string[] | null = null;
 
 /** Install the handler that answers every `invoke(cmd, args)` for a test. */
 export function setInvoke(handlerFn: InvokeHandler): void {
@@ -107,13 +108,21 @@ export function getCurrentWindow(): typeof fakeWindow {
   return fakeWindow;
 }
 
+export function setCurrentDeepLinks(urls: string[] | null): void {
+  currentDeepLinks = urls;
+}
+
+export const getCurrentDeepLinks = vi.fn(async () => currentDeepLinks);
+
 /** Reset all mock state between tests. */
 export function resetTauriMock(): void {
   handler = null;
+  currentDeepLinks = null;
   listeners.clear();
   closeHandler = null;
   closeListenerActiveAtClose = false;
   invoke.mockClear();
+  getCurrentDeepLinks.mockClear();
   fakeWindow.listen.mockClear();
   fakeWindow.onCloseRequested.mockClear();
   fakeWindow.close.mockClear();

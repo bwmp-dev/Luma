@@ -1080,11 +1080,11 @@ pub async fn sync_now(
         });
     }
 
-    // A pull rewrites local rows, so the stamp read before the merge no longer
-    // describes what is on disk.
-    if pulled {
-        stamp = local_change_stamp(pool, vault_id).await?;
-    }
+    // Applying the merged state rewrites rows even when their content is
+    // unchanged, so capture the resulting sequence before assembling the exact
+    // bundle that may be uploaded. A concurrent save after this read remains
+    // dirty and is picked up by the next pass.
+    stamp = local_change_stamp(pool, vault_id).await?;
     let merged = assemble_bundle(pool, keystore_state, &secret, vault_id).await?;
     stored.local_stamp = Some(stamp);
     let compare_private_keys = private_key_sync_active(pool, keystore_state, vault_id).await?;
@@ -3701,59 +3701,25 @@ async fn clear_credential(
     }
 }
 
-/// A cheap fingerprint of everything this vault would contribute to a bundle.
+/// A cheap monotonic sequence for everything this vault would contribute to a bundle.
 ///
 /// It is a *trigger*, not a decision: an equal stamp means "do not bother
 /// contacting the remote", while a different one only means "look properly".
 /// `sync_now` still compares real content before it uploads anything, so a
 /// false positive costs one round trip and nothing else.
 ///
-/// Only counts and timestamp aggregates are read, so this stays a few index
-/// scans and can run on a short timer. Timestamps have one-second resolution,
-/// which is why the sum is included as well as the maximum: editing an older
-/// row up to a second another row already occupies moves the sum even when it
-/// leaves the maximum alone.
+/// SQLite triggers advance the sequence on every relevant insert, update, or
+/// delete. This avoids losing rapid rewrites to the one-second resolution of
+/// row timestamps and keeps the scheduler check to a single indexed lookup.
 pub async fn local_change_stamp(pool: &SqlitePool, vault_id: &str) -> Result<String> {
-    // Ephemeral quick-connect hosts are excluded from bundles, so they must not
-    // register as a change here either.
-    let mut sql = String::from(
-        "SELECT COUNT(*) AS n, COALESCE(MAX(updated_at),0) AS hi, COALESCE(SUM(updated_at),0) AS total
-           FROM hosts WHERE vault_id = ?1 AND is_ephemeral = 0
-         UNION ALL SELECT COUNT(*), COALESCE(MAX(updated_at),0), COALESCE(SUM(updated_at),0)
-           FROM host_groups WHERE vault_id = ?1
-         UNION ALL SELECT COUNT(*), COALESCE(MAX(updated_at),0), COALESCE(SUM(updated_at),0)
-           FROM key_references WHERE vault_id = ?1
-         UNION ALL SELECT COUNT(*), COALESCE(MAX(updated_at),0), COALESCE(SUM(updated_at),0)
-           FROM identities WHERE vault_id = ?1
-         UNION ALL SELECT COUNT(*), COALESCE(MAX(updated_at),0), COALESCE(SUM(updated_at),0)
-           FROM snippets WHERE vault_id = ?1
-         UNION ALL SELECT COUNT(*), COALESCE(MAX(deleted_at),0), COALESCE(SUM(deleted_at),0)
-           FROM tombstones WHERE vault_id = ?1",
-    );
-    // Terminal profiles and settings ride along with the personal vault only —
-    // matching `assemble_bundle_inner`'s `device_scoped`.
-    if vault_id == PERSONAL_VAULT_ID {
-        sql.push_str(
-            " UNION ALL SELECT COUNT(*), COALESCE(MAX(updated_at),0), COALESCE(SUM(updated_at),0)
-                FROM terminal_profiles
-              UNION ALL SELECT COUNT(*), COALESCE(MAX(updated_at),0), COALESCE(SUM(updated_at),0)
-                FROM settings WHERE key <> ?2",
-        );
-    }
-
-    let mut query = sqlx::query(&sql).bind(vault_id);
-    if vault_id == PERSONAL_VAULT_ID {
-        query = query.bind(settings::WORKSPACE_SNAPSHOT_KEY);
-    }
-    let rows = query.fetch_all(pool).await?;
-
-    let mut hasher = Sha256::new();
-    for row in &rows {
-        hasher.update(row.get::<i64, _>("n").to_le_bytes());
-        hasher.update(row.get::<i64, _>("hi").to_le_bytes());
-        hasher.update(row.get::<i64, _>("total").to_le_bytes());
-    }
-    Ok(format!("{:x}", hasher.finalize())[..32].to_string())
+    let version = sqlx::query_scalar::<_, i64>(
+        "SELECT version FROM sync_change_counters WHERE vault_id = ?1",
+    )
+    .bind(vault_id)
+    .fetch_optional(pool)
+    .await?
+    .unwrap_or_default();
+    Ok(version.to_string())
 }
 
 /// The lock that serializes transfers for one vault, created on first use.
@@ -5553,9 +5519,27 @@ mod tests {
         let after_create = local_change_stamp(&pool, &vault).await.unwrap();
         assert_ne!(empty, after_create);
 
+        sqlx::query("UPDATE hosts SET name = 'web-2', updated_at = 123 WHERE id = ?1")
+            .bind(&host)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let after_first_same_second_update = local_change_stamp(&pool, &vault).await.unwrap();
+        sqlx::query("UPDATE hosts SET name = 'web-3', updated_at = 123 WHERE id = ?1")
+            .bind(&host)
+            .execute(&pool)
+            .await
+            .unwrap();
+        let after_second_same_second_update = local_change_stamp(&pool, &vault).await.unwrap();
+        assert_ne!(after_create, after_first_same_second_update);
+        assert_ne!(
+            after_first_same_second_update,
+            after_second_same_second_update
+        );
+
         hosts::delete(&pool, &host).await.unwrap();
         let after_delete = local_change_stamp(&pool, &vault).await.unwrap();
-        assert_ne!(after_create, after_delete);
+        assert_ne!(after_second_same_second_update, after_delete);
         // A tombstone is a change in its own right, not a return to empty.
         assert_ne!(empty, after_delete);
 
@@ -5572,7 +5556,7 @@ mod tests {
         let personal_before = local_change_stamp(&pool, PERSONAL_VAULT_ID).await.unwrap();
         crate::storage::settings::set(
             &pool,
-            crate::storage::settings::WORKSPACE_SNAPSHOT_KEY,
+            "workspace.snapshot",
             &serde_json::json!({"tabs": []}),
         )
         .await
@@ -5654,6 +5638,22 @@ mod tests {
         let after = candidate(&pool, &vault).await;
         assert!(!after.has_local_changes(&pool).await.unwrap());
         assert!(after.last_synced_at.is_some());
+
+        sync_now(
+            &pool,
+            &runtime,
+            &keystore_state,
+            &collab,
+            &app_data_dir,
+            &vault,
+        )
+        .await
+        .unwrap();
+        assert!(!candidate(&pool, &vault)
+            .await
+            .has_local_changes(&pool)
+            .await
+            .unwrap());
 
         seed_host(&pool, &vault, "web-2").await;
         assert!(candidate(&pool, &vault)

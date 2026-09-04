@@ -19,6 +19,11 @@ vi.mock("@tauri-apps/api/window", async () => {
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn() }));
 
+vi.mock("@tauri-apps/plugin-deep-link", async () => {
+  const mock = await import("./tauriMock");
+  return { getCurrent: mock.getCurrentDeepLinks };
+});
+
 vi.mock("@xterm/xterm", () => import("./xtermMock"));
 vi.mock("@xterm/addon-fit", () => ({
   FitAddon: class {

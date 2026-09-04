@@ -25,11 +25,6 @@ pub(crate) const DEVICE_LOCAL_SETTING_KEYS: &[&str] = &[
     crate::analytics::INSTALL_ID_SETTING_KEY,
 ];
 
-/// The restore-my-tabs snapshot. It is written every time a tab opens, closes or
-/// moves, so it is the one bundled setting that changes without the user having
-/// "saved" anything; `sync::local_change_stamp` leaves it out for that reason.
-pub(crate) const WORKSPACE_SNAPSHOT_KEY: &str = "workspace.snapshot";
-
 pub(crate) fn validate_key(key: &str) -> Result<()> {
     if key.is_empty() || key.len() > MAX_KEY_LENGTH {
         return Err(LumaError::InvalidInput(format!(

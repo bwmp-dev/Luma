@@ -62,6 +62,7 @@ const LEGACY_CRLF_CHECKSUMS: &[(i64, &str)] = &[
     (20, "15988679df03f819c03896892da24a5a159e446bcb8f947fa88d00377f67fbfe5602a6be0f4a3f6e72da0e55165dc258"),
     (21, "271823081cffbed5281b5d01f179a64a90f053a42625a898d67bb16ca42460d75edcf1f00b7240ca845bad551ebb6c59"),
     (22, "418666cd2bbcdb4b9a856c9adddcc11ce71da03f166ed6490da6e5854d976e828b84a7cd6ab076df541a86bc1da569b2"),
+    (23, "35c8cb1f55aae957b80b5507cbe396bccdc388cbf8f003ee3e52aeaa0f287933ce8aad878271125f7cf6c8c32185465b"),
 ];
 
 fn is_allowlisted_legacy_checksum(version: i64, recorded: &[u8]) -> bool {
