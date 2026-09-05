@@ -1,5 +1,5 @@
 import type { Channel, InvokeArgs } from "./mocks/core";
-import { emitWindowEvent } from "./mocks/window";
+import type { SshControlEvent, SshRemoteOsId } from "../lib/ssh";
 import type { ThemeMode } from "../types";
 import type { ShowcasePlatform } from "./scenarios";
 import {
@@ -26,6 +26,7 @@ import {
 } from "./terminalContent";
 
 type ByteChannel = Channel<ArrayBuffer | number[] | string>;
+type ControlChannel = Channel<SshControlEvent>;
 
 const NARROW_VIEWPORT_MAX_PX = 600;
 
@@ -50,7 +51,7 @@ let statsSample = 0;
 
 function driveSsh(
   channel: ByteChannel,
-  backendId: string,
+  control: ControlChannel,
   hostId: string,
   sessions: Record<string, string>,
 ): void {
@@ -58,14 +59,19 @@ function driveSsh(
   const content =
     sessions[hostId] ??
     fillerSession(host?.username ?? "user", host?.name ?? "server");
-  const osId = host?.osId ?? "linux";
+  const osId = (host?.osId ?? "linux") as SshRemoteOsId;
 
-  setTimeout(() => channel.onmessage("__LUMA_SSH_AUTHENTICATED__\r\n"), 20);
+  /* Connection state travels on the control channel and the screen boundary in
+   * the byte stream, exactly as the backend does it: authentication is a
+   * control event, and the reset that starts the session is plain RIS. */
+  setTimeout(() => {
+    channel.onmessage("\x1bc");
+    control.onmessage({ kind: "authenticated" });
+  }, 20);
   setTimeout(
     () =>
-      emitWindowEvent("ssh-remote-os", {
-        sessionId: backendId,
-        hostId,
+      control.onmessage({
+        kind: "remoteOs",
         osId,
         prettyName: host?.osPrettyName ?? null,
       }),
@@ -195,7 +201,12 @@ export function createInvokeHandler(
         const hostId = request.hostId ?? "";
         const host = HOSTS.find((h) => h.id === hostId);
         const backendId = `ssh-${++backendSeq}`;
-        driveSsh(args.onData as ByteChannel, backendId, hostId, sessions);
+        driveSsh(
+          args.onData as ByteChannel,
+          args.onControl as ControlChannel,
+          hostId,
+          sessions,
+        );
         return { sessionId: backendId, title: host?.name ?? "SSH" };
       }
       case "pty_spawn": {

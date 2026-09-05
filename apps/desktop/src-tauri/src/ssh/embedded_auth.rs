@@ -6,15 +6,13 @@ use std::time::Duration;
 use russh::client::{AuthResult, Handle, KeyboardInteractiveAuthResponse};
 use russh::keys::{load_secret_key, PrivateKey, PrivateKeyWithHashAlg};
 use russh::{MethodKind, MethodSet};
-use serde::Serialize;
 use tokio::sync::mpsc;
 use zeroize::Zeroizing;
 
-use super::embedded::{Client, Control, EmbeddedSshTimeouts, PingFailure, SharedDataCallback};
-use super::SshConnectionConfig;
+use super::embedded::{Client, Control, EmbeddedSshTimeouts, PingFailure, SharedSessionCallback};
+use super::{SshConnectionConfig, SshControl, SshEvent};
 use crate::errors::{LumaError, Result};
 
-const PROMPT_MARKER: &str = "__LUMA_SSH_PROMPT__";
 const PROMPT_TIMEOUT: Duration = Duration::from_secs(180);
 const MAX_PROMPT_ATTEMPTS: usize = 3;
 const MAX_KEYBOARD_INTERACTIVE_ROUNDS: usize = 16;
@@ -143,41 +141,41 @@ impl AuthDriver {
     }
 }
 
-#[derive(Serialize)]
-struct PromptMarker<'a> {
-    label: &'a str,
-    secret: bool,
-    target: &'a str,
+fn emit(sink: &SharedSessionCallback, bytes: &[u8]) {
+    (sink.lock().unwrap())(SshEvent::Data(bytes));
 }
 
-fn emit(on_data: &SharedDataCallback, bytes: &[u8]) {
-    (on_data.lock().unwrap())(bytes);
+fn emit_text(sink: &SharedSessionCallback, text: &str) {
+    emit(sink, text.as_bytes());
 }
 
-fn emit_text(on_data: &SharedDataCallback, text: &str) {
-    emit(on_data, text.as_bytes());
+fn emit_control(sink: &SharedSessionCallback, control: SshControl) {
+    (sink.lock().unwrap())(SshEvent::Control(control));
 }
 
+/* The overlay is asked for the credential out of band, while the prompt the
+ * user would see on a terminal still goes to the terminal. Nothing a remote
+ * host prints can raise this dialog: the request does not travel in the byte
+ * stream at all. */
 async fn prompt(
     driver: &mut AuthDriver,
-    on_data: &SharedDataCallback,
+    sink: &SharedSessionCallback,
     label: &str,
     secret: bool,
     target: &str,
     text: &str,
 ) -> std::result::Result<Zeroizing<String>, AuthAbort> {
-    let marker = serde_json::to_string(&PromptMarker {
-        label,
-        secret,
-        target,
-    })
-    .map_err(|error| {
-        AuthAbort::Error(LumaError::SshConnection {
-            category: "ssh-error",
-            message: format!("could not encode SSH credential prompt: {error}"),
-        })
-    })?;
-    emit_text(on_data, &format!("{PROMPT_MARKER}{marker}\r\n{text}"));
+    emit_control(
+        sink,
+        SshControl::Prompt {
+            label: label.to_string(),
+            secret,
+            target: target.to_string(),
+        },
+    );
+    // Own line: a retry after a wrong password would otherwise print the second
+    // prompt against the tail of the first.
+    emit_text(sink, &format!("\r\n{text}"));
     driver.answer().await
 }
 
@@ -225,7 +223,7 @@ fn load_saved_key(config: &SshConnectionConfig) -> Result<PrivateKey> {
 async fn load_key_with_prompts(
     config: &SshConnectionConfig,
     driver: &mut AuthDriver,
-    on_data: &SharedDataCallback,
+    sink: &SharedSessionCallback,
 ) -> std::result::Result<PrivateKey, AuthAbort> {
     let identity_file = config.identity_file.as_deref().ok_or_else(|| {
         AuthAbort::Error(LumaError::KeyUnavailable(
@@ -242,15 +240,8 @@ async fn load_key_with_prompts(
     let prompt_text = format!("Enter passphrase for key '{identity_file}':");
     let target = prompt_target(config);
     for _ in 0..MAX_PROMPT_ATTEMPTS {
-        let passphrase = prompt(
-            driver,
-            on_data,
-            "Key passphrase",
-            true,
-            &target,
-            &prompt_text,
-        )
-        .await?;
+        let passphrase =
+            prompt(driver, sink, "Key passphrase", true, &target, &prompt_text).await?;
         if let Ok(key) = load_secret_key(identity_file, Some(passphrase.as_str())) {
             return Ok(key);
         }
@@ -303,7 +294,7 @@ async fn authenticate_agent_key(
     username: &str,
     key: &russh::keys::PublicKey,
     driver: &mut AuthDriver,
-    on_data: &SharedDataCallback,
+    sink: &SharedSessionCallback,
     timeouts: EmbeddedSshTimeouts,
 ) -> std::result::Result<AuthResult, AuthAbort> {
     let mut agent = super::agent::connect_client()
@@ -328,7 +319,7 @@ async fn authenticate_agent_key(
         .await?
         .flatten();
     emit_text(
-        on_data,
+        sink,
         "\r\nConfirm the SSH signature with your security key or agent provider if prompted.\r\n",
     );
 
@@ -368,7 +359,7 @@ async fn authenticate_password_with_prompts(
     fallback: bool,
     remaining_methods: &mut MethodSet,
     driver: &mut AuthDriver,
-    on_data: &SharedDataCallback,
+    sink: &SharedSessionCallback,
     budget: &mut AuthenticationBudget,
 ) -> std::result::Result<bool, AuthAbort> {
     let username = config.username.as_deref().ok_or_else(|| {
@@ -394,7 +385,7 @@ async fn authenticate_password_with_prompts(
         } else {
             let target = prompt_target(config);
             let text = format!("{target}'s password:");
-            prompt(driver, on_data, "Password", true, &target, &text).await?
+            prompt(driver, sink, "Password", true, &target, &text).await?
         };
         budget.method_attempts += 1;
         let result = driver
@@ -417,7 +408,7 @@ async fn authenticate_keyboard_interactive(
     username: &str,
     target: &str,
     driver: &mut AuthDriver,
-    on_data: &SharedDataCallback,
+    sink: &SharedSessionCallback,
     timeouts: EmbeddedSshTimeouts,
     method_attempts: &mut usize,
 ) -> std::result::Result<std::result::Result<(), MethodSet>, AuthAbort> {
@@ -444,16 +435,16 @@ async fn authenticate_keyboard_interactive(
                 prompts,
             } => {
                 if !name.is_empty() {
-                    emit_text(on_data, &format!("{name}\r\n"));
+                    emit_text(sink, &format!("{name}\r\n"));
                 }
                 if !instructions.is_empty() {
-                    emit_text(on_data, &format!("{instructions}\r\n"));
+                    emit_text(sink, &format!("{instructions}\r\n"));
                 }
                 let mut answers = Vec::with_capacity(prompts.len());
                 for server_prompt in prompts {
                     let answer = prompt(
                         driver,
-                        on_data,
+                        sink,
                         &server_prompt.prompt,
                         !server_prompt.echo,
                         target,
@@ -483,7 +474,7 @@ pub(super) async fn authenticate_with_prompts(
     handle: &mut Handle<Client>,
     config: &SshConnectionConfig,
     driver: &mut AuthDriver,
-    on_data: &SharedDataCallback,
+    sink: &SharedSessionCallback,
     timeouts: EmbeddedSshTimeouts,
 ) -> std::result::Result<(), AuthAbort> {
     let username = config.username.as_deref().ok_or_else(|| {
@@ -511,9 +502,9 @@ pub(super) async fn authenticate_with_prompts(
         budget.method_attempts += 1;
         let uses_agent = config.agent_public_key.is_some();
         let result = if let Some(key) = config.agent_public_key.as_ref() {
-            authenticate_agent_key(handle, username, key, driver, on_data, budget.timeouts).await?
+            authenticate_agent_key(handle, username, key, driver, sink, budget.timeouts).await?
         } else {
-            let key = load_key_with_prompts(config, driver, on_data).await?;
+            let key = load_key_with_prompts(config, driver, sink).await?;
             authenticate_key(handle, username, key, driver, budget.timeouts).await?
         };
         match auth_failure(result) {
@@ -524,7 +515,7 @@ pub(super) async fn authenticate_with_prompts(
                 // silent: a user who expects a hardware-backed key to be in use
                 // needs to know it was not accepted before typing a password.
                 emit_text(
-                    on_data,
+                    sink,
                     if uses_agent {
                         "\r\nThe server rejected your SSH-agent key. Falling back to the remaining authentication methods.\r\n"
                     } else {
@@ -544,7 +535,7 @@ pub(super) async fn authenticate_with_prompts(
             username,
             &target,
             driver,
-            on_data,
+            sink,
             budget.timeouts,
             &mut budget.method_attempts,
         )
@@ -561,7 +552,7 @@ pub(super) async fn authenticate_with_prompts(
         authentication_type == "key",
         &mut remaining_methods,
         driver,
-        on_data,
+        sink,
         &mut budget,
     )
     .await?
@@ -575,7 +566,7 @@ pub(super) async fn authenticate_with_prompts(
             username,
             &target,
             driver,
-            on_data,
+            sink,
             budget.timeouts,
             &mut budget.method_attempts,
         )

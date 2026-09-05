@@ -48,12 +48,47 @@ pub use tunnels::{
     tunnel_connection_config, TunnelExit, TunnelInfo, TunnelManager, TunnelStartResponse,
 };
 
-pub(crate) const SSH_AUTHENTICATED_MARKER: &[u8] = b"__LUMA_SSH_AUTHENTICATED__";
 const MAX_PROXY_JUMP_DEPTH: usize = 8;
 
-type DataCallback = Box<dyn FnMut(&[u8]) + Send + 'static>;
+/* Everything a session reports upwards travels through one ordered callback:
+ * terminal bytes, and the control facts that are ABOUT the session rather than
+ * part of its output. Keeping them on one path is what lets a control event be
+ * placed exactly where it happened in the byte stream; commands/ssh.rs splits
+ * them onto separate IPC channels at the frontend boundary, so nothing a remote
+ * host can print is ever mistaken for a control signal. */
+pub(crate) enum SshEvent<'a> {
+    Data(&'a [u8]),
+    Control(SshControl),
+}
+
+/// A fact about the session's own state, reported out of band.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum SshControl {
+    /// Authentication succeeded. Everything the data channel carries from here
+    /// on is the remote session itself.
+    Authenticated,
+    /// A credential the user has to supply before authentication can continue.
+    /// The human-readable prompt text is written to the terminal as usual; this
+    /// is the machine-readable half the connection overlay needs.
+    Prompt {
+        label: String,
+        secret: bool,
+        target: String,
+    },
+    /// The remote operating system, detected once the connection is up.
+    RemoteOs {
+        os_id: String,
+        pretty_name: Option<String>,
+    },
+}
+
+type SessionCallback = Box<dyn FnMut(SshEvent<'_>) + Send + 'static>;
 type ExitCallback = Box<dyn FnOnce(SshExit) + Send + 'static>;
-type RemoteOsCallback = Box<dyn FnOnce(SshRemoteOs) + Send + 'static>;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -457,6 +492,41 @@ pub async fn connection_config(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The control channel is a hand-kept contract with SshControlEvent in
+    /// src/lib/ssh.ts: the tag and every field name has to match that union, or
+    /// the frontend silently ignores events it cannot recognise.
+    #[test]
+    fn control_events_serialize_the_shape_the_frontend_expects() {
+        let json = |control: SshControl| serde_json::to_string(&control).unwrap();
+
+        assert_eq!(
+            json(SshControl::Authenticated),
+            r#"{"kind":"authenticated"}"#
+        );
+        assert_eq!(
+            json(SshControl::Prompt {
+                label: "Password".into(),
+                secret: true,
+                target: "alice@example.com".into(),
+            }),
+            r#"{"kind":"prompt","label":"Password","secret":true,"target":"alice@example.com"}"#
+        );
+        assert_eq!(
+            json(SshControl::RemoteOs {
+                os_id: "ubuntu".into(),
+                pretty_name: Some("Ubuntu 24.04 LTS".into()),
+            }),
+            r#"{"kind":"remoteOs","osId":"ubuntu","prettyName":"Ubuntu 24.04 LTS"}"#
+        );
+        assert_eq!(
+            json(SshControl::RemoteOs {
+                os_id: "unknown".into(),
+                pretty_name: None,
+            }),
+            r#"{"kind":"remoteOs","osId":"unknown","prettyName":null}"#
+        );
+    }
 
     #[test]
     fn os_username_validation_matches_host_rules() {

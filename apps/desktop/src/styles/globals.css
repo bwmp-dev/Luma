@@ -64,6 +64,15 @@ body,
   height: 100%;
 }
 
+/* The shell is a fixed-size app, never a scrolling document. Saying so stops
+   the webview from rubber-banding an unscrollable page on a touch drag, which
+   on iOS both flashes a scroll indicator and takes the gesture away from the
+   handlers that were meant to answer it (see useTerminalScroll.ts). */
+html,
+body {
+  overscroll-behavior: none;
+}
+
 body {
   @apply bg-background text-foreground font-sans antialiased overflow-hidden;
 }

@@ -1,5 +1,4 @@
 import { Channel, invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { queryClient } from "./queryClient";
 import type { Host } from "./hosts";
 import type { MultiplexerAttach } from "./multiplexer";
@@ -11,30 +10,40 @@ import type { MultiplexerAttach } from "./multiplexer";
  * returned sessionId.
  */
 
-/** Remote OS ids reported by the backend `ssh-remote-os` event. Exactly one of
- * these fixed values is emitted per authenticated session. */
+/** Remote OS ids the backend reports. Exactly one of these fixed values is
+ * reported per authenticated session. */
 export type SshRemoteOsId =
   | "ubuntu" | "debian" | "fedora" | "rhel" | "centos" | "rocky" | "almalinux"
   | "arch" | "manjaro" | "alpine" | "opensuse" | "suse" | "mint" | "kali"
   | "gentoo" | "void" | "nixos" | "amazon" | "oracle" | "raspbian"
   | "freebsd" | "macos" | "windows" | "linux" | "unknown";
 
-/** Payload of the backend `ssh-remote-os` event (emitted to the `main` window).
- * `sessionId` is the BACKEND session id (the value ssh_spawn returns), not the
- * frontend/React session id. */
-export type SshRemoteOsEvent = {
-  sessionId: string;
-  hostId: string;
-  osId: SshRemoteOsId;
-  prettyName: string | null;
-};
+/*
+ * Facts about a session's own state, delivered on the spawn's control channel
+ * instead of inside its output. Nothing a remote host prints can reach this
+ * channel, and because the channel belongs to one invoke there is nothing to
+ * correlate: no listener to register before spawning, no backend id to filter.
+ */
+export type SshControlEvent =
+  /** Authentication finished. From here the data channel carries the remote
+   * session itself; the backend writes a terminal reset at that exact point, so
+   * the screen boundary needs no help from this side. */
+  | { kind: "authenticated" }
+  /** A credential the connection overlay has to collect. The prompt text the
+   * user would read on a terminal is written to the terminal separately. */
+  | { kind: "prompt"; label: string; secret: boolean; target: string }
+  /** Best-effort remote OS detection, once per authenticated session. */
+  | { kind: "remoteOs"; osId: SshRemoteOsId; prettyName: string | null };
 
-function updateCachedHostOs(payload: SshRemoteOsEvent): void {
+function updateCachedHostOs(
+  hostId: string,
+  event: { osId: SshRemoteOsId; prettyName: string | null },
+): void {
   for (const key of [["hosts"], ["recent-hosts"]] as const) {
     queryClient.setQueryData<Host[]>(key, (hosts) =>
       hosts?.map((host) =>
-        host.id === payload.hostId
-          ? { ...host, osId: payload.osId, osPrettyName: payload.prettyName }
+        host.id === hostId
+          ? { ...host, osId: event.osId, osPrettyName: event.prettyName }
           : host,
       ),
     );
@@ -227,7 +236,7 @@ export async function spawnSsh(
   },
   onData: (data: Uint8Array | string) => void,
   onExit: (payload: SshExitPayload) => void,
-  onRemoteOs?: (osId: SshRemoteOsId, prettyName: string | null) => void,
+  onControl: (event: SshControlEvent) => void,
 ): Promise<SshSpawnResult> {
   const dataChannel = new Channel<ArrayBuffer | number[] | string>();
   dataChannel.onmessage = (message) => {
@@ -236,84 +245,25 @@ export async function spawnSsh(
     else onData(message);
   };
   const exitChannel = new Channel<SshExitPayload>();
-
-  /*
-   * Remote OS detection. The backend emits `ssh-remote-os` (to the `main`
-   * window) keyed by the BACKEND session id — the value ssh_spawn RETURNS, not
-   * the frontend session id — at most once per authenticated session.
-   *
-   * Two races to handle:
-   *  1. listener-before-spawn: register the listener and await it BEFORE
-   *     invoking ssh_spawn, so a fast-auth event fired the instant the backend
-   *     authenticates can't slip through before we're subscribed.
-   *  2. event-before-resolve: the event can arrive before ssh_spawn's promise
-   *     resolves, so before we know our backend id we can't tell whether an
-   *     event is ours. We buffer every early event, then once ssh_spawn returns
-   *     the backend id we replay the buffer and filter by exact sessionId
-   *     match. Concurrent SSH spawns each keep their own listener, so an event
-   *     we discard here (another session's) is still matched by that session's
-   *     listener.
-   */
-  let backendId: string | null = null;
-  let delivered = false;
-  let stopped = false;
-  let unlisten: (() => void) | undefined;
-  const buffer: SshRemoteOsEvent[] = [];
-
-  const cleanup = () => {
-    stopped = true;
-    unlisten?.();
-    unlisten = undefined;
+  exitChannel.onmessage = onExit;
+  const controlChannel = new Channel<SshControlEvent>();
+  controlChannel.onmessage = (event) => {
+    // The host list shows the distro logo, so the cache is refreshed here rather
+    // than leaving every caller to remember it.
+    if (event.kind === "remoteOs") updateCachedHostOs(request.hostId, event);
+    onControl(event);
   };
 
-  const deliver = (payload: SshRemoteOsEvent) => {
-    if (delivered || backendId === null) return;
-    if (payload.sessionId !== backendId) return;
-    delivered = true;
-    updateCachedHostOs(payload);
-    onRemoteOs?.(payload.osId, payload.prettyName);
-    // At most one event per session; release the listener once delivered.
-    cleanup();
-  };
-
-  // Always release the listener when the session ends — sessions that never
-  // authenticate emit nothing, so the listener would otherwise leak.
-  exitChannel.onmessage = (payload) => {
-    cleanup();
-    onExit(payload);
-  };
-
-  if (onRemoteOs) {
-    const un = await getCurrentWindow().listen<SshRemoteOsEvent>(
-      "ssh-remote-os",
-      (event) => {
-        if (backendId === null) buffer.push(event.payload);
-        else deliver(event.payload);
-      },
-    );
-    // cleanup() may have run while listen() was pending (unlikely here since we
-    // await before invoking, but keep the guard robust).
-    if (stopped) un();
-    else unlisten = un;
-  }
-
-  try {
-    const result = await invoke<SshSpawnResult>("ssh_spawn", {
-      request: {
-        hostId: request.hostId,
-        cols: request.cols,
-        rows: request.rows,
-        multiplexer: request.multiplexer ?? null,
-        mcpRequestId: request.mcpRequestId ?? null,
-      },
-      onData: dataChannel,
-      onExit: exitChannel,
-    });
-    backendId = result.sessionId;
-    for (const payload of buffer.splice(0)) deliver(payload);
-    return result;
-  } catch (error) {
-    cleanup();
-    throw error;
-  }
+  return invoke<SshSpawnResult>("ssh_spawn", {
+    request: {
+      hostId: request.hostId,
+      cols: request.cols,
+      rows: request.rows,
+      multiplexer: request.multiplexer ?? null,
+      mcpRequestId: request.mcpRequestId ?? null,
+    },
+    onData: dataChannel,
+    onExit: exitChannel,
+    onControl: controlChannel,
+  });
 }

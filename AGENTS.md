@@ -19,6 +19,7 @@ cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml      # CI enforces f
 - The frontend never passes raw executable paths to spawn; `pty_spawn` accepts only detected shell ids or stored profile ids.
 - Secrets never go in plain SQLite columns or logs (logger redacts; see `apps/desktop/src-tauri/src/logging/`). Schema changes are new files in `apps/desktop/src-tauri/migrations/`, never edits to shipped migrations.
 - Tauri capabilities stay strict (`apps/desktop/src-tauri/capabilities/`); no unrestricted fs/process APIs exposed to the frontend.
+- Nothing about a session's state is signalled inside its output. Authentication, credential prompts and remote-OS detection travel on `ssh_spawn`'s `onControl` channel (`SshControl` in `apps/desktop/src-tauri/src/ssh/mod.rs`); the data channel carries only what the remote sent, so no sentinel can be rendered, scraped, or spoofed by a host that prints it. A screen boundary that must line up with the bytes is written as terminal control (RIS), not as a marker.
 
 ## Verifying mobile/iOS changes visually
 

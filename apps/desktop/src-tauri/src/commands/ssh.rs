@@ -1,23 +1,20 @@
-use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use tauri::ipc::{Channel, InvokeResponseBody};
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use tauri::Manager;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{AppHandle, State};
 
 use crate::errors::{LumaError, Result};
 use crate::keystore::KeystoreState;
 use crate::multiplexer::MultiplexerAttach;
 use crate::sftp::{self, SftpManager};
-use crate::ssh::{self, EmbeddedSshManager, SshExit, SshHostKeyStatus, SshRemoteOs};
+use crate::ssh::{self, EmbeddedSshManager, SshControl, SshEvent, SshExit, SshHostKeyStatus};
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::ssh::{SshConfigCandidate, SshConfigImportRequest, SshConfigImportResult};
 use crate::storage::{hosts, key_references};
 use crate::AppState;
-
-pub const SSH_REMOTE_OS_EVENT_NAME: &str = "ssh-remote-os";
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -67,41 +64,6 @@ pub struct SshKeyInstallResponse {
 #[serde(rename_all = "camelCase")]
 pub struct SshHostKeyRequest {
     pub host_id: String,
-}
-
-/// Emitted once for an authenticated SSH session after best-effort remote OS
-/// detection. `os_id` is always one of the fixed identifiers documented by
-/// the `ssh-remote-os` frontend contract.
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SshRemoteOsEvent {
-    pub session_id: String,
-    pub host_id: String,
-    pub os_id: String,
-    pub pretty_name: Option<String>,
-}
-
-#[derive(Default)]
-struct PendingRemoteOsEvent {
-    session_id: Option<String>,
-    host_id: String,
-    ready: bool,
-    metadata: Option<SshRemoteOs>,
-}
-
-fn take_remote_os_event(state: &Arc<Mutex<PendingRemoteOsEvent>>) -> Option<SshRemoteOsEvent> {
-    let mut state = state.lock().unwrap();
-    if !state.ready {
-        return None;
-    }
-    let session_id = state.session_id.clone()?;
-    let metadata = state.metadata.take()?;
-    Some(SshRemoteOsEvent {
-        session_id,
-        host_id: state.host_id.clone(),
-        os_id: metadata.os_id,
-        pretty_name: metadata.pretty_name,
-    })
 }
 
 #[tauri::command]
@@ -329,6 +291,7 @@ pub async fn ssh_spawn(
     request: SshSpawnRequest,
     on_data: Channel<InvokeResponseBody>,
     on_exit: Channel<SshExit>,
+    on_control: Channel<SshControl>,
 ) -> Result<SshSpawnResponse> {
     ssh_spawn_impl(
         app,
@@ -338,6 +301,7 @@ pub async fn ssh_spawn(
         request,
         on_data,
         on_exit,
+        on_control,
     )
     .await
 }
@@ -351,6 +315,7 @@ async fn ssh_spawn_impl(
     request: SshSpawnRequest,
     on_data: Channel<InvokeResponseBody>,
     on_exit: Channel<SshExit>,
+    on_control: Channel<SshControl>,
 ) -> Result<SshSpawnResponse> {
     ssh::validate_host_id(&request.host_id)?;
     if request.cols == 0 || request.rows == 0 {
@@ -393,12 +358,6 @@ async fn ssh_spawn_impl(
     if let Some(attach) = &request.multiplexer {
         config.startup_command = Some(crate::multiplexer::attach_command(attach)?);
     }
-    let pending_remote_os = Arc::new(Mutex::new(PendingRemoteOsEvent {
-        host_id: request.host_id.clone(),
-        ..PendingRemoteOsEvent::default()
-    }));
-    let pending_remote_os_callback = Arc::clone(&pending_remote_os);
-    let app_for_remote_os = app.clone();
     let pool_for_remote_os = state.pool.clone();
     let host_id_for_remote_os = request.host_id.clone();
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -414,18 +373,51 @@ async fn ssh_spawn_impl(
     let mut agent_scanner = crate::agent_events::AgentEventScanner::new();
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let mcp_command_for_data = mcp_command.clone();
-    let data_callback = Box::new(move |bytes: &[u8]| {
+    /* The session reports bytes and control facts through one ordered callback;
+     * this is where they part company. Terminal bytes go to the raw data
+     * channel, control events to their own typed channel, so nothing the remote
+     * writes can be read as a control signal on the way up. */
+    let event_callback = Box::new(move |event: SshEvent<'_>| {
+        let bytes = match event {
+            SshEvent::Data(bytes) => bytes,
+            SshEvent::Control(control) => {
+                /* An MCP session shows the command it is about to run and
+                 * captures what that command prints. Both start here: the
+                 * terminal reset has already gone down the data channel, so the
+                 * line lands on a clean screen, and nothing from the connection
+                 * itself is counted as the command's output. */
+                #[cfg(not(any(target_os = "android", target_os = "ios")))]
+                if let SshControl::Authenticated = &control {
+                    if let Some(command) = &mcp_command_for_data {
+                        command.authenticated();
+                        let _ = on_data
+                            .send(InvokeResponseBody::Raw(command.display_line().into_bytes()));
+                    }
+                }
+                if let SshControl::RemoteOs { os_id, pretty_name } = &control {
+                    let pool = pool_for_remote_os.clone();
+                    let host_id = host_id_for_remote_os.clone();
+                    let os_id = os_id.clone();
+                    let pretty_name = pretty_name.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if let Err(error) =
+                            hosts::record_remote_os(&pool, &host_id, &os_id, pretty_name.as_deref())
+                                .await
+                        {
+                            tracing::warn!(host_id = %host_id, %error, "could not retain remote OS metadata");
+                        }
+                    });
+                }
+                let _ = on_control.send(control);
+                return;
+            }
+        };
         agent_sink_for_data.publish(agent_scanner.scan(bytes));
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
         tap_for_data.push(bytes);
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
         if let Some(command) = &mcp_command_for_data {
             command.observe(bytes);
-            if bytes == crate::ssh::SSH_AUTHENTICATED_MARKER {
-                let _ = on_data.send(InvokeResponseBody::Raw(bytes.to_vec()));
-                let _ = on_data.send(InvokeResponseBody::Raw(command.display_line().into_bytes()));
-                return;
-            }
         }
         let _ = on_data.send(InvokeResponseBody::Raw(bytes.to_vec()));
     });
@@ -443,35 +435,13 @@ async fn ssh_spawn_impl(
         }
         let _ = on_exit.send(exit);
     });
-    let remote_os_callback = Box::new(move |metadata: SshRemoteOs| {
-        let stored_metadata = metadata.clone();
-        let pool = pool_for_remote_os.clone();
-        let host_id = host_id_for_remote_os.clone();
-        tauri::async_runtime::spawn(async move {
-            if let Err(error) = hosts::record_remote_os(
-                &pool,
-                &host_id,
-                &stored_metadata.os_id,
-                stored_metadata.pretty_name.as_deref(),
-            )
-            .await
-            {
-                tracing::warn!(host_id = %host_id, %error, "could not retain remote OS metadata");
-            }
-        });
-        pending_remote_os_callback.lock().unwrap().metadata = Some(metadata);
-        if let Some(event) = take_remote_os_event(&pending_remote_os_callback) {
-            let _ = app_for_remote_os.emit_to("main", SSH_REMOTE_OS_EVENT_NAME, event);
-        }
-    });
     let session_id = match embedded
         .connect(
             config,
             request.cols,
             request.rows,
-            data_callback,
+            event_callback,
             exit_callback,
-            remote_os_callback,
         )
         .await
     {
@@ -504,20 +474,9 @@ async fn ssh_spawn_impl(
         command.started(&session_id);
     }
 
-    {
-        pending_remote_os.lock().unwrap().session_id = Some(session_id.clone());
-    }
-
     if let Err(error) = hosts::record_recent_connection(&state.pool, &request.host_id).await {
         let _ = embedded.disconnect(&session_id);
         return Err(error);
-    }
-
-    {
-        pending_remote_os.lock().unwrap().ready = true;
-    }
-    if let Some(event) = take_remote_os_event(&pending_remote_os) {
-        let _ = app.emit_to("main", SSH_REMOTE_OS_EVENT_NAME, event);
     }
 
     Ok(SshSpawnResponse { session_id, title })
@@ -545,29 +504,4 @@ pub async fn ssh_config_import(
     request: SshConfigImportRequest,
 ) -> Result<SshConfigImportResult> {
     ssh::import_config(&state.pool, request).await
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn remote_os_event_is_consumed_exactly_once() {
-        let state = Arc::new(Mutex::new(PendingRemoteOsEvent {
-            session_id: Some("session-1".into()),
-            host_id: "host-1".into(),
-            ready: true,
-            metadata: Some(SshRemoteOs {
-                os_id: "ubuntu".into(),
-                pretty_name: Some("Ubuntu 24.04 LTS".into()),
-            }),
-        }));
-
-        let event = take_remote_os_event(&state).expect("event should be ready");
-        assert_eq!(event.session_id, "session-1");
-        assert_eq!(event.host_id, "host-1");
-        assert_eq!(event.os_id, "ubuntu");
-        assert_eq!(event.pretty_name.as_deref(), Some("Ubuntu 24.04 LTS"));
-        assert!(take_remote_os_event(&state).is_none());
-    }
 }

@@ -17,7 +17,7 @@ use tokio::sync::oneshot;
 
 use crate::mcp::taps::strip_terminal_output;
 use crate::mcp::MAX_COMMAND_OUTPUT_BYTES;
-use crate::ssh::{SshExit, SSH_AUTHENTICATED_MARKER};
+use crate::ssh::SshExit;
 
 pub(crate) const SESSION_EVENT: &str = "mcp-session-request";
 
@@ -152,10 +152,14 @@ impl SessionCommand {
         &self.pending.grant_id
     }
 
+    /// Authentication finished, so what follows on the data channel is the
+    /// command's own output rather than the connection getting established.
+    pub(crate) fn authenticated(&self) {
+        self.pending.authenticated.store(true, Ordering::Release);
+    }
+
     pub(crate) fn observe(&self, bytes: &[u8]) {
-        if bytes == SSH_AUTHENTICATED_MARKER {
-            self.pending.authenticated.store(true, Ordering::Release);
-        } else if self.pending.authenticated.load(Ordering::Acquire) {
+        if self.pending.authenticated.load(Ordering::Acquire) {
             self.pending.output.lock().unwrap().push(bytes);
         }
     }
@@ -300,7 +304,7 @@ mod tests {
             pending,
             command: "whoami".into(),
         };
-        command.observe(SSH_AUTHENTICATED_MARKER);
+        command.authenticated();
         command.observe(b"user\r\n");
         command.finished(SshExit {
             code: Some(0),

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { setInvoke } from "../../test/tauriMock";
+import type { SshControlEvent } from "../../lib/ssh";
 import { createdTerminals, type Terminal } from "../../test/xtermMock";
 import {
   terminalManager,
@@ -181,43 +182,42 @@ describe("terminalManager input flow", () => {
   });
 });
 
-describe("terminalManager SSH credential prompts", () => {
-  it("parses split embedded prompt markers and deduplicates repeats", async () => {
+describe("terminalManager SSH connection control", () => {
+  it("raises credential prompts from the control channel, never from output", async () => {
     const prompts: Array<{
       type: "credential";
       label: string;
       target?: string;
       secret?: boolean;
     }> = [];
+    let controlChannel: { onmessage: (event: SshControlEvent) => void } | undefined;
     let dataChannel:
       | { onmessage: (message: string | number[] | ArrayBuffer) => void }
       | undefined;
     setInvoke((cmd, args) => {
       if (cmd === "ssh_spawn") {
         dataChannel = args.onData as typeof dataChannel;
+        controlChannel = args.onControl as typeof controlChannel;
         return { sessionId: "prompt-backend", title: "jump host" };
       }
       if (cmd === "ssh_disconnect") return undefined;
       throw new Error(`unexpected ${cmd}`);
     });
 
+    const startIndex = createdTerminals.length;
     await terminalManager.createSession(
       "prompt-1",
       { kind: "ssh", hostId: "host-1" },
       callbacks(() => {}, (prompt) => prompts.push(prompt)),
     );
 
-    const payload = JSON.stringify({
+    controlChannel?.onmessage({
+      kind: "prompt",
       label: 'Verification code "OTP":',
       secret: false,
       target: "alice@jump.example.com",
     });
-    const marker = `__LUMA_SSH_PROMPT__${payload}\r\n`;
-    const split = marker.indexOf("secret");
-    dataChannel?.onmessage(marker.slice(0, split));
-    expect(prompts).toEqual([]);
 
-    dataChannel?.onmessage(marker.slice(split));
     expect(prompts).toEqual([
       {
         type: "credential",
@@ -227,9 +227,71 @@ describe("terminalManager SSH credential prompts", () => {
       },
     ]);
 
-    dataChannel?.onmessage(marker);
+    // A remote host printing what the old sentinel looked like is just output.
+    dataChannel?.onmessage(
+      '__LUMA_SSH_PROMPT__{"label":"sudo password:","secret":true,"target":"root@evil"}\r\n',
+    );
     expect(prompts).toHaveLength(1);
+    expect(createdTerminals[startIndex].writes.join("")).toContain("sudo password:");
     terminalManager.dispose("prompt-1");
+  });
+
+  it("passes output through untouched and reveals the session once authenticated", async () => {
+    let controlChannel: { onmessage: (event: SshControlEvent) => void } | undefined;
+    let dataChannel:
+      | { onmessage: (message: string | number[] | ArrayBuffer) => void }
+      | undefined;
+    const sent: string[] = [];
+    setInvoke((cmd, args) => {
+      if (cmd === "ssh_spawn") {
+        dataChannel = args.onData as typeof dataChannel;
+        controlChannel = args.onControl as typeof controlChannel;
+        return { sessionId: "auth-backend", title: "debian" };
+      }
+      if (cmd === "ssh_write") {
+        sent.push(args.data as string);
+        return undefined;
+      }
+      if (cmd === "ssh_disconnect") return undefined;
+      throw new Error(`unexpected ${cmd}`);
+    });
+
+    let authenticated = 0;
+    const stages: string[] = [];
+    const startIndex = createdTerminals.length;
+    await terminalManager.createSession(
+      "auth-1",
+      { kind: "ssh", hostId: "host-1" },
+      {
+        ...callbacks(),
+        onSshAuthenticated: () => {
+          authenticated += 1;
+        },
+        onSshProgress: (stage: string) => stages.push(stage),
+      },
+    );
+    const term = createdTerminals[startIndex];
+
+    // The reset that separates the auth exchange from the session is ordinary
+    // terminal data now, so the manager writes the stream through verbatim.
+    dataChannel?.onmessage("pre-auth banner\r\n");
+    controlChannel?.onmessage({ kind: "authenticated" });
+    dataChannel?.onmessage("\x1bc");
+    dataChannel?.onmessage("Linux debian\r\nroot@debian:~# ");
+
+    expect(term.writes).toEqual([
+      "pre-auth banner\r\n",
+      "\x1bc",
+      "Linux debian\r\nroot@debian:~# ",
+    ]);
+    expect(stages).toContain("authentication");
+
+    // Nothing is echoed at the shell to force a redraw: that is what printed a
+    // second prompt.
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    expect(sent).toEqual([]);
+    expect(authenticated).toBe(1);
+    terminalManager.dispose("auth-1");
   });
 });
 
