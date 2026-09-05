@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.18.0](https://github.com/bwmp-dev/Luma/compare/v0.17.1...v0.18.0) (2026-09-05)
+
+
+### Features
+
+* **mobile:** add two-finger terminal scrolling ([180b2b1](https://github.com/bwmp-dev/Luma/commit/180b2b1c0352b48f5a0a45fc3547c712050562dc))
+
+
+### Bug Fixes
+
+* clean up deleted runtime state and bound transfer history ([1c0381b](https://github.com/bwmp-dev/Luma/commit/1c0381b02a50ee8f710e555b9e363e3f76d51f32))
+* **sync:** track rapid changes and handle startup deep links ([0512ee6](https://github.com/bwmp-dev/Luma/commit/0512ee6c156a25faaea8969ab3b7bef10a9ad62e))
+* **web-preview:** support listener discovery on Windows ([9ce9559](https://github.com/bwmp-dev/Luma/commit/9ce9559798a5f75571cfa6d0e00742054b61fb5f))
+
 ## [0.17.1](https://github.com/bwmp-dev/Luma/compare/v0.17.0...v0.17.1) (2026-09-04)
 
 
