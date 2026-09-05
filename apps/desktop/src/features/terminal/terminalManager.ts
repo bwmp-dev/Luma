@@ -1674,6 +1674,15 @@ export const terminalManager = {
     sessions.get(sessionId)?.term.scrollLines(amount);
   },
 
+  /** Rendered height of one terminal row, used to translate touch movement. */
+  cellHeight(sessionId: string): number | null {
+    const term = sessions.get(sessionId)?.term;
+    const screen = term?.element?.querySelector<HTMLElement>(".xterm-screen");
+    if (!term || !screen || term.rows <= 0) return null;
+    const height = screen.getBoundingClientRect().height / term.rows;
+    return height > 0 ? height : null;
+  },
+
   /**
    * The buffer cell under a viewport point, or null when the point misses the
    * grid. Measured off `.xterm-screen`, which xterm sizes to exactly cols×rows,

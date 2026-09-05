@@ -8,6 +8,7 @@ import { useSessionLogStore } from "../../stores/sessionLogStore";
 import { useSettings } from "../../hooks/useSettings";
 import { useTerminalGestures } from "../mobile/useTerminalGestures";
 import { useTerminalSelection } from "../mobile/useTerminalSelection";
+import { useTerminalScroll } from "../mobile/useTerminalScroll";
 import { TerminalGesturePad } from "../mobile/TerminalGesturePad";
 import { SETTING_KEYS, type TerminalSession } from "../../types";
 import { parseLumaError } from "../../lib/hosts";
@@ -110,6 +111,7 @@ export function PaneView({
       settings?.[SETTING_KEYS.gestureDoubleTapTab] !== false,
   });
   useTerminalSelection({ sessionId: session.id, hostRef, enabled: selectMode });
+  useTerminalScroll({ sessionId: session.id, hostRef, enabled: isMobile });
 
   const beginLogging = (mode: "raw" | "asciicast") => {
     setLogError(null);
