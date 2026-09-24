@@ -325,11 +325,7 @@ impl Analytics {
         if cfg!(test) || tokio::runtime::Handle::try_current().is_ok() {
             return;
         }
-        let inner = Arc::clone(inner);
-        let _ =
-            tauri::async_runtime::block_on(tokio::time::timeout(SHUTDOWN_TIMEOUT, async move {
-                inner.flush_once().await
-            }));
+        inner.flush_with_deadline();
     }
 
     /// Queues the exit event and flushes with a hard deadline. Returns promptly
@@ -348,18 +344,20 @@ impl Analytics {
         if cfg!(test) {
             return;
         }
-        let inner = Arc::clone(inner);
         // The main thread is not inside the tokio runtime here, so blocking on
         // the runtime handle is safe. Bounded so a hung network cannot hold the
         // app open.
-        let _ =
-            tauri::async_runtime::block_on(tokio::time::timeout(SHUTDOWN_TIMEOUT, async move {
-                inner.flush_once().await
-            }));
+        inner.flush_with_deadline();
     }
 }
 
 impl Inner {
+    fn flush_with_deadline(&self) {
+        let _ = tauri::async_runtime::block_on(async {
+            tokio::time::timeout(SHUTDOWN_TIMEOUT, self.flush_once()).await
+        });
+    }
+
     /// Infallible and non-blocking. Drops the event when disabled.
     fn track(&self, name: &str, props: Option<Value>) {
         if !self.enabled.load(Ordering::Relaxed) {
@@ -540,6 +538,12 @@ mod tests {
         // `init` reads the compile-time config, which the shipped defaults make
         // valid; `consent: None` leaves it off so each test opts in explicitly.
         init("0.14.2".into(), None, Some(TEST_INSTALL_ID.into()))
+    }
+
+    #[test]
+    fn flush_with_deadline_runs_outside_runtime() {
+        let analytics = configured();
+        analytics.inner.as_ref().unwrap().flush_with_deadline();
     }
 
     #[test]
