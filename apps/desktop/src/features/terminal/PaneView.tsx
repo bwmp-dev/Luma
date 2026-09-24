@@ -513,6 +513,7 @@ export function PaneView({
       }}
     >
     <div
+      data-pane-session={session.id}
       className={cn(
         "relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden",
         showFocusRing &&
@@ -704,6 +705,7 @@ export function PaneView({
                 className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-foreground hover:border-accent hover:text-accent"
               >
                 <RotateCcw size={13} /> {isSsh || isSerial ? "Reconnect" : "Restart"}
+                {!isMobile && <kbd className="font-sans text-[11px] text-muted">Ctrl+R</kbd>}
               </button>
             )}
             <button
@@ -712,6 +714,7 @@ export function PaneView({
               className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-muted hover:border-danger hover:text-danger"
             >
               <X size={13} /> Close
+              {!isMobile && <kbd className="font-sans text-[11px] text-muted">Ctrl+D</kbd>}
             </button>
           </div>
         </div>

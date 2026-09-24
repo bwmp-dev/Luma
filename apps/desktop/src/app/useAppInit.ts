@@ -38,6 +38,7 @@ import {
 import { joinRoomByCapability } from "../features/collaboration/collabClient";
 import { parseVaultJoinLink } from "../lib/vaults";
 import { hasPlatformModifier } from "../lib/platform";
+import { endedSessionAction } from "../features/terminal/endedSessionShortcuts";
 
 /**
  * Handle a `luma://join?t=…` capability deep link. Parses the token, verifies it
@@ -334,6 +335,21 @@ export function useAppInit(): void {
       setActiveTab(tabs[next].id);
     };
 
+    // Only while focus is inside the active pane (its terminal or its error
+    // card), so the chords never act on a pane hidden behind a dialog.
+    const endedSessionShortcut = (event: KeyboardEvent) => {
+      const { sessions, activeSessionId } = useSessionStore.getState();
+      if (!activeSessionId) return null;
+      const pane =
+        event.target instanceof Element
+          ? event.target.closest<HTMLElement>("[data-pane-session]")
+          : null;
+      if (pane?.dataset.paneSession !== activeSessionId) return null;
+      const session = sessions.find((s) => s.id === activeSessionId);
+      const action = session ? endedSessionAction(session, event) : null;
+      return action ? { action, sessionId: activeSessionId } : null;
+    };
+
     const runAction = (action: KeymapActionId) => {
       const session = useSessionStore.getState();
       switch (action) {
@@ -381,6 +397,16 @@ export function useAppInit(): void {
       if (mod && (event.code === "PageUp" || event.code === "PageDown")) {
         event.preventDefault();
         cycleTab(event.code === "PageUp" ? -1 : 1);
+        return;
+      }
+      const ended = endedSessionShortcut(event);
+      if (ended) {
+        // Claimed before xterm sees it, or Ctrl+D would be written to a dead pty.
+        event.preventDefault();
+        event.stopPropagation();
+        const session = useSessionStore.getState();
+        if (ended.action === "close") session.closeSession(ended.sessionId);
+        else void session.restartSession(ended.sessionId);
         return;
       }
 
