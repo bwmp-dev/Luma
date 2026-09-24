@@ -335,8 +335,7 @@ export function useAppInit(): void {
       setActiveTab(tabs[next].id);
     };
 
-    // Only while focus is inside the active pane (its terminal or its error
-    // card), so the chords never act on a pane hidden behind a dialog.
+    // Requires focus inside the active pane so a dialog on top never triggers it.
     const endedSessionShortcut = (event: KeyboardEvent) => {
       const { sessions, activeSessionId } = useSessionStore.getState();
       if (!activeSessionId) return null;
@@ -401,7 +400,6 @@ export function useAppInit(): void {
       }
       const ended = endedSessionShortcut(event);
       if (ended) {
-        // Claimed before xterm sees it, or Ctrl+D would be written to a dead pty.
         event.preventDefault();
         event.stopPropagation();
         const session = useSessionStore.getState();

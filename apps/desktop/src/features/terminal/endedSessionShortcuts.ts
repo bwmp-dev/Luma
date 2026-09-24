@@ -10,9 +10,6 @@ type KeyEventLike = {
   code: string;
 };
 
-/** A session whose backend has exited or failed and is not waiting on an
- * auto-reconnect: the pane shows the disconnect banner or an error card, and
- * keystrokes no longer reach a shell. */
 export function isEndedSession(session: TerminalSession): boolean {
   return (
     (session.status === "disconnected" || session.status === "error") &&
@@ -20,19 +17,12 @@ export function isEndedSession(session: TerminalSession): boolean {
   );
 }
 
-/** Whether the pane offers a reconnect/restart for this ended session. Mirrors
- * PaneView: agent-run commands are one-shot, and a changed host key must be
- * resolved in Known Hosts rather than retried. */
+// Mirrors when PaneView offers a Reconnect/Retry button.
 export function canRestartEndedSession(session: TerminalSession): boolean {
   return !session.agentCommand && session.errorCategory !== "host-key-changed";
 }
 
-/**
- * Ctrl+R reconnects and Ctrl+D closes an ended session. Ctrl+D is EOF, so a
- * second press after the shell exits closes the pane just like a terminal
- * emulator closing on exit. Only ended sessions claim these chords, so a live
- * shell keeps reverse-search and EOF.
- */
+// Only ended sessions claim these, so a live shell keeps reverse-search and EOF.
 export function endedSessionAction(
   session: TerminalSession,
   event: KeyEventLike,
