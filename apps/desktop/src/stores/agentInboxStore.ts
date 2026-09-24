@@ -245,8 +245,8 @@ export const useAgentInboxStore = create<AgentInboxState>((set) => ({
 
 /**
  * Subscribe once to the backend `agent-event` window event and feed the store.
- * Wired from app bootstrap (useAppInit) exactly like the `deep-link` and
- * `ssh-remote-os` listeners. Returns an unlisten cleanup.
+ * Wired from app bootstrap (useAppInit) exactly like the `deep-link`
+ * listener. Returns an unlisten cleanup.
  */
 export function startAgentInboxListener(): () => void {
   let unlisten: (() => void) | undefined;

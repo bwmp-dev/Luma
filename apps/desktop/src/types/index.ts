@@ -102,8 +102,8 @@ export type TerminalSession = {
   /** Previously trusted host keys, populated alongside `hostKeyScanned` for the
    * `host-key-changed` comparison view. */
   hostKeyKnown?: HostKeyFingerprint[];
-  /** Remote OS id reported by the backend `ssh-remote-os` event for an
-   * authenticated SSH session; absent until detected (drives the tab distro
+  /** Remote OS id the backend reports on an authenticated SSH session's
+   * control channel; absent until detected (drives the tab distro
    * logo). One of the fixed backend ids; "unknown"/unrecognized falls back to
    * the generic server icon. */
   osId?: string;

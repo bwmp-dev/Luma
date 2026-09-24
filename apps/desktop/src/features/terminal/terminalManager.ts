@@ -42,6 +42,7 @@ import {
   sshDisconnect,
   sshResize,
   sshWrite,
+  type SshControlEvent,
   type SshExitPayload,
   type SshRemoteOsId,
 } from "../../lib/ssh";
@@ -306,56 +307,6 @@ type SessionCallbacks = {
   onRemoteOs: (osId: SshRemoteOsId, prettyName: string | null) => void;
 };
 
-const SSH_PROMPT_MARKER = "__LUMA_SSH_PROMPT__";
-
-type EmbeddedSshPrompt = {
-  label: string;
-  target: string;
-  secret: boolean;
-};
-
-function latestEmbeddedSshPrompt(transcript: string): {
-  prompt: EmbeddedSshPrompt;
-  signature: string;
-} | null {
-  const markerIndex = transcript.lastIndexOf(SSH_PROMPT_MARKER);
-  if (markerIndex < 0) return null;
-
-  const payloadStart = markerIndex + SSH_PROMPT_MARKER.length;
-  const carriageReturn = transcript.indexOf("\r", payloadStart);
-  const newline = transcript.indexOf("\n", payloadStart);
-  const lineEnd = [carriageReturn, newline]
-    .filter((index) => index >= 0)
-    .reduce((earliest, index) => Math.min(earliest, index), Number.POSITIVE_INFINITY);
-  if (!Number.isFinite(lineEnd)) return null;
-
-  const payload = transcript.slice(payloadStart, lineEnd).trim();
-  try {
-    const parsed: unknown = JSON.parse(payload);
-    if (typeof parsed !== "object" || parsed === null) return null;
-    const record = parsed as Record<string, unknown>;
-    if (
-      typeof record.label !== "string" ||
-      typeof record.target !== "string" ||
-      typeof record.secret !== "boolean"
-    ) {
-      return null;
-    }
-    return {
-      prompt: {
-        label: record.label,
-        target: record.target,
-        secret: record.secret,
-      },
-      signature: `embedded-credential:${payload}`,
-    };
-  } catch {
-    // A marker split across data chunks stays in the rolling transcript and is
-    // parsed after its terminating newline arrives.
-    return null;
-  }
-}
-
 type ManagedSession = {
   /** This session's stable id (the store's session id). Kept on the session so
    * broadcast fan-out can skip the originating pane without an O(n) reverse
@@ -389,8 +340,6 @@ type ManagedSession = {
    * invoke from a superseded attempt is discarded. */
   spawnGeneration: number;
   disposed: boolean;
-  sshTranscript: string;
-  lastPromptSignature: string;
   sshStage: "starting" | "network" | "host-key" | "authentication" | "ready";
   sshFinalizing: boolean;
   resizeTimer: ReturnType<typeof window.setTimeout> | null;
@@ -431,6 +380,10 @@ type ManagedSession = {
    * control lease and for normal backend sessions. */
   onInput: ((data: string) => void) | null;
 };
+
+/** How long the connecting overlay stays up after authentication, covering the
+ * gap until the remote shell paints. */
+const SSH_REVEAL_DELAY_MS = 750;
 
 // Split-pane and window drags can produce dozens of xterm sizes per second.
 // Sending every intermediate size makes remote prompt themes redraw repeatedly
@@ -1056,20 +1009,19 @@ async function spawnBackend(sessionId: string): Promise<ManagedSpawnResult> {
   };
 
   if (descriptor.kind === "ssh") {
-    session.sshTranscript = "";
-    session.lastPromptSignature = "";
     session.sshStage = "starting";
     session.sshFinalizing = false;
   }
 
+  /* Session output, verbatim. Nothing is scraped out of it and nothing is
+   * inserted into it: what the backend sends is what the terminal shows. The
+   * collaboration tap gets the SAME bytes (manager → tap directly; they never
+   * enter React state), so a room mirrors exactly what the local screen does. */
   const handleData = (data: Uint8Array | string) => {
     term.write(data);
     // Metadata only: the tracker re-reads the rendered screen from xterm once
     // output settles. No bytes are handed to it.
     session.agentSignals?.onOutput();
-    // Collaboration tap: hand the SAME bytes to the room broadcaster (if this
-    // session is being shared) before any SSH transcript scraping. Bytes go
-    // manager → tap directly; they never enter React state.
     if (session.outputTap) {
       const bytes =
         typeof data === "string" ? new TextEncoder().encode(data) : data;
@@ -1080,50 +1032,46 @@ async function spawnBackend(sessionId: string): Promise<ManagedSpawnResult> {
       const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
       for (const subscriber of subscribers) subscriber(bytes);
     }
-    if (descriptor.kind !== "ssh") return;
-    const text = typeof data === "string" ? data : new TextDecoder().decode(data);
-    session.sshTranscript = (session.sshTranscript + text).slice(-16_384);
-    const readableTranscript = session.sshTranscript
-      // Matching terminal control characters (ESC/BEL) is intentional here: this
-      // strips OSC and CSI escape sequences from the transcript before scanning it.
-      // oxlint-disable-next-line no-control-regex
-      .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, "")
-      // oxlint-disable-next-line no-control-regex
-      .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, "");
-    const reportStage = (stage: ManagedSession["sshStage"]) => {
-      if (session.sshStage === stage) return;
-      session.sshStage = stage;
-      session.callbacks.onSshProgress(stage);
-    };
-    if (/__LUMA_SSH_AUTHENTICATED__/.test(readableTranscript)) reportStage("authentication");
-    if (!session.sshFinalizing && /__LUMA_SSH_AUTHENTICATED__/.test(readableTranscript)) {
-      session.sshFinalizing = true;
-      if (descriptor.mcpRequestId) {
-        session.sshTranscript = "";
-        session.lastPromptSignature = "";
-        term.clear();
-        session.callbacks.onSshAuthenticated();
+  };
+
+  const reportSshStage = (stage: ManagedSession["sshStage"]) => {
+    if (session.sshStage === stage) return;
+    session.sshStage = stage;
+    session.callbacks.onSshProgress(stage);
+  };
+
+  /* Connection state the backend reports out of band. None of it is in the
+   * output, so there is nothing to scrape and nothing a remote host can print
+   * to fake it — including the screen reset at the authentication boundary,
+   * which arrives as ordinary terminal bytes at exactly the right point. */
+  const handleControl = (event: SshControlEvent) => {
+    switch (event.kind) {
+      case "prompt":
+        reportSshStage("authentication");
+        session.callbacks.onSshPrompt({
+          type: "credential",
+          label: event.label,
+          target: event.target,
+          secret: event.secret,
+        });
         return;
-      }
-      // Keep the overlay visible until the local authentication marker settles,
-      // then reveal a clean terminal and ask the remote shell to redraw.
-      window.setTimeout(() => {
-        if (session.disposed || session.exited) return;
-        session.sshTranscript = "";
-        session.lastPromptSignature = "";
-        term.clear();
-        enqueueInput(session, "\r");
-        session.callbacks.onSshAuthenticated();
-      }, 750);
-      return;
-    }
-    const embeddedPrompt = latestEmbeddedSshPrompt(readableTranscript);
-    if (embeddedPrompt && embeddedPrompt.signature !== session.lastPromptSignature) {
-      session.lastPromptSignature = embeddedPrompt.signature;
-      session.callbacks.onSshPrompt({
-        type: "credential",
-        ...embeddedPrompt.prompt,
-      });
+      case "remoteOs":
+        session.callbacks.onRemoteOs(event.osId, event.prettyName);
+        return;
+      case "authenticated":
+        reportSshStage("authentication");
+        if (session.sshFinalizing) return;
+        session.sshFinalizing = true;
+        if (descriptor.kind === "ssh" && descriptor.mcpRequestId) {
+          session.callbacks.onSshAuthenticated();
+          return;
+        }
+        // Hold the connecting overlay a little longer so the shell's first
+        // paint lands behind it and the session is revealed already drawn.
+        window.setTimeout(() => {
+          if (session.disposed || session.exited) return;
+          session.callbacks.onSshAuthenticated();
+        }, SSH_REVEAL_DELAY_MS);
     }
   };
 
@@ -1154,7 +1102,7 @@ async function spawnBackend(sessionId: string): Promise<ManagedSpawnResult> {
           errorCategory: payload.errorCategory,
           errorMessage: payload.errorMessage,
         }),
-      (osId, prettyName) => session.callbacks.onRemoteOs(osId, prettyName),
+      handleControl,
     );
     result = { sessionId: spawned.sessionId, title: spawned.title };
   } else if (descriptor.kind === "mosh") {
@@ -1476,8 +1424,6 @@ export const terminalManager = {
       exited: false,
       spawnGeneration: 0,
       disposed: false,
-      sshTranscript: "",
-      lastPromptSignature: "",
       sshStage: "starting",
       sshFinalizing: false,
       resizeTimer: null,
@@ -1856,8 +1802,6 @@ export const terminalManager = {
   answerSshPrompt(sessionId: string, value: string): void {
     const session = sessions.get(sessionId);
     if (!session || session.descriptor.kind !== "ssh") return;
-    session.lastPromptSignature = "";
-    session.sshTranscript = "";
     enqueueInput(session, `${value}\r`);
   },
 
@@ -2056,8 +2000,6 @@ export const terminalManager = {
       exited: false,
       spawnGeneration: 0,
       disposed: false,
-      sshTranscript: "",
-      lastPromptSignature: "",
       sshStage: "starting",
       sshFinalizing: false,
       resizeTimer: null,

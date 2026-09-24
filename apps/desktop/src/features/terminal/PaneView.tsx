@@ -111,7 +111,14 @@ export function PaneView({
       settings?.[SETTING_KEYS.gestureDoubleTapTab] !== false,
   });
   useTerminalSelection({ sessionId: session.id, hostRef, enabled: selectMode });
-  useTerminalScroll({ sessionId: session.id, hostRef, enabled: isMobile });
+  useTerminalScroll({
+    sessionId: session.id,
+    hostRef,
+    enabled: isMobile,
+    // Selection mode and an open arrow pad both own one-finger drags; two
+    // fingers keep scrolling either way.
+    oneFinger: !selectMode && gesturePad === null,
+  });
 
   const beginLogging = (mode: "raw" | "asciicast") => {
     setLogError(null);
@@ -533,7 +540,15 @@ export function PaneView({
       {titleBar}
       {/* The xterm host keeps its own padding and stays the terminal's direct
           parent: dropOverflowingRow measures this element's content box. */}
-      <div ref={hostRef} className="min-h-0 w-full flex-1 pl-2 pt-1.5" />
+      {/* touch-action: none is what makes the touch gestures reachable at all
+          on iOS: without it WebKit hands the drag to the webview's own scroll
+          view, which rubber-bands an unscrollable page and flashes its scroll
+          indicator while the listeners that were meant to answer never see
+          the move. */}
+      <div
+        ref={hostRef}
+        className={cn("min-h-0 w-full flex-1 pl-2 pt-1.5", isMobile && "touch-none")}
+      />
 
       {/* Arrow-key pad, shown only while a long press is driving it. Positioned
           in viewport coordinates at the press point and pointer-events-none, so

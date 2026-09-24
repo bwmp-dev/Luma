@@ -5,7 +5,7 @@ import { vi } from "vitest";
  * and `@tauri-apps/api/window` are replaced (see src/test/setup.ts) with the
  * exports below so store/manager tests can drive `invoke` responses, fire
  * Channel messages (PTY data / exit / transfer progress), and emit window
- * events (`ssh-remote-os`) deterministically.
+ * events (`agent-event`, `deep-link`) deterministically.
  */
 
 type InvokeArgs = Record<string, unknown>;
@@ -38,7 +38,7 @@ export class Channel<T = unknown> {
 type Listener = (event: { payload: unknown }) => void;
 const listeners = new Map<string, Set<Listener>>();
 
-/** Emit a window event to every registered listener (e.g. `ssh-remote-os`). */
+/** Emit a window event to every registered listener (e.g. `agent-event`). */
 export function emitWindowEvent(name: string, payload: unknown): void {
   for (const listener of listeners.get(name) ?? []) listener({ payload });
 }

@@ -207,7 +207,7 @@ export function useAppInit(): void {
   useEffect(() => startDeepLinkListener(), []);
 
   // Subscribe once to backend `agent-event` notifications (Agent Inbox),
-  // mirroring the `deep-link`/`ssh-remote-os` listener wiring.
+  // mirroring the `deep-link` listener wiring.
   useEffect(() => startAgentInboxListener(), []);
 
   useEffect(() => startAgentSessionListener(), []);

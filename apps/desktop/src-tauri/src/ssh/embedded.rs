@@ -13,10 +13,7 @@ use tokio::sync::{mpsc, oneshot};
 use super::embedded_auth::{
     authenticate_with_prompts, authenticate_without_prompts, AuthAbort, AuthDriver,
 };
-use super::{
-    DataCallback, ExitCallback, RemoteOsCallback, SshConnectionConfig, SshExit,
-    SSH_AUTHENTICATED_MARKER,
-};
+use super::{ExitCallback, SessionCallback, SshConnectionConfig, SshControl, SshEvent, SshExit};
 use crate::errors::{LumaError, Result};
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use crate::session_logging::{SessionLogManager, SessionLogMode, SessionLogStatus};
@@ -57,13 +54,17 @@ pub struct EmbeddedSshManager {
     logs: SessionLogManager,
 }
 
-pub(super) type SharedDataCallback = Arc<Mutex<DataCallback>>;
+pub(super) type SharedSessionCallback = Arc<Mutex<SessionCallback>>;
+
+/// RIS (reset to initial state): what the app writes to a terminal to start a
+/// session on a clean screen.
+const TERMINAL_RESET: &[u8] = b"\x1bc";
 
 #[derive(Clone)]
 pub(crate) struct Client {
     trusted_keys: Arc<Vec<PublicKey>>,
     key_mismatch: Arc<AtomicBool>,
-    on_data: Option<SharedDataCallback>,
+    sink: Option<SharedSessionCallback>,
     forwarded_tcpip: Option<mpsc::UnboundedSender<ForwardedTcpip>>,
     agent_forwarding_enabled: Arc<AtomicBool>,
 }
@@ -113,8 +114,8 @@ impl client::Handler for Client {
         banner: &str,
         _session: &mut client::Session,
     ) -> std::result::Result<(), Self::Error> {
-        if let Some(on_data) = &self.on_data {
-            (on_data.lock().unwrap())(banner.as_bytes());
+        if let Some(sink) = &self.sink {
+            (sink.lock().unwrap())(SshEvent::Data(banner.as_bytes()));
         }
         Ok(())
     }
@@ -173,8 +174,20 @@ impl client::Handler for Client {
     }
 }
 
-fn notify_frontend_authenticated(on_data: &mut DataCallback) {
-    on_data(SSH_AUTHENTICATED_MARKER);
+/* Authentication succeeded. Two things go out, both from here so they cannot
+ * drift apart: a terminal reset on the data stream, and the control fact the app
+ * needs for its own state. The reset is RIS — ordinary terminal semantics, not a
+ * sentinel — and being in band it lands at exactly the point the session begins:
+ * it clears the auth exchange, and on a reconnect the dead session's screen,
+ * without ever reaching what the remote shell sends next.
+ *
+ * The reset goes FIRST so that everything keyed off the control event lands on
+ * the cleared screen rather than under it — an MCP session writes the command it
+ * is about to run there, and the capture of that command's output starts from
+ * the same point. */
+fn notify_frontend_authenticated(sink: &mut SessionCallback) {
+    sink(SshEvent::Data(TERMINAL_RESET));
+    sink(SshEvent::Control(SshControl::Authenticated));
 }
 
 impl EmbeddedSshManager {
@@ -183,14 +196,13 @@ impl EmbeddedSshManager {
         config: SshConnectionConfig,
         cols: u16,
         rows: u16,
-        on_data: DataCallback,
+        on_event: SessionCallback,
         on_exit: ExitCallback,
-        on_remote_os: RemoteOsCallback,
     ) -> Result<String> {
         if config.username.is_none() {
             return Err(LumaError::InvalidInput("SSH username is required".into()));
         }
-        let on_data = Arc::new(Mutex::new(on_data));
+        let sink = Arc::new(Mutex::new(on_event));
         let route = route_configs(&config);
         let first = route
             .first()
@@ -198,7 +210,7 @@ impl EmbeddedSshManager {
         let handle = connect_transport(
             first,
             EmbeddedSshTimeouts::default(),
-            Some(Arc::clone(&on_data)),
+            Some(Arc::clone(&sink)),
             None,
         )
         .await?;
@@ -230,7 +242,7 @@ impl EmbeddedSshManager {
                         &mut handle,
                         node,
                         &mut driver,
-                        &on_data,
+                        &sink,
                         EmbeddedSshTimeouts::default(),
                     )
                     .await?;
@@ -239,7 +251,7 @@ impl EmbeddedSshManager {
                             &handle,
                             next,
                             EmbeddedSshTimeouts::default(),
-                            Some(Arc::clone(&on_data)),
+                            Some(Arc::clone(&sink)),
                             None,
                         )
                         .await
@@ -291,7 +303,7 @@ impl EmbeddedSshManager {
 
             tracing::debug!(host = %config.hostname, "embedded SSH: authentication succeeded");
             {
-                let mut callback = on_data.lock().unwrap();
+                let mut callback = sink.lock().unwrap();
                 notify_frontend_authenticated(&mut callback);
             }
 
@@ -324,8 +336,13 @@ impl EmbeddedSshManager {
             authenticated.store(true, Ordering::Release);
 
             let remote_os_handle = Arc::clone(&handle);
+            let remote_os_sink = Arc::clone(&sink);
             tauri::async_runtime::spawn(async move {
-                on_remote_os(detect_remote_os(&remote_os_handle).await);
+                let detected = detect_remote_os(&remote_os_handle).await;
+                (remote_os_sink.lock().unwrap())(SshEvent::Control(SshControl::RemoteOs {
+                    os_id: detected.os_id,
+                    pretty_name: detected.pretty_name,
+                }));
             });
 
             let mut exit_code = None;
@@ -420,7 +437,7 @@ impl EmbeddedSshManager {
                         Some(ChannelMsg::Data { data }) | Some(ChannelMsg::ExtendedData { data, .. }) => {
                             #[cfg(not(any(target_os = "android", target_os = "ios")))]
                             logs.write(&task_id, &data);
-                            (on_data.lock().unwrap())(&data);
+                            (sink.lock().unwrap())(SshEvent::Data(&data));
                         }
                         Some(ChannelMsg::ExitStatus { exit_status }) => exit_code = Some(exit_status),
                         Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) => break,
@@ -812,7 +829,7 @@ async fn connect_stream_transport<S>(
     config: &SshConnectionConfig,
     timeouts: EmbeddedSshTimeouts,
     stream: S,
-    on_data: Option<SharedDataCallback>,
+    sink: Option<SharedSessionCallback>,
     forwarded_tcpip: Option<mpsc::UnboundedSender<ForwardedTcpip>>,
 ) -> Result<client::Handle<Client>>
 where
@@ -841,7 +858,7 @@ where
             Client {
                 trusted_keys,
                 key_mismatch: Arc::clone(&key_mismatch),
-                on_data,
+                sink,
                 forwarded_tcpip,
                 agent_forwarding_enabled: Arc::clone(&config.agent_forwarding_enabled),
             },
@@ -875,24 +892,24 @@ where
 async fn connect_transport(
     config: &SshConnectionConfig,
     timeouts: EmbeddedSshTimeouts,
-    on_data: Option<SharedDataCallback>,
+    sink: Option<SharedSessionCallback>,
     forwarded_tcpip: Option<mpsc::UnboundedSender<ForwardedTcpip>>,
 ) -> Result<client::Handle<Client>> {
     let target = display_target(config);
     tracing::debug!(%target, port = config.port, "embedded SSH: opening transport");
     let socket = connect_tcp_stream(config, timeouts.connect).await?;
-    connect_stream_transport(config, timeouts, socket, on_data, forwarded_tcpip).await
+    connect_stream_transport(config, timeouts, socket, sink, forwarded_tcpip).await
 }
 
 async fn connect_through_proxy(
     handle: &client::Handle<Client>,
     next: &SshConnectionConfig,
     timeouts: EmbeddedSshTimeouts,
-    on_data: Option<SharedDataCallback>,
+    sink: Option<SharedSessionCallback>,
     forwarded_tcpip: Option<mpsc::UnboundedSender<ForwardedTcpip>>,
 ) -> Result<client::Handle<Client>> {
     let stream = open_proxy_stream(handle, next, timeouts.connect).await?;
-    connect_stream_transport(next, timeouts, stream, on_data, forwarded_tcpip).await
+    connect_stream_transport(next, timeouts, stream, sink, forwarded_tcpip).await
 }
 
 pub(crate) async fn authenticated_handle(
@@ -1552,6 +1569,56 @@ mod tests {
         .unwrap_or_else(|_| panic!("server did not observe {expected:?}"));
     }
 
+    /// Split a session sink into its two streams, the way commands/ssh.rs does
+    /// at the IPC boundary, so a test can wait on bytes and on control events
+    /// independently.
+    fn test_sink(
+        data_tx: mpsc::UnboundedSender<Vec<u8>>,
+        control_tx: mpsc::UnboundedSender<SshControl>,
+    ) -> SessionCallback {
+        Box::new(move |event| match event {
+            SshEvent::Data(bytes) => {
+                let _ = data_tx.send(bytes.to_vec());
+            }
+            SshEvent::Control(control) => {
+                let _ = control_tx.send(control);
+            }
+        })
+    }
+
+    /// The next control event, or a test failure if none arrives.
+    async fn next_control(receiver: &mut mpsc::UnboundedReceiver<SshControl>) -> SshControl {
+        tokio::time::timeout(Duration::from_secs(2), receiver.recv())
+            .await
+            .expect("timed out waiting for an SSH control event")
+            .expect("embedded SSH control channel closed")
+    }
+
+    /// The next credential prompt reported on the control channel.
+    async fn wait_for_prompt(
+        receiver: &mut mpsc::UnboundedReceiver<SshControl>,
+    ) -> (String, bool, String) {
+        loop {
+            if let SshControl::Prompt {
+                label,
+                secret,
+                target,
+            } = next_control(receiver).await
+            {
+                return (label, secret, target);
+            }
+        }
+    }
+
+    /// Drain control events until authentication is reported.
+    async fn wait_for_authenticated(receiver: &mut mpsc::UnboundedReceiver<SshControl>) {
+        loop {
+            if matches!(next_control(receiver).await, SshControl::Authenticated) {
+                return;
+            }
+        }
+    }
+
     async fn wait_for_output(
         receiver: &mut mpsc::UnboundedReceiver<Vec<u8>>,
         expected: &[u8],
@@ -1576,19 +1643,21 @@ mod tests {
     }
 
     #[test]
-    fn reports_authentication_with_the_shared_frontend_marker() {
-        let received = Arc::new(Mutex::new(Vec::new()));
-        let received_by_callback = Arc::clone(&received);
-        let mut callback: DataCallback = Box::new(move |bytes| {
-            received_by_callback
-                .lock()
-                .unwrap()
-                .extend_from_slice(bytes);
-        });
+    fn authentication_reports_a_control_event_and_resets_the_screen() {
+        let (data_tx, mut data_rx) = mpsc::unbounded_channel();
+        let (control_tx, mut control_rx) = mpsc::unbounded_channel();
+        let mut sink = test_sink(data_tx, control_tx);
 
-        notify_frontend_authenticated(&mut callback);
+        notify_frontend_authenticated(&mut sink);
 
-        assert_eq!(*received.lock().unwrap(), SSH_AUTHENTICATED_MARKER);
+        // The control fact goes out of band; the screen boundary stays in band,
+        // as an ordinary terminal reset rather than a sentinel to scrape. The
+        // reset is emitted first, so anything written in response to the control
+        // event lands on the cleared screen.
+        assert_eq!(data_rx.try_recv().unwrap(), TERMINAL_RESET);
+        assert!(data_rx.try_recv().is_err());
+        assert_eq!(control_rx.try_recv().unwrap(), SshControl::Authenticated);
+        assert!(control_rx.try_recv().is_err());
     }
 
     #[tokio::test]
@@ -1791,7 +1860,8 @@ mod tests {
         config.password = None;
         config.authentication_type = "password".into();
         let manager = EmbeddedSshManager::default();
-        let (data_tx, mut data_rx) = mpsc::unbounded_channel();
+        let (data_tx, _data_rx) = mpsc::unbounded_channel();
+        let (control_tx, mut control_rx) = mpsc::unbounded_channel();
         let (exit_tx, exit_rx) = oneshot::channel();
 
         let session_id = manager
@@ -1799,26 +1869,25 @@ mod tests {
                 config,
                 80,
                 24,
-                Box::new(move |data| {
-                    let _ = data_tx.send(data.to_vec());
-                }),
+                test_sink(data_tx, control_tx),
                 Box::new(move |exit| {
                     let _ = exit_tx.send(exit);
                 }),
-                Box::new(|_| {}),
             )
             .await
             .unwrap();
 
-        let prompt = wait_for_output(&mut data_rx, b"__LUMA_SSH_PROMPT__").await;
-        assert!(String::from_utf8_lossy(&prompt).contains("\"target\":\"luma-test@"));
+        let (label, secret, target) = wait_for_prompt(&mut control_rx).await;
+        assert_eq!(label, "Password");
+        assert!(secret);
+        assert!(target.starts_with("luma-test@"));
         let ping_error = manager.ping(&session_id).await.unwrap_err();
         assert_eq!(ping_error.category(), "ssh-error");
         assert!(manager.write(&session_id, "correct horse ".into()).unwrap());
         assert!(manager
             .write(&session_id, "battery staple\r\n".into())
             .unwrap());
-        wait_for_output(&mut data_rx, SSH_AUTHENTICATED_MARKER).await;
+        wait_for_authenticated(&mut control_rx).await;
         assert!(manager.disconnect(&session_id).unwrap());
         let exit = tokio::time::timeout(Duration::from_secs(2), exit_rx)
             .await
@@ -1840,7 +1909,8 @@ mod tests {
         config.password = None;
         config.authentication_type = "password".into();
         let manager = EmbeddedSshManager::default();
-        let (data_tx, mut data_rx) = mpsc::unbounded_channel();
+        let (data_tx, _data_rx) = mpsc::unbounded_channel();
+        let (control_tx, mut control_rx) = mpsc::unbounded_channel();
         let (exit_tx, exit_rx) = oneshot::channel();
 
         let session_id = manager
@@ -1848,18 +1918,15 @@ mod tests {
                 config,
                 80,
                 24,
-                Box::new(move |data| {
-                    let _ = data_tx.send(data.to_vec());
-                }),
+                test_sink(data_tx, control_tx),
                 Box::new(move |exit| {
                     let _ = exit_tx.send(exit);
                 }),
-                Box::new(|_| {}),
             )
             .await
             .unwrap();
 
-        wait_for_output(&mut data_rx, b"__LUMA_SSH_PROMPT__").await;
+        wait_for_prompt(&mut control_rx).await;
         for _ in 0..3 {
             assert!(manager.write(&session_id, "wrong\n".into()).unwrap());
         }
@@ -1886,6 +1953,7 @@ mod tests {
         config.password = None;
         let manager = EmbeddedSshManager::default();
         let (data_tx, mut data_rx) = mpsc::unbounded_channel();
+        let (control_tx, mut control_rx) = mpsc::unbounded_channel();
         let (exit_tx, exit_rx) = oneshot::channel();
 
         let session_id = manager
@@ -1893,28 +1961,29 @@ mod tests {
                 config,
                 80,
                 24,
-                Box::new(move |data| {
-                    let _ = data_tx.send(data.to_vec());
-                }),
+                test_sink(data_tx, control_tx),
                 Box::new(move |exit| {
                     let _ = exit_tx.send(exit);
                 }),
-                Box::new(|_| {}),
             )
             .await
             .unwrap();
 
-        let output = wait_for_output(&mut data_rx, b"__LUMA_SSH_PROMPT__").await;
+        let (label, secret, target) = wait_for_prompt(&mut control_rx).await;
+        assert_eq!(label, "Verification code:");
+        assert!(secret);
+        assert!(target.starts_with("luma-interactive@"));
+        // The text a terminal would show still goes to the terminal; only the
+        // machine-readable half moved off the byte stream.
+        let output = wait_for_output(&mut data_rx, b"Verification code:").await;
         let output = String::from_utf8_lossy(&output);
         assert!(output.contains("Authorized test users only"));
         assert!(output.contains("Test challenge"));
         assert!(output.contains("Enter the interactive secret"));
-        assert!(output.contains("\"secret\":true"));
-        assert!(output.contains("\"target\":\"luma-interactive@"));
         assert!(manager
             .write(&session_id, format!("{TEST_PASSWORD}\n"))
             .unwrap());
-        wait_for_output(&mut data_rx, SSH_AUTHENTICATED_MARKER).await;
+        wait_for_authenticated(&mut control_rx).await;
         assert!(manager.disconnect(&session_id).unwrap());
         let exit = tokio::time::timeout(Duration::from_secs(2), exit_rx)
             .await
@@ -1940,7 +2009,8 @@ mod tests {
         config.identity_file = Some(client_key_path.to_string_lossy().into_owned());
         config.authentication_type = "key".into();
         let manager = EmbeddedSshManager::default();
-        let (data_tx, mut data_rx) = mpsc::unbounded_channel();
+        let (data_tx, _data_rx) = mpsc::unbounded_channel();
+        let (control_tx, mut control_rx) = mpsc::unbounded_channel();
         let (exit_tx, exit_rx) = oneshot::channel();
 
         let session_id = manager
@@ -1948,23 +2018,20 @@ mod tests {
                 config,
                 80,
                 24,
-                Box::new(move |data| {
-                    let _ = data_tx.send(data.to_vec());
-                }),
+                test_sink(data_tx, control_tx),
                 Box::new(move |exit| {
                     let _ = exit_tx.send(exit);
                 }),
-                Box::new(|_| {}),
             )
             .await
             .unwrap();
 
-        let output = wait_for_output(&mut data_rx, b"__LUMA_SSH_PROMPT__").await;
-        assert!(String::from_utf8_lossy(&output).contains("\"target\":\"luma-test@"));
+        let (_, _, target) = wait_for_prompt(&mut control_rx).await;
+        assert!(target.starts_with("luma-test@"));
         assert!(manager
             .write(&session_id, format!("{TEST_PASSWORD}\n"))
             .unwrap());
-        wait_for_output(&mut data_rx, SSH_AUTHENTICATED_MARKER).await;
+        wait_for_authenticated(&mut control_rx).await;
         assert!(manager.disconnect(&session_id).unwrap());
         let exit = tokio::time::timeout(Duration::from_secs(2), exit_rx)
             .await
@@ -1995,6 +2062,7 @@ mod tests {
         config.authentication_type = "key".into();
         let manager = EmbeddedSshManager::default();
         let (data_tx, mut data_rx) = mpsc::unbounded_channel();
+        let (control_tx, mut control_rx) = mpsc::unbounded_channel();
         let (exit_tx, exit_rx) = oneshot::channel();
 
         let session_id = manager
@@ -2002,24 +2070,24 @@ mod tests {
                 config,
                 80,
                 24,
-                Box::new(move |data| {
-                    let _ = data_tx.send(data.to_vec());
-                }),
+                test_sink(data_tx, control_tx),
                 Box::new(move |exit| {
                     let _ = exit_tx.send(exit);
                 }),
-                Box::new(|_| {}),
             )
             .await
             .unwrap();
 
-        let output = wait_for_output(&mut data_rx, b"__LUMA_SSH_PROMPT__").await;
-        let output = String::from_utf8_lossy(&output);
-        assert!(output.contains("\"target\":\"luma-test@"));
-        assert!(output.contains("Enter passphrase for key"));
+        let (label, _, target) = wait_for_prompt(&mut control_rx).await;
+        assert!(target.starts_with("luma-test@"));
+        assert_eq!(label, "Key passphrase");
+        assert!(String::from_utf8_lossy(
+            &wait_for_output(&mut data_rx, b"Enter passphrase for key").await
+        )
+        .contains("Enter passphrase for key"));
         assert!(manager.write(&session_id, "typed key ".into()).unwrap());
         assert!(manager.write(&session_id, "passphrase\r".into()).unwrap());
-        wait_for_output(&mut data_rx, SSH_AUTHENTICATED_MARKER).await;
+        wait_for_authenticated(&mut control_rx).await;
         assert!(manager.disconnect(&session_id).unwrap());
         let exit = tokio::time::timeout(Duration::from_secs(2), exit_rx)
             .await
@@ -2085,36 +2153,35 @@ mod tests {
         let config = test_config(server.address, known_hosts);
         let manager = EmbeddedSshManager::default();
         let (data_tx, mut data_rx) = mpsc::unbounded_channel();
+        let (control_tx, mut control_rx) = mpsc::unbounded_channel();
         let (exit_tx, exit_rx) = oneshot::channel();
-        let (remote_os_tx, remote_os_rx) = oneshot::channel();
 
         let session_id = manager
             .connect(
                 config,
                 80,
                 24,
-                Box::new(move |data| {
-                    let _ = data_tx.send(data.to_vec());
-                }),
+                test_sink(data_tx, control_tx),
                 Box::new(move |exit| {
                     let _ = exit_tx.send(exit);
-                }),
-                Box::new(move |remote_os| {
-                    let _ = remote_os_tx.send(remote_os);
                 }),
             )
             .await
             .unwrap();
 
-        let remote_os = tokio::time::timeout(Duration::from_secs(2), remote_os_rx)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!(remote_os.os_id, "alpine");
-        let authenticated_output = wait_for_output(&mut data_rx, SSH_AUTHENTICATED_MARKER).await;
-        assert!(authenticated_output
-            .windows(SSH_AUTHENTICATED_MARKER.len())
-            .any(|window| window == SSH_AUTHENTICATED_MARKER));
+        // Authentication and the detected OS both arrive as control events on
+        // the session's own channel — nothing to correlate, nothing to scrape.
+        assert_eq!(
+            next_control(&mut control_rx).await,
+            SshControl::Authenticated
+        );
+        assert_eq!(
+            next_control(&mut control_rx).await,
+            SshControl::RemoteOs {
+                os_id: "alpine".into(),
+                pretty_name: Some("Luma Test Server".into()),
+            }
+        );
         wait_for_event(&server.events, ServerEvent::PtyRequested(80, 24)).await;
         wait_for_event(&server.events, ServerEvent::ShellRequested).await;
 
