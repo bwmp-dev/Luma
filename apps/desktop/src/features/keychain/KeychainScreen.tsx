@@ -76,7 +76,7 @@ export function KeychainScreen() {
     </div>
   </div>
   {draft && (draft.storageMode === "ssh-agent"
-    ? <AgentKeyInspector draft={draft} onClose={() => setDraft(null)} />
+    ? <AgentKeyInspector draft={draft} onClose={() => setDraft(null)} onInstall={draft.id ? () => setInstallKey({ id: draft.id!, name: draft.label }) : undefined} />
     : <KeyInspector draft={draft} setDraft={setDraft} onClose={() => { save.reset(); setDraft(null); }} onSave={() => save.mutate(draft)} busy={save.isPending} error={save.isError ? parseLumaError(save.error).message : null} onInstall={draft.id ? () => setInstallKey({ id: draft.id!, name: draft.label }) : undefined} />)}
   {identityDraft && <IdentityInspector draft={identityDraft} setDraft={setIdentityDraft} keys={keys.filter(key => key.vaultId === identityDraft.vaultId)} onClose={() => { saveIdentity.reset(); setIdentityDraft(null); }} onSave={() => saveIdentity.mutate(identityDraft)} busy={saveIdentity.isPending} error={saveIdentity.isError ? parseLumaError(saveIdentity.error).message : null} />}
   <GenerateKeyDialog open={generateOpen} onOpenChange={setGenerateOpen} vaultId={creationVaultId} />
@@ -122,10 +122,10 @@ function KeychainSection({title,view,children}:{title:string;view:"grid"|"list";
 function KeychainCard({icon,title,detail,onClick,selected=false}:{icon:React.ReactNode;title:string;detail:string;onClick:()=>void;selected?:boolean}){return <button onClick={onClick} className={`flex min-h-15 items-center gap-3 rounded-xl bg-raised px-3 py-2 text-left hover:ring-1 hover:ring-accent ${selected ? "ring-2 ring-accent" : ""}`}><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/20 text-accent">{icon}</span><span className="min-w-0"><span className="block truncate text-sm font-semibold">{title}</span><span className="block truncate text-xs text-muted">{detail}</span></span></button>}
 function Empty({text,action,onClick}:{text:string;action?:string;onClick?:()=>void}){return <div className="col-span-full rounded-xl border border-dashed border-border px-5 py-8 text-center"><p className="text-sm font-medium">{text}</p>{action&&<button onClick={onClick} className="mt-1 text-xs text-accent">{action}</button>}</div>}
 
-function AgentKeyInspector({draft,onClose}:{draft:KeyDraft;onClose:()=>void}) {
+function AgentKeyInspector({draft,onClose,onInstall}:{draft:KeyDraft;onClose:()=>void;onInstall?:()=>void}) {
   const copy=()=>void navigator.clipboard.writeText(draft.publicKey);
   const hardware=draft.publicKey.startsWith("sk-");
-  const footer=<button type="button" onClick={onClose} className="min-h-11 w-full rounded-lg border border-border text-sm font-medium hover:border-accent">Done</button>;
+  const footer=<div className="space-y-2">{onInstall&&<button type="button" onClick={onInstall} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 text-sm font-medium text-accent-foreground"><UploadCloud size={14}/>Install on host…</button>}<button type="button" onClick={onClose} className="min-h-11 w-full rounded-lg border border-border text-sm font-medium hover:border-accent">Done</button></div>;
   return <InspectorShell title={draft.label} subtitle="Device-bound SSH-agent key" onClose={onClose} footer={footer}>
     <div className="rounded-lg border border-border bg-background px-3 py-3 text-xs">
       <div className="flex items-center gap-2 font-medium text-foreground"><ShieldCheck size={15} className="text-accent"/>{hardware?"Hardware-backed security key":"External agent key"}</div>

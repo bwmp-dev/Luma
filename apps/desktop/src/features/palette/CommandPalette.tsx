@@ -353,7 +353,7 @@ function useCommands(
           id: "close-pane",
           group: "Layout",
           label: "Close pane",
-          hint: "Ctrl+Shift+W",
+          hint: formatChord(keymap["workspace.closePane"]),
           icon: <X size={15} />,
           run: wrap(() => closeActivePane()),
         },

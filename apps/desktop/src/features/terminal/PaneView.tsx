@@ -5,6 +5,8 @@ import { attachFileToSession, canAttachFile } from "./attachFile";
 import { useSessionStore } from "../../stores/sessionStore";
 import { useUiStore } from "../../stores/uiStore";
 import { useSessionLogStore } from "../../stores/sessionLogStore";
+import { useKeymapStore } from "../../stores/keymapStore";
+import { formatChord } from "../../lib/keymap";
 import { useSettings } from "../../hooks/useSettings";
 import { useTerminalGestures } from "../mobile/useTerminalGestures";
 import { useTerminalSelection } from "../mobile/useTerminalSelection";
@@ -62,6 +64,7 @@ export function PaneView({
   const stopReconnect = useSessionStore((s) => s.stopReconnect);
   const splitActivePane = useSessionStore((s) => s.splitActivePane);
   const closeActivePane = useSessionStore((s) => s.closeActivePane);
+  const closePaneChord = useKeymapStore((s) => s.keymap["workspace.closePane"]);
   const setPaneBroadcast = useSessionStore((s) => s.setPaneBroadcast);
   const setTransportNotice = useSessionStore((s) => s.setTransportNotice);
   const setAgentForwarding = useSessionStore((s) => s.setAgentForwarding);
@@ -288,7 +291,7 @@ export function PaneView({
     {
       label: "Close pane",
       icon: <X size={15} />,
-      hint: "Ctrl+Shift+W",
+      hint: formatChord(closePaneChord),
       onSelect: () => {
         onFocus();
         closeActivePane();

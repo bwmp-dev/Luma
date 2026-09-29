@@ -25,6 +25,8 @@ import { useCollabStore } from "../../stores/collabStore";
 import { useSessionStore } from "../../stores/sessionStore";
 import { useUiStore } from "../../stores/uiStore";
 import { useSessionLogStore } from "../../stores/sessionLogStore";
+import { useKeymapStore } from "../../stores/keymapStore";
+import { formatChord } from "../../lib/keymap";
 import { useProfiles, useShells } from "../../hooks/useShells";
 import { usePaneShareMutations, useSharedPanes } from "../../hooks/useMcp";
 import { useMcpShareStore } from "../../stores/mcpStore";
@@ -87,6 +89,7 @@ function workspaceActions(deps: {
   openNewTab: () => void;
   splitActivePane: (direction: SplitDirection) => Promise<void>;
   closeActivePane: () => void;
+  closePaneChord: string;
   openPalette: () => void;
   hasTab: boolean;
   hasSession: boolean;
@@ -144,7 +147,7 @@ function workspaceActions(deps: {
     actions.push({
       label: "Close pane",
       icon: <X size={15} />,
-      hint: "Ctrl+Shift+W",
+      hint: formatChord(deps.closePaneChord),
       onSelect: () => deps.closeActivePane(),
     });
   }
@@ -242,6 +245,7 @@ export function TabBar() {
   const closeTab = useSessionStore((s) => s.closeTab);
   const splitActivePane = useSessionStore((s) => s.splitActivePane);
   const closeActivePane = useSessionStore((s) => s.closeActivePane);
+  const closePaneChord = useKeymapStore((s) => s.keymap["workspace.closePane"]);
   const mergeTabs = useSessionStore((s) => s.mergeTabs);
   const toggleBroadcast = useSessionStore((s) => s.toggleBroadcast);
   const openPalette = useUiStore((s) => s.openPalette);
@@ -749,6 +753,7 @@ export function TabBar() {
             openNewTab,
             splitActivePane,
             closeActivePane,
+            closePaneChord,
             openPalette,
             hasTab: true,
             hasSession: Boolean(session),
@@ -1055,6 +1060,7 @@ function WorkspaceMenu({
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const splitActivePane = useSessionStore((s) => s.splitActivePane);
   const closeActivePane = useSessionStore((s) => s.closeActivePane);
+  const closePaneChord = useKeymapStore((s) => s.keymap["workspace.closePane"]);
   const sessions = useSessionStore((s) => s.sessions);
   const activeTab = useSessionStore((s) =>
     s.tabs.find((t) => t.id === s.activeTabId),
@@ -1066,6 +1072,7 @@ function WorkspaceMenu({
     openNewTab,
     splitActivePane,
     closeActivePane,
+    closePaneChord,
     openPalette,
     hasTab: Boolean(activeTabId),
     hasSession: Boolean(activeSessionId),
