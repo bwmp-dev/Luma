@@ -329,23 +329,52 @@ export function remoteJoin(base: string, name: string): string {
   return joinPath(base, name, "/");
 }
 
+const VERBATIM_UNC_ROOT = /^\\\\\?\\UNC\\([^\\]+)\\([^\\]+)(?:\\|$)/i;
+const DRIVE_ROOT = /^(\\\\\?\\)?([A-Za-z]:)(?:\\|$)/;
+const UNC_ROOT = /^\\\\([^\\?][^\\]*)\\([^\\]+)(?:\\|$)/;
+
+/**
+ * The root of a Windows path, with its trailing separator, and the label shown
+ * for it. Covers drives ("C:\"), shares ("\\server\share\") and the verbatim
+ * forms of both ("\\?\C:\", "\\?\UNC\server\share\"), which the backend returns
+ * for shares and over-long paths. The verbatim prefix stays on `root` so every
+ * path derived from it remains valid.
+ */
+function windowsRoot(path: string): { root: string; label: string } | null {
+  const verbatimUnc = VERBATIM_UNC_ROOT.exec(path);
+  if (verbatimUnc) {
+    const [, server, share] = verbatimUnc;
+    return { root: `\\\\?\\UNC\\${server}\\${share}\\`, label: `\\\\${server}\\${share}` };
+  }
+  const drive = DRIVE_ROOT.exec(path);
+  if (drive) {
+    const [, verbatim = "", letter] = drive;
+    return { root: `${verbatim}${letter}\\`, label: letter };
+  }
+  const unc = UNC_ROOT.exec(path);
+  if (unc) {
+    const [, server, share] = unc;
+    return { root: `\\\\${server}\\${share}\\`, label: `\\\\${server}\\${share}` };
+  }
+  return null;
+}
+
 /**
  * Parent of a canonical path, or null when already at a root. Derived purely by
  * string operations on the canonical path so it works for both "/" (remote /
- * unix) and "\" (Windows) styles, including drive roots like "C:\".
+ * unix) and "\" (Windows) styles, including drive and share roots.
  */
 export function parentPath(path: string, separator: "/" | "\\"): string | null {
   const trimmed = path.replace(/[/\\]+$/, "");
   const index = trimmed.lastIndexOf(separator);
-  if (index < 0) return null;
   if (separator === "/") {
+    if (index < 0) return null;
     return index === 0 ? "/" : trimmed.slice(0, index);
   }
-  const parent = trimmed.slice(0, index);
-  if (parent === "") return null;
-  // Keep the trailing separator for a drive root ("C:" -> "C:\").
-  if (/^[A-Za-z]:$/.test(parent)) return `${parent}${separator}`;
-  return parent;
+  const root = windowsRoot(path);
+  if (!root) return index > 0 ? trimmed.slice(0, index) : null;
+  if (trimmed.length < root.root.length) return null;
+  return index < root.root.length ? root.root : trimmed.slice(0, index);
 }
 
 /**
@@ -367,18 +396,13 @@ export function breadcrumbSegments(
     }
     return segments;
   }
-  // Windows-style: first part is the drive ("C:").
-  const parts = path.split("\\").filter(Boolean);
-  let acc = "";
-  parts.forEach((part, i) => {
-    if (i === 0) {
-      acc = `${part}\\`;
-      segments.push({ label: part, path: acc });
-    } else {
-      acc = acc.endsWith("\\") ? `${acc}${part}` : `${acc}\\${part}`;
-      segments.push({ label: part, path: acc });
-    }
-  });
-  if (segments.length === 0) segments.push({ label: path, path });
+  const root = windowsRoot(path);
+  if (!root) return [{ label: path, path }];
+  segments.push({ label: root.label, path: root.root });
+  let acc = root.root;
+  for (const part of path.slice(root.root.length).split("\\").filter(Boolean)) {
+    acc = acc.endsWith("\\") ? `${acc}${part}` : `${acc}\\${part}`;
+    segments.push({ label: part, path: acc });
+  }
   return segments;
 }

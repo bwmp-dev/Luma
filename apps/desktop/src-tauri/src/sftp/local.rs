@@ -252,8 +252,9 @@ fn list_blocking(path: Option<&str>) -> Result<DirectoryListing> {
         })?,
         Some(path) => validate_local_path(path)?,
     };
-    let canonical = requested
-        .canonicalize()
+    // std's canonicalize yields `\\?\C:\...` on Windows; the frontend splits the
+    // returned path into breadcrumbs and must get back the plain `C:\...` form.
+    let canonical = dunce::canonicalize(&requested)
         .map_err(|error| local_io_error("could not resolve local directory", error))?;
     if !canonical.is_dir() {
         return Err(LumaError::InvalidInput(
@@ -622,6 +623,44 @@ mod tests {
             validate_local_path(input).unwrap_err().category(),
             "invalid-input"
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn local_listing_returns_paths_without_verbatim_prefix() {
+        let base = std::env::temp_dir().join(format!("luma-list-test-{}", uuid::Uuid::new_v4()));
+        fs::create_dir_all(base.join("child")).unwrap();
+
+        let listing = list_blocking(Some(base.to_str().unwrap())).unwrap();
+        assert!(!listing.path.starts_with(r"\\?\"), "{}", listing.path);
+        assert!(listing
+            .entries
+            .iter()
+            .all(|entry| !entry.path.starts_with(r"\\?\")));
+
+        let drive_root = format!("{}\\", &listing.path[..2]);
+        assert_eq!(list_blocking(Some(&drive_root)).unwrap().path, drive_root);
+        let verbatim_root = format!(r"\\?\{drive_root}");
+        assert_eq!(
+            list_blocking(Some(&verbatim_root)).unwrap().path,
+            drive_root
+        );
+        fs::remove_dir_all(base).unwrap();
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn local_paths_accept_share_and_verbatim_roots() {
+        for input in [
+            r"\\?\C:\",
+            r"\\?\C:\Users",
+            r"\\nas\media\",
+            r"\\nas\media\films",
+            r"\\?\UNC\nas\media\",
+            r"\\?\UNC\nas\media\films",
+        ] {
+            assert!(validate_local_path(input).is_ok(), "{input}");
+        }
     }
 
     #[test]
