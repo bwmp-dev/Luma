@@ -10,8 +10,6 @@
     "dialog:allow-save",
     "deep-link:default",
     "opener:default",
-    "ios-glass-tabbar:default",
-    "allow-mobile-commands",
-    "allow-derive-public-key"
+    "ios-glass-tabbar:default"
   ]
 }

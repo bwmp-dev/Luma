@@ -1,13 +1,10 @@
 fn main() {
-    println!("cargo:rerun-if-changed=permissions");
     // Without these, a cached crate compiled against different values would be
     // reused and the override would silently not apply.
     println!("cargo:rerun-if-env-changed=LUMA_ANALYTICS_HOST");
     println!("cargo:rerun-if-env-changed=LUMA_ANALYTICS_KEY");
     allow_undefined_swift_bridge_symbols();
-    let attributes = tauri_build::Attributes::new()
-        .app_manifest(tauri_build::AppManifest::new().commands(&["derive_public_key"]));
-    tauri_build::try_build(attributes).expect("failed to build Tauri application");
+    tauri_build::build();
 }
 
 /// The Live Activity, native menu and in-app browser bridges call `@_cdecl`

@@ -26,8 +26,6 @@
     "deep-link:default",
     "opener:default",
     "process:allow-restart",
-    "updater:default",
-    "allow-existing-commands",
-    "allow-derive-public-key"
+    "updater:default"
   ]
 }
