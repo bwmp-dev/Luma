@@ -746,6 +746,9 @@ function installKeyHandlers(session: ManagedSession): void {
       return false;
     }
     if (mod && event.shiftKey && event.code === "KeyV") {
+      // WebView2 treats Ctrl+Shift+V as a native paste that xterm also
+      // handles, so without this the text is inserted twice (issue #31).
+      event.preventDefault();
       void navigator.clipboard.readText().then((text) => {
         if (text) term.paste(text);
       });
