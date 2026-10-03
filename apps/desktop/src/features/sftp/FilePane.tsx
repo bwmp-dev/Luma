@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
+  Check,
   ChevronRight,
   ClipboardPaste,
   Copy,
@@ -14,6 +15,7 @@ import {
   FileText,
   Folder,
   FolderPlus,
+  HardDrive,
   Link2,
   MoreHorizontal,
   Pencil,
@@ -39,7 +41,7 @@ import {
   type SftpEntry,
 } from "../../lib/sftp";
 import { parseLumaError } from "../../lib/hosts";
-import { localListKey, sftpListKey } from "../../hooks/useSftp";
+import { localListKey, sftpListKey, useLocalDrives } from "../../hooks/useSftp";
 import { cn } from "../../lib/utils";
 import { ContextMenu, type MenuAction } from "../../components/ContextMenu";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
@@ -60,7 +62,7 @@ import {
   type SortField,
   type ViewPrefs,
 } from "./viewPrefs";
-import { MENU_CONTENT_CLASS, ViewMenuItems } from "./ViewMenu";
+import { MENU_CONTENT_CLASS, MENU_ITEM_CLASS, ViewMenuItems } from "./ViewMenu";
 import {
   NO_ENTRIES,
   rowsInBand,
@@ -629,6 +631,15 @@ export function FilePane({
         </div>
 
         <div className="flex items-center gap-1">
+          {!isRemote && (
+            <DrivesMenu
+              path={path}
+              onNavigate={(drive) => {
+                onNavigate(drive);
+                clearSelection();
+              }}
+            />
+          )}
           <IconButton
             label="Up one level"
             disabled={parent === null}
@@ -1106,6 +1117,58 @@ function ViewMenu({
           className={cn(MENU_CONTENT_CLASS, "min-w-48 text-xs")}
         >
           <ViewMenuItems prefs={prefs} onChange={onChange} compact />
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
+/** Renders nothing until the backend reports drives, which only Windows does. */
+function DrivesMenu({
+  path,
+  onNavigate,
+}: {
+  path: string;
+  onNavigate: (drive: string) => void;
+}) {
+  const drives = useLocalDrives();
+  if (!drives.data?.length) return null;
+  const current = path.toUpperCase();
+  return (
+    <DropdownMenu.Root
+      onOpenChange={(open) => {
+        if (open) void drives.refetch();
+      }}
+    >
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          aria-label="Drives"
+          title="Drives"
+          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-raised text-muted hover:border-accent hover:text-accent"
+        >
+          <HardDrive size={14} />
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="start"
+          sideOffset={4}
+          className={cn(MENU_CONTENT_CLASS, "min-w-32 text-xs")}
+        >
+          {drives.data.map((drive) => (
+            <DropdownMenu.Item
+              key={drive}
+              onSelect={() => onNavigate(drive)}
+              className={cn(MENU_ITEM_CLASS, "py-1.5 font-mono")}
+            >
+              <Check
+                size={14}
+                className={current.startsWith(drive) ? "text-accent" : "invisible"}
+              />
+              {drive}
+            </DropdownMenu.Item>
+          ))}
         </DropdownMenu.Content>
       </DropdownMenu.Portal>
     </DropdownMenu.Root>

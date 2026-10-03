@@ -307,6 +307,7 @@ pub fn run() {
         commands::sftp_rename,
         commands::sftp_delete,
         commands::local_list,
+        commands::local_drives,
         commands::local_mkdir,
         commands::local_rename,
         commands::local_delete,

@@ -177,6 +177,37 @@ pub async fn local_list(path: Option<String>) -> Result<DirectoryListing> {
         .map_err(|error| LumaError::SftpFailed(format!("local directory task failed: {error}")))?
 }
 
+/// Roots the local pane can jump to. Only Windows has more than one; elsewhere
+/// everything hangs off `/`, which the breadcrumbs already reach.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub fn local_drives() -> Result<Vec<String>> {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::Storage::FileSystem::GetLogicalDrives;
+        // SAFETY: takes no arguments and only returns a bitmask.
+        let mask = unsafe { GetLogicalDrives() };
+        if mask == 0 {
+            return Err(local_io_error(
+                "could not list local drives",
+                std::io::Error::last_os_error(),
+            ));
+        }
+        Ok(drive_roots(mask))
+    }
+    #[cfg(not(windows))]
+    {
+        Ok(Vec::new())
+    }
+}
+
+#[cfg(windows)]
+fn drive_roots(mask: u32) -> Vec<String> {
+    (0..26u8)
+        .filter(|bit| mask & (1 << bit) != 0)
+        .map(|bit| format!("{}:\\", char::from(b'A' + bit)))
+        .collect()
+}
+
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub async fn local_mkdir(path: String) -> Result<()> {
     tokio::task::spawn_blocking(move || {
@@ -575,6 +606,13 @@ fn build_local_delete_plan(root: PathBuf) -> Result<Vec<LocalDeleteOperation>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn drive_roots_follow_the_logical_drive_bitmask() {
+        assert_eq!(drive_roots((1 << 25) | 0b101), vec!["A:\\", "C:\\", "Z:\\"]);
+        assert!(drive_roots(0).is_empty());
+    }
 
     #[test]
     fn local_paths_must_be_absolute_bounded_and_nul_free() {

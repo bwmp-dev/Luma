@@ -19,7 +19,7 @@ use crate::ssh::{authenticated_handle, connection_config, AuthenticatedConnectio
 
 pub use attach::upload_attachment;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
-pub use local::{local_delete, local_list, local_mkdir, local_rename};
+pub use local::{local_delete, local_drives, local_list, local_mkdir, local_rename};
 pub use transfer::{
     sftp_copy, sftp_download, sftp_retry, sftp_upload, TransferProgress, TransferStartResponse,
 };

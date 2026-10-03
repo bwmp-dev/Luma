@@ -125,6 +125,11 @@ export function localList(path: string | null): Promise<DirectoryListing> {
   return invoke<DirectoryListing>("local_list", { path });
 }
 
+/** Drive roots (`C:\`) on Windows; empty everywhere else. */
+export function localDrives(): Promise<string[]> {
+  return invoke<string[]>("local_drives");
+}
+
 export function localMkdir(path: string): Promise<void> {
   return invoke<void>("local_mkdir", { path });
 }

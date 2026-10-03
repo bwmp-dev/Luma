@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { localList, sftpList, type DirectoryListing } from "../lib/sftp";
+import { localDrives, localList, sftpList, type DirectoryListing } from "../lib/sftp";
 
 /*
  * Directory-listing queries for the SFTP browser. Listings are the only SFTP
@@ -32,6 +32,16 @@ export function useLocalList(path: string | null, enabled = true) {
     queryFn: () => localList(path),
     enabled,
     staleTime: 5_000,
+    retry: false,
+  });
+}
+
+/** Drives the local pane can jump to. Removable drives come and go, so the
+ * picker refetches whenever it opens. */
+export function useLocalDrives() {
+  return useQuery<string[]>({
+    queryKey: ["local-drives"],
+    queryFn: localDrives,
     retry: false,
   });
 }

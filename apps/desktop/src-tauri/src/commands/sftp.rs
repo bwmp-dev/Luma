@@ -84,6 +84,12 @@ pub async fn local_list(path: Option<String>) -> Result<DirectoryListing> {
 
 #[tauri::command]
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub async fn local_drives() -> Result<Vec<String>> {
+    sftp::local_drives()
+}
+
+#[tauri::command]
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub async fn local_mkdir(path: String) -> Result<()> {
     sftp::local_mkdir(path).await
 }
