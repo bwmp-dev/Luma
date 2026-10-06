@@ -2,10 +2,10 @@ import { useEffect, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Check, ChevronDown, Copy, Eye, EyeOff, Fingerprint, Grid2X2, KeyRound, List, Loader2, Plus, Save, Search, ShieldCheck, X } from "lucide-react";
+import { Check, ChevronDown, Copy, Eye, EyeOff, Fingerprint, Grid2X2, KeyRound, List, Loader2, Pencil, Plus, Save, Search, ShieldCheck, Trash2, X } from "lucide-react";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { useIdentities, useInvalidateHosts, useKeyReferences } from "../../hooks/useHosts";
-import { createIdentity, createKeyReference, derivePublicKey, getKeyReferenceSecrets, getKeystoreStatus, parseLumaError, setKeystorePolicy, updateIdentity, updateKeyReference, type DerivedPublicKey, type Identity, type KeyReference, type KeyStorageMode, type KeystoreStatus } from "../../lib/hosts";
+import { createIdentity, createKeyReference, deleteIdentity, deleteKeyReference, derivePublicKey, getKeyReferenceSecrets, getKeystoreStatus, parseLumaError, setKeystorePolicy, updateIdentity, updateKeyReference, type DerivedPublicKey, type Identity, type KeyReference, type KeyStorageMode, type KeystoreStatus } from "../../lib/hosts";
 import { useBrowsingVaultId, useCreationVaultId } from "../../stores/vaultStore";
 import { KeystoreGate } from "../keystore/KeystoreGate";
 import { GenerateKeyDialog } from "./GenerateKeyDialog";
@@ -14,6 +14,8 @@ import { AgentKeyDialog } from "./AgentKeyDialog";
 import { PuttyKeyDialog } from "./PuttyKeyDialog";
 import { UploadCloud } from "lucide-react";
 import { useCapabilityStore } from "../../stores/capabilityStore";
+import { ContextMenu, type MenuAction } from "../../components/ContextMenu";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 
 // Drafts carry their vault so an edit stays in the entity's own vault and the
 // key picker can only offer keys an identity is allowed to reference.
@@ -23,6 +25,7 @@ const editKey = (key: KeyReference): KeyDraft => ({ id: key.id, vaultId: key.vau
 type IdentityDraft = { id: string | null; vaultId: string; label: string; username: string; keyId: string; password: string };
 const blankIdentity = (vaultId: string): IdentityDraft => ({ id: null, vaultId, label: "", username: "", keyId: "", password: "" });
 const editIdentity = (identity: Identity): IdentityDraft => ({ id: identity.id, vaultId: identity.vaultId, label: identity.name, username: identity.username, keyId: identity.keyId ?? "", password: "" });
+type PendingDelete = { kind: "key" | "identity"; id: string; name: string };
 
 export function KeychainScreen() {
   const browsingVaultId = useBrowsingVaultId();
@@ -36,6 +39,7 @@ export function KeychainScreen() {
   const [agentImportOpen, setAgentImportOpen] = useState(false);
   const [puttyImportOpen, setPuttyImportOpen] = useState(false);
   const [installKey, setInstallKey] = useState<{ id: string; name: string } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -54,6 +58,21 @@ export function KeychainScreen() {
   // send a free-text public key that could mismatch the stored private key.
   const save = useMutation({ mutationFn: (value: KeyDraft) => { const input = { vaultId: value.vaultId, name: value.label.trim(), storageMode: "encrypted-vault" as const, localPath: null, publicKey: null, fingerprint: null, certificate: value.certificate.trim() || null, privateKey: value.privateKey || (value.id ? null : ""), passphrase: value.passphrase || (value.id ? null : "") }; return value.id ? updateKeyReference(value.id, input) : createKeyReference(input); }, onSuccess: () => { invalidate(); setDraft(null); } });
   const saveIdentity = useMutation({ mutationFn: (value: IdentityDraft) => { const input = { vaultId: value.vaultId, name: value.label.trim(), username: value.username.trim(), keyId: value.keyId || null, password: value.password || (value.id ? null : "") }; return value.id ? updateIdentity(value.id, input) : createIdentity(input); }, onSuccess: () => { invalidate(); setIdentityDraft(null); } });
+  const remove = useMutation({ mutationFn: (target: PendingDelete) => target.kind === "key" ? deleteKeyReference(target.id) : deleteIdentity(target.id), onSuccess: (_, target) => { invalidate(); if (target.kind === "key" && draft?.id === target.id) setDraft(null); if (target.kind === "identity" && identityDraft?.id === target.id) setIdentityDraft(null); setPendingDelete(null); } });
+  const openKey = (key: KeyReference) => { setIdentityDraft(null); setDraft(editKey(key)); };
+  const openIdentity = (identity: Identity) => { setDraft(null); setIdentityDraft(editIdentity(identity)); };
+  const keyActions = (key: KeyReference): MenuAction[] => [
+    { label: "Edit", icon: <Pencil size={14}/>, onSelect: () => openKey(key) },
+    ...(key.publicKey ? [{ label: "Copy public key", icon: <Copy size={14}/>, onSelect: () => void navigator.clipboard.writeText(key.publicKey!) }] : []),
+    { label: "Install on host…", icon: <UploadCloud size={14}/>, onSelect: () => setInstallKey({ id: key.id, name: key.name }) },
+    { separator: true },
+    { label: "Delete", icon: <Trash2 size={14}/>, destructive: true, onSelect: () => setPendingDelete({ kind: "key", id: key.id, name: key.name }) },
+  ];
+  const identityActions = (identity: Identity): MenuAction[] => [
+    { label: "Edit", icon: <Pencil size={14}/>, onSelect: () => openIdentity(identity) },
+    { separator: true },
+    { label: "Delete", icon: <Trash2 size={14}/>, destructive: true, onSelect: () => setPendingDelete({ kind: "identity", id: identity.id, name: identity.name }) },
+  ];
   if (keystoreStatus && !keystoreStatus.unlocked) return <KeystoreGate status={keystoreStatus} onReady={() => void getKeystoreStatus().then(setKeystoreStatus)} />;
   return <div className="keychain-screen flex h-full bg-background">
   <div className="min-w-0 flex-1 overflow-y-auto">
@@ -71,18 +90,19 @@ export function KeychainScreen() {
       </div>
     </div>
     <div className="mx-auto max-w-375 space-y-8 px-4 py-5 md:px-7">
-      <KeychainSection title="Keys" view={viewMode}>{filteredKeys.length ? filteredKeys.map(key => <KeychainCard key={key.id} selected={draft?.id === key.id} icon={<KeyRound size={19}/>} title={key.name} detail="SSH key reference" onClick={() => { setIdentityDraft(null); setDraft(editKey(key)); }}/>) : q ? <Empty text="No matching keys"/> : <Empty text="No SSH keys" action="Add a key reference" onClick={() => { setIdentityDraft(null); setDraft(blankKey(creationVaultId)); }}/>}</KeychainSection>
-      <KeychainSection title="Identities" view={viewMode}>{filteredIdentities.length ? filteredIdentities.map(identity => <KeychainCard key={identity.id} selected={identityDraft?.id === identity.id} icon={<Fingerprint size={19}/>} title={identity.name} detail={`${identity.username} · ${identity.keyId ? "password and key" : "password authentication"}`} onClick={() => { setDraft(null); setIdentityDraft(editIdentity(identity)); }}/>) : q ? <Empty text="No matching identities"/> : <Empty text="No identities yet" action="Create your first identity" onClick={() => { setDraft(null); setIdentityDraft(blankIdentity(creationVaultId)); }}/>}</KeychainSection>
+      <KeychainSection title="Keys" view={viewMode}>{filteredKeys.length ? filteredKeys.map(key => <KeychainCard key={key.id} selected={draft?.id === key.id} icon={<KeyRound size={19}/>} title={key.name} detail="SSH key reference" onClick={() => openKey(key)} actions={keyActions(key)}/>) : q ? <Empty text="No matching keys"/> : <Empty text="No SSH keys" action="Add a key reference" onClick={() => { setIdentityDraft(null); setDraft(blankKey(creationVaultId)); }}/>}</KeychainSection>
+      <KeychainSection title="Identities" view={viewMode}>{filteredIdentities.length ? filteredIdentities.map(identity => <KeychainCard key={identity.id} selected={identityDraft?.id === identity.id} icon={<Fingerprint size={19}/>} title={identity.name} detail={`${identity.username} · ${identity.keyId ? "password and key" : "password authentication"}`} onClick={() => openIdentity(identity)} actions={identityActions(identity)}/>) : q ? <Empty text="No matching identities"/> : <Empty text="No identities yet" action="Create your first identity" onClick={() => { setDraft(null); setIdentityDraft(blankIdentity(creationVaultId)); }}/>}</KeychainSection>
     </div>
   </div>
   {draft && (draft.storageMode === "ssh-agent"
-    ? <AgentKeyInspector draft={draft} onClose={() => setDraft(null)} onInstall={draft.id ? () => setInstallKey({ id: draft.id!, name: draft.label }) : undefined} />
-    : <KeyInspector draft={draft} setDraft={setDraft} onClose={() => { save.reset(); setDraft(null); }} onSave={() => save.mutate(draft)} busy={save.isPending} error={save.isError ? parseLumaError(save.error).message : null} onInstall={draft.id ? () => setInstallKey({ id: draft.id!, name: draft.label }) : undefined} />)}
-  {identityDraft && <IdentityInspector draft={identityDraft} setDraft={setIdentityDraft} keys={keys.filter(key => key.vaultId === identityDraft.vaultId)} onClose={() => { saveIdentity.reset(); setIdentityDraft(null); }} onSave={() => saveIdentity.mutate(identityDraft)} busy={saveIdentity.isPending} error={saveIdentity.isError ? parseLumaError(saveIdentity.error).message : null} />}
+    ? <AgentKeyInspector draft={draft} onClose={() => setDraft(null)} onInstall={draft.id ? () => setInstallKey({ id: draft.id!, name: draft.label }) : undefined} onDelete={draft.id ? () => setPendingDelete({ kind: "key", id: draft.id!, name: draft.label }) : undefined} />
+    : <KeyInspector draft={draft} setDraft={setDraft} onClose={() => { save.reset(); setDraft(null); }} onSave={() => save.mutate(draft)} busy={save.isPending} error={save.isError ? parseLumaError(save.error).message : null} onInstall={draft.id ? () => setInstallKey({ id: draft.id!, name: draft.label }) : undefined} onDelete={draft.id ? () => setPendingDelete({ kind: "key", id: draft.id!, name: draft.label }) : undefined} />)}
+  {identityDraft && <IdentityInspector draft={identityDraft} setDraft={setIdentityDraft} keys={keys.filter(key => key.vaultId === identityDraft.vaultId)} onClose={() => { saveIdentity.reset(); setIdentityDraft(null); }} onSave={() => saveIdentity.mutate(identityDraft)} busy={saveIdentity.isPending} error={saveIdentity.isError ? parseLumaError(saveIdentity.error).message : null} onDelete={identityDraft.id ? () => setPendingDelete({ kind: "identity", id: identityDraft.id!, name: identityDraft.label }) : undefined} />}
   <GenerateKeyDialog open={generateOpen} onOpenChange={setGenerateOpen} vaultId={creationVaultId} />
   <AgentKeyDialog open={agentImportOpen} onOpenChange={setAgentImportOpen} onImported={invalidate} />
   <PuttyKeyDialog open={puttyImportOpen} onOpenChange={setPuttyImportOpen} onImported={invalidate} vaultId={creationVaultId} />
   <InstallKeyDialog open={installKey !== null} keyReferenceId={installKey?.id ?? null} keyName={installKey?.name ?? ""} onOpenChange={(open) => { if (!open) setInstallKey(null); }} />
+  <ConfirmDialog open={pendingDelete !== null} onOpenChange={(open) => { if (!open) { setPendingDelete(null); remove.reset(); } }} title={pendingDelete?.kind === "identity" ? "Delete identity?" : "Delete key?"} destructive confirmLabel={remove.isPending ? "Deleting…" : "Delete"} busy={remove.isPending} onConfirm={() => { if (pendingDelete) remove.mutate(pendingDelete); }} message={<div className="space-y-2"><p>Delete <span className="font-medium text-foreground">{pendingDelete?.name}</span>? {pendingDelete?.kind === "identity" ? "Hosts and groups using this identity will no longer have one." : "Identities and hosts using this key will no longer have one."} This can&apos;t be undone.</p>{remove.isError && <p role="alert" className="text-danger">Could not delete: {parseLumaError(remove.error).message}</p>}</div>} />
   </div>;
 }
 
@@ -119,13 +139,15 @@ function InspectorShell({title,subtitle,onClose,footer,children}:{title:string;s
 }
 
 function KeychainSection({title,view,children}:{title:string;view:"grid"|"list";children:React.ReactNode}){return <section><h2 className="mb-3 text-sm font-semibold">{title}</h2><div className={view==="list"?"flex flex-col gap-2":"grid gap-3 md:grid-cols-2 xl:grid-cols-3"}>{children}</div></section>}
-function KeychainCard({icon,title,detail,onClick,selected=false}:{icon:React.ReactNode;title:string;detail:string;onClick:()=>void;selected?:boolean}){return <button onClick={onClick} className={`flex min-h-15 items-center gap-3 rounded-xl bg-raised px-3 py-2 text-left hover:ring-1 hover:ring-accent ${selected ? "ring-2 ring-accent" : ""}`}><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/20 text-accent">{icon}</span><span className="min-w-0"><span className="block truncate text-sm font-semibold">{title}</span><span className="block truncate text-xs text-muted">{detail}</span></span></button>}
+function KeychainCard({icon,title,detail,onClick,actions,selected=false}:{icon:React.ReactNode;title:string;detail:string;onClick:()=>void;actions:MenuAction[];selected?:boolean}){return <ContextMenu actions={actions}><button onClick={onClick} className={`flex min-h-15 items-center gap-3 rounded-xl bg-raised px-3 py-2 text-left hover:ring-1 hover:ring-accent ${selected ? "ring-2 ring-accent" : ""}`}><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/20 text-accent">{icon}</span><span className="min-w-0"><span className="block truncate text-sm font-semibold">{title}</span><span className="block truncate text-xs text-muted">{detail}</span></span></button></ContextMenu>}
 function Empty({text,action,onClick}:{text:string;action?:string;onClick?:()=>void}){return <div className="col-span-full rounded-xl border border-dashed border-border px-5 py-8 text-center"><p className="text-sm font-medium">{text}</p>{action&&<button onClick={onClick} className="mt-1 text-xs text-accent">{action}</button>}</div>}
 
-function AgentKeyInspector({draft,onClose,onInstall}:{draft:KeyDraft;onClose:()=>void;onInstall?:()=>void}) {
+function DeleteButton({label,onClick}:{label:string;onClick:()=>void}){return <button type="button" onClick={onClick} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium text-danger hover:bg-danger/10"><Trash2 size={14}/>{label}</button>}
+
+function AgentKeyInspector({draft,onClose,onInstall,onDelete}:{draft:KeyDraft;onClose:()=>void;onInstall?:()=>void;onDelete?:()=>void}) {
   const copy=()=>void navigator.clipboard.writeText(draft.publicKey);
   const hardware=draft.publicKey.startsWith("sk-");
-  const footer=<div className="space-y-2">{onInstall&&<button type="button" onClick={onInstall} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 text-sm font-medium text-accent-foreground"><UploadCloud size={14}/>Install on host…</button>}<button type="button" onClick={onClose} className="min-h-11 w-full rounded-lg border border-border text-sm font-medium hover:border-accent">Done</button></div>;
+  const footer=<div className="space-y-2">{onInstall&&<button type="button" onClick={onInstall} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 text-sm font-medium text-accent-foreground"><UploadCloud size={14}/>Install on host…</button>}<button type="button" onClick={onClose} className="min-h-11 w-full rounded-lg border border-border text-sm font-medium hover:border-accent">Done</button>{onDelete&&<DeleteButton label="Delete key" onClick={onDelete}/>}</div>;
   return <InspectorShell title={draft.label} subtitle="Device-bound SSH-agent key" onClose={onClose} footer={footer}>
     <div className="rounded-lg border border-border bg-background px-3 py-3 text-xs">
       <div className="flex items-center gap-2 font-medium text-foreground"><ShieldCheck size={15} className="text-accent"/>{hardware?"Hardware-backed security key":"External agent key"}</div>
@@ -136,7 +158,7 @@ function AgentKeyInspector({draft,onClose,onInstall}:{draft:KeyDraft;onClose:()=
   </InspectorShell>;
 }
 
-function KeyInspector({draft,setDraft,onClose,onSave,busy,error,onInstall}:{draft:KeyDraft;setDraft:(draft:KeyDraft)=>void;onClose:()=>void;onSave:()=>void;busy:boolean;error:string|null;onInstall?:()=>void}) {
+function KeyInspector({draft,setDraft,onClose,onSave,busy,error,onInstall,onDelete}:{draft:KeyDraft;setDraft:(draft:KeyDraft)=>void;onClose:()=>void;onSave:()=>void;busy:boolean;error:string|null;onInstall?:()=>void;onDelete?:()=>void}) {
   const [showPrivateKey,setShowPrivateKey]=useState(false);
   const [showPassphrase,setShowPassphrase]=useState(false);
   const [loadingSecrets,setLoadingSecrets]=useState(false);
@@ -154,12 +176,12 @@ function KeyInspector({draft,setDraft,onClose,onSave,busy,error,onInstall}:{draf
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[draft.id]);
   const ready = draft.label.trim() && (draft.id || draft.privateKey.trim());
-  return <KeyInspectorView draft={draft} setDraft={setDraft} onClose={onClose} onSave={onSave} busy={busy} ready={Boolean(ready)} error={error} secretError={secretError} loadingSecrets={loadingSecrets} showPrivateKey={showPrivateKey} setShowPrivateKey={setShowPrivateKey} showPassphrase={showPassphrase} setShowPassphrase={setShowPassphrase} onInstall={onInstall}/>;
+  return <KeyInspectorView draft={draft} setDraft={setDraft} onClose={onClose} onSave={onSave} busy={busy} ready={Boolean(ready)} error={error} secretError={secretError} loadingSecrets={loadingSecrets} showPrivateKey={showPrivateKey} setShowPrivateKey={setShowPrivateKey} showPassphrase={showPassphrase} setShowPassphrase={setShowPassphrase} onInstall={onInstall} onDelete={onDelete}/>;
 }
 function InspectorField({label,value,onChange,placeholder,type="text"}:{label:string;value:string;onChange:(value:string)=>void;placeholder?:string;type?:string}){return <label className="block text-xs text-muted">{label}<input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"/></label>}
 function InspectorArea({label,value,onChange}:{label:string;value:string;onChange:(value:string)=>void}){return <label className="block text-xs text-muted">{label}<textarea value={value} onChange={e=>onChange(e.target.value)} rows={7} className="mt-1 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 font-mono text-xs text-foreground outline-none focus:border-accent"/></label>}
 
-function KeyInspectorView({draft,setDraft,onClose,onSave,busy,ready,error,secretError,loadingSecrets,showPrivateKey,setShowPrivateKey,showPassphrase,setShowPassphrase,onInstall}:{draft:KeyDraft;setDraft:(draft:KeyDraft)=>void;onClose:()=>void;onSave:()=>void;busy:boolean;ready:boolean;error:string|null;secretError:string|null;loadingSecrets:boolean;showPrivateKey:boolean;setShowPrivateKey:(value:boolean)=>void;showPassphrase:boolean;setShowPassphrase:(value:boolean)=>void;onInstall?:()=>void}) {
+function KeyInspectorView({draft,setDraft,onClose,onSave,busy,ready,error,secretError,loadingSecrets,showPrivateKey,setShowPrivateKey,showPassphrase,setShowPassphrase,onInstall,onDelete}:{draft:KeyDraft;setDraft:(draft:KeyDraft)=>void;onClose:()=>void;onSave:()=>void;busy:boolean;ready:boolean;error:string|null;secretError:string|null;loadingSecrets:boolean;showPrivateKey:boolean;setShowPrivateKey:(value:boolean)=>void;showPassphrase:boolean;setShowPassphrase:(value:boolean)=>void;onInstall?:()=>void;onDelete?:()=>void}) {
   const privateKey=draft.privateKey;
   const passphrase=draft.passphrase;
   const [derived,setDerived]=useState<DerivedPublicKey|null>(null);
@@ -181,7 +203,7 @@ function KeyInspectorView({draft,setDraft,onClose,onSave,busy,ready,error,secret
     },400);
     return()=>{active=false;window.clearTimeout(timer);};
   },[privateKey,passphrase]);
-  const footer = <div className="space-y-2"><button disabled={!ready||busy||loadingSecrets} onClick={onSave} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 text-sm font-medium text-accent-foreground disabled:opacity-40"><Save size={14}/>{busy?"Saving…":"Save"}</button>{onInstall&&<button type="button" onClick={onInstall} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border px-3 text-sm font-medium text-foreground hover:border-accent hover:text-accent"><UploadCloud size={14}/>Install on host…</button>}</div>;
+  const footer = <div className="space-y-2"><button disabled={!ready||busy||loadingSecrets} onClick={onSave} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 text-sm font-medium text-accent-foreground disabled:opacity-40"><Save size={14}/>{busy?"Saving…":"Save"}</button>{onInstall&&<button type="button" onClick={onInstall} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-border px-3 text-sm font-medium text-foreground hover:border-accent hover:text-accent"><UploadCloud size={14}/>Install on host…</button>}{onDelete&&<DeleteButton label="Delete key" onClick={onDelete}/>}</div>;
   return <InspectorShell title={draft.id?"Edit key":"New key"} subtitle="Encrypted keystore" onClose={onClose} footer={footer}><InspectorField label="Label" value={draft.label} onChange={label=>setDraft({...draft,label})}/><SecretArea label="Private key" value={draft.privateKey} onChange={privateKey=>setDraft({...draft,privateKey})} revealed={showPrivateKey} onToggle={()=>setShowPrivateKey(!showPrivateKey)} loading={loadingSecrets}/><DerivedPublicKeyView derived={derived} busy={deriving||loadingSecrets} error={deriveError}/><SecretField label="Passphrase" value={draft.passphrase} onChange={passphrase=>setDraft({...draft,passphrase})} revealed={showPassphrase} onToggle={()=>setShowPassphrase(!showPassphrase)} loading={loadingSecrets}/><InspectorArea label="Certificate" value={draft.certificate} onChange={certificate=>setDraft({...draft,certificate})}/>{secretError&&<div role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">Could not load secrets: {secretError}</div>}{error&&<div role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">Could not save key: {error}</div>}</InspectorShell>;
 }
 // Read-only display of the public key + fingerprint the backend derives from
@@ -208,8 +230,8 @@ function SecretButtons({value,revealed,onToggle}:{value:string;revealed:boolean;
 function SecretArea({label,value,onChange,revealed,onToggle,loading}:{label:string;value:string;onChange:(value:string)=>void;revealed:boolean;onToggle:()=>void;loading:boolean}){return <label className="block text-xs text-muted">{label}<span className="relative mt-1 block"><textarea aria-label={label} value={value} onChange={e=>onChange(e.target.value)} rows={7} disabled={loading} placeholder={loading?"Loading…":""} style={revealed?undefined:({WebkitTextSecurity:"disc"} as React.CSSProperties)} className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 pr-16 font-mono text-xs text-foreground outline-none focus:border-accent disabled:opacity-60"/><SecretButtons value={value} revealed={revealed} onToggle={onToggle}/></span></label>}
 function SecretField({label,value,onChange,revealed,onToggle,loading}:{label:string;value:string;onChange:(value:string)=>void;revealed:boolean;onToggle:()=>void;loading:boolean}){return <label className="block text-xs text-muted">{label}<span className="relative mt-1 block"><input aria-label={label} type={revealed?"text":"password"} value={value} onChange={e=>onChange(e.target.value)} disabled={loading} placeholder={loading?"Loading…":""} className="w-full rounded-lg border border-border bg-background px-3 py-2 pr-16 text-sm text-foreground outline-none focus:border-accent disabled:opacity-60"/><SecretButtons value={value} revealed={revealed} onToggle={onToggle}/></span></label>}
 
-function IdentityInspector({draft,setDraft,keys,onClose,onSave,busy,error}:{draft:IdentityDraft;setDraft:(draft:IdentityDraft)=>void;keys:KeyReference[];onClose:()=>void;onSave:()=>void;busy:boolean;error:string|null}) {
+function IdentityInspector({draft,setDraft,keys,onClose,onSave,busy,error,onDelete}:{draft:IdentityDraft;setDraft:(draft:IdentityDraft)=>void;keys:KeyReference[];onClose:()=>void;onSave:()=>void;busy:boolean;error:string|null;onDelete?:()=>void}) {
   const ready=draft.label.trim()&&draft.username.trim();
-  const footer = <button disabled={!ready||busy} onClick={onSave} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 text-sm font-medium text-accent-foreground disabled:opacity-40"><Save size={14}/>{busy?"Saving…":"Save identity"}</button>;
+  const footer = <div className="space-y-2"><button disabled={!ready||busy} onClick={onSave} className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 text-sm font-medium text-accent-foreground disabled:opacity-40"><Save size={14}/>{busy?"Saving…":"Save identity"}</button>{onDelete&&<DeleteButton label="Delete identity" onClick={onDelete}/>}</div>;
   return <InspectorShell title={draft.id?"Edit identity":"New identity"} subtitle="Reusable host credentials" onClose={onClose} footer={footer}><InspectorField label="Label" value={draft.label} onChange={label=>setDraft({...draft,label})}/><InspectorField label="Username" value={draft.username} onChange={username=>setDraft({...draft,username})}/><label className="block text-xs text-muted">SSH key<select value={draft.keyId} onChange={e=>setDraft({...draft,keyId:e.target.value})} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"><option value="">None</option>{keys.map(key=><option key={key.id} value={key.id}>{key.name}</option>)}</select></label><InspectorField label={draft.id?"New password (blank keeps current)":"Password (optional)"} type="password" value={draft.password} onChange={password=>setDraft({...draft,password})}/>{error&&<div className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">Could not save identity: {error}</div>}</InspectorShell>;
 }

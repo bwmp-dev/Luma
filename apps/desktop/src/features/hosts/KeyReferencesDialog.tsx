@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { KeyRound, Pencil, Plus, Trash2 } from "lucide-react";
 import { Modal } from "../../components/Modal";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 import {
   createKeyReference,
   deleteKeyReference,
@@ -69,6 +70,7 @@ export function KeyReferencesDialog({
   const { data: keys } = useKeyReferences(browsingVaultId);
   const invalidate = useInvalidateHosts();
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<KeyReference | null>(null);
 
   const save = useMutation({
     mutationFn: (input: { id: string | null; data: KeyReferenceInput }) =>
@@ -80,7 +82,10 @@ export function KeyReferencesDialog({
   });
   const remove = useMutation({
     mutationFn: (id: string) => deleteKeyReference(id),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      invalidate();
+      setPendingDelete(null);
+    },
   });
   const generate = useMutation({ mutationFn: ({ name, path, passphrase, certificate }: { name: string; path: string; passphrase: string; certificate: string | null }) => generateSshKey(name, path, passphrase, certificate, creationVaultId), onSuccess: () => { invalidate(); setDraft(null); } });
 
@@ -152,7 +157,7 @@ export function KeyReferencesDialog({
               <button
                 type="button"
                 aria-label={`Delete key ${key.name}`}
-                onClick={() => remove.mutate(key.id)}
+                onClick={() => setPendingDelete(key)}
                 className="rounded-md p-1.5 text-muted hover:bg-raised hover:text-danger"
               >
                 <Trash2 size={14} />
@@ -238,6 +243,37 @@ export function KeyReferencesDialog({
           </button>
         )}
       </div>
+      <ConfirmDialog
+        open={pendingDelete !== null}
+        onOpenChange={(next) => {
+          if (!next) {
+            setPendingDelete(null);
+            remove.reset();
+          }
+        }}
+        title="Delete key?"
+        destructive
+        confirmLabel={remove.isPending ? "Deleting…" : "Delete"}
+        busy={remove.isPending}
+        onConfirm={() => {
+          if (pendingDelete) remove.mutate(pendingDelete.id);
+        }}
+        message={
+          <div className="space-y-2">
+            <p>
+              Delete{" "}
+              <span className="font-medium text-foreground">{pendingDelete?.name}</span>?
+              Identities and hosts using this key will no longer have one. This
+              can&apos;t be undone.
+            </p>
+            {remove.isError && (
+              <p role="alert" className="text-danger">
+                Could not delete: {parseLumaError(remove.error).message}
+              </p>
+            )}
+          </div>
+        }
+      />
     </Modal>
   );
 }
