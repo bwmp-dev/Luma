@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.18.0](https://github.com/bwmp-dev/Luma/compare/v0.17.1...v0.18.0) (2026-10-06)
+
+
+### Features
+
+* add confirmation dialogs for delete actions in Identities and Key References ([9c2fbc9](https://github.com/bwmp-dev/Luma/commit/9c2fbc964241771dd5f6dfedd02b3e3abb9e5464))
+* **mobile:** add two-finger terminal scrolling ([180b2b1](https://github.com/bwmp-dev/Luma/commit/180b2b1c0352b48f5a0a45fc3547c712050562dc))
+* **sftp:** add local drive picker on Windows ([35eaca7](https://github.com/bwmp-dev/Luma/commit/35eaca788a0641b89b64f7049cdc2cbcbbadf4e4))
+* **terminal:** add shortcuts for ended sessions ([eaa5659](https://github.com/bwmp-dev/Luma/commit/eaa5659e7623925f085fac8ebc7184ffc8f6ac67))
+
+
+### Bug Fixes
+
+* clean up deleted runtime state and bound transfer history ([1c0381b](https://github.com/bwmp-dev/Luma/commit/1c0381b02a50ee8f710e555b9e363e3f76d51f32))
+* **keymap:** show configured close-pane shortcut ([d0e2c7a](https://github.com/bwmp-dev/Luma/commit/d0e2c7a2041d54fc98bff4d2608fa7579082d8e7))
+* **sftp:** handle Windows drive and share roots ([14b50cb](https://github.com/bwmp-dev/Luma/commit/14b50cb25570aced2c4198e9723bb20f9b005095))
+* **ssh:** move session control events off terminal output ([3c0b6a6](https://github.com/bwmp-dev/Luma/commit/3c0b6a6e8a7bc97ba27c2eefc0f2c6e928a7212b))
+* **sync:** track rapid changes and handle startup deep links ([0512ee6](https://github.com/bwmp-dev/Luma/commit/0512ee6c156a25faaea8969ab3b7bef10a9ad62e))
+* **tauri:** remove app command permission ACLs ([d844944](https://github.com/bwmp-dev/Luma/commit/d84494445b7241c63e59a9203d5f51fe14ea5aaf))
+* **terminal:** prevent duplicate WebView2 paste ([fc1eeef](https://github.com/bwmp-dev/Luma/commit/fc1eeef7c0da14fcf7621781d012b62204738d4d))
+* **web-preview:** support listener discovery on Windows ([9ce9559](https://github.com/bwmp-dev/Luma/commit/9ce9559798a5f75571cfa6d0e00742054b61fb5f))
+
 ## [0.17.1](https://github.com/bwmp-dev/Luma/compare/v0.17.0...v0.17.1) (2026-09-04)
 
 
