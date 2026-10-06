@@ -60,10 +60,7 @@ export function createPortForward(input: PortForwardInput): Promise<PortForward>
   return invoke<PortForward>("port_forward_create", { input });
 }
 
-export function updatePortForward(
-  id: string,
-  input: PortForwardInput,
-): Promise<PortForward> {
+export function updatePortForward(id: string, input: PortForwardInput): Promise<PortForward> {
   return invoke<PortForward>("port_forward_update", { id, input });
 }
 

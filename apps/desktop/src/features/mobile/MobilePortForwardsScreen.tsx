@@ -23,9 +23,7 @@ export function MobilePortForwardsScreen({ onBack }: { onBack: () => void }) {
   const hostsById = new Map((hosts ?? []).map((host) => [host.id, host]));
   // Scope to the browsing vault by way of its hosts: forwards hang off hosts,
   // so a forward is in-scope exactly when its host is.
-  const visible = (forwards ?? []).filter((forward) =>
-    hostsById.has(forward.hostId),
-  );
+  const visible = (forwards ?? []).filter((forward) => hostsById.has(forward.hostId));
 
   const groups = new Map<string, PortForward[]>();
   for (const forward of visible) {
@@ -45,8 +43,7 @@ export function MobilePortForwardsScreen({ onBack }: { onBack: () => void }) {
           </div>
           <p className="text-base font-semibold">No port forwards</p>
           <p className="text-sm text-muted">
-            Add local, remote, or dynamic tunnels from a host's editor, then start
-            them here.
+            Add local, remote, or dynamic tunnels from a host's editor, then start them here.
           </p>
         </div>
       )}
@@ -81,9 +78,7 @@ function ForwardRow({ forward }: { forward: PortForward }) {
   return (
     <li className="flex items-center gap-3 px-4 py-3">
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[17px] leading-tight">
-          {forward.name}
-        </span>
+        <span className="block truncate text-[17px] leading-tight">{forward.name}</span>
         <span className="mt-0.5 block truncate font-mono text-xs text-muted">
           {describeForward(forward)}
         </span>

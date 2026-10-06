@@ -87,13 +87,9 @@ export function ShareWithAgentDialog() {
                   />
                   <Bot size={15} className="shrink-0 text-muted" />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm text-foreground">
-                      {grant.label}
-                    </span>
+                    <span className="block truncate text-sm text-foreground">{grant.label}</span>
                     <span className="block truncate text-xs text-muted">
-                      {grant.requireApproval
-                        ? "Asks before each action"
-                        : "Acts without asking"}
+                      {grant.requireApproval ? "Asks before each action" : "Acts without asking"}
                     </span>
                   </span>
                 </label>
@@ -107,9 +103,8 @@ export function ShareWithAgentDialog() {
         )}
 
         <p className="text-xs text-muted">
-          The agent reads this pane as plain text with terminal formatting
-          stripped, so logs and command output are legible but full-screen
-          programs like vim or top are not.
+          The agent reads this pane as plain text with terminal formatting stripped, so logs and
+          command output are legible but full-screen programs like vim or top are not.
         </p>
 
         {error && (

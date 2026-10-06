@@ -408,12 +408,7 @@ export async function joinRoomByCapability(payload: JoinLinkPayload): Promise<vo
       keyEpoch: payload.keyEpoch,
       recipientDeviceId: identity.deviceId,
     });
-    await collabJoinRoomWithCapability(
-      payload.roomId,
-      payload.secret,
-      identity.deviceId,
-      envelope,
-    );
+    await collabJoinRoomWithCapability(payload.roomId, payload.secret, identity.deviceId, envelope);
   } finally {
     roomKeyBytes.fill(0);
   }
@@ -488,7 +483,7 @@ export async function leaveRoom(roomId?: string): Promise<void> {
 
 /** The local xterm session id for the shared viewer terminal, or null. */
 export function viewerDisplaySessionId(): string | null {
-  return viewingRoomId ? rooms.get(viewingRoomId)?.displaySessionId ?? null : null;
+  return viewingRoomId ? (rooms.get(viewingRoomId)?.displaySessionId ?? null) : null;
 }
 
 export function attachViewer(host: HTMLElement): void {
@@ -608,10 +603,7 @@ function scheduleReconnect(r: Room): void {
   if (r.closing || rooms.get(r.roomId) !== r) return;
   r.reconnectAttempt += 1;
   setStatus(r, "reconnecting");
-  const delay = Math.min(
-    MAX_RECONNECT_DELAY_MS,
-    1000 * 2 ** (r.reconnectAttempt - 1),
-  );
+  const delay = Math.min(MAX_RECONNECT_DELAY_MS, 1000 * 2 ** (r.reconnectAttempt - 1));
   const jitter = Math.floor(Math.random() * 400);
   if (r.reconnectTimer) clearTimeout(r.reconnectTimer);
   r.reconnectTimer = setTimeout(() => {
@@ -711,10 +703,7 @@ async function handleServerMessage(r: Room, message: ServerMessage): Promise<voi
   }
 }
 
-async function handleEncryptedEvent(
-  r: Room,
-  event: BroadcastEncryptedEvent,
-): Promise<void> {
+async function handleEncryptedEvent(r: Room, event: BroadcastEncryptedEvent): Promise<void> {
   if (typeof event.roomSequence === "number") {
     r.lastRoomSequence = Math.max(r.lastRoomSequence, event.roomSequence);
   }

@@ -59,19 +59,22 @@ function databaseWithTransaction(transaction: object): Database {
   const database = Object.create(Database.prototype) as Database;
   Object.defineProperty(database, "orm", {
     value: {
-      transaction: async (callback: (tx: object) => Promise<unknown>) => await callback(transaction),
+      transaction: async (callback: (tx: object) => Promise<unknown>) =>
+        await callback(transaction),
     } as unknown as Database["orm"],
   });
   return database;
 }
 
-function inviteRow(overrides: Partial<{
-  role: "controller" | "viewer";
-  keyEpoch: number;
-  currentKeyEpoch: number;
-  expiresAt: Date;
-  revokedAt: Date | null;
-}> = {}) {
+function inviteRow(
+  overrides: Partial<{
+    role: "controller" | "viewer";
+    keyEpoch: number;
+    currentKeyEpoch: number;
+    expiresAt: Date;
+    revokedAt: Date | null;
+  }> = {},
+) {
   return {
     role: "viewer" as const,
     keyEpoch: 4,
@@ -90,9 +93,7 @@ describe("collaboration capability invites", () => {
       insert,
     });
 
-    await expect(
-      database.createInvite(roomId, joiningSubject, "viewer", 86_400),
-    ).rejects.toEqual(
+    await expect(database.createInvite(roomId, joiningSubject, "viewer", 86_400)).rejects.toEqual(
       expect.objectContaining({
         status: 403,
         message: "only the room owner can create capabilities",
@@ -210,17 +211,13 @@ describe("collaboration capability invites", () => {
   it("rejects an expired capability", async () => {
     const insert = vi.fn();
     const database = databaseWithTransaction({
-      select: vi.fn(() =>
-        queryChain([inviteRow({ expiresAt: new Date(Date.now() - 1_000) })]),
-      ),
+      select: vi.fn(() => queryChain([inviteRow({ expiresAt: new Date(Date.now() - 1_000) })])),
       insert,
     });
 
     await expect(
       database.redeemInvite(roomId, joiningSubject, "expired-secret", deviceId, keyEnvelope),
-    ).rejects.toEqual(
-      expect.objectContaining({ status: 410, message: "capability has expired" }),
-    );
+    ).rejects.toEqual(expect.objectContaining({ status: 410, message: "capability has expired" }));
     expect(insert).not.toHaveBeenCalled();
   });
 

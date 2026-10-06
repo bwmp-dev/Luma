@@ -146,35 +146,26 @@ export function ConflictDialog({
           const Icon = TYPE_ICONS[conflict.objectType];
           const choice = choices[key];
           return (
-            <li
-              key={key}
-              className="rounded-lg border border-border bg-background p-3"
-            >
+            <li key={key} className="rounded-lg border border-border bg-background p-3">
               <div className="flex items-center gap-2">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-accent/15 text-accent">
                   <Icon size={15} />
                 </span>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{conflict.label}</p>
-                  <p className="text-xs text-muted">
-                    {CONFLICT_TYPE_LABELS[conflict.objectType]}
-                  </p>
+                  <p className="text-xs text-muted">{CONFLICT_TYPE_LABELS[conflict.objectType]}</p>
                 </div>
               </div>
               <div className="mt-2.5 grid grid-cols-2 gap-2">
                 <ChoiceButton
                   active={choice === "keep-local"}
-                  onClick={() =>
-                    setChoices((prev) => ({ ...prev, [key]: "keep-local" }))
-                  }
+                  onClick={() => setChoices((prev) => ({ ...prev, [key]: "keep-local" }))}
                   heading="Keep local"
                   detail={`Edited ${formatRelativeTime(conflict.localUpdatedAt)}`}
                 />
                 <ChoiceButton
                   active={choice === "take-remote"}
-                  onClick={() =>
-                    setChoices((prev) => ({ ...prev, [key]: "take-remote" }))
-                  }
+                  onClick={() => setChoices((prev) => ({ ...prev, [key]: "take-remote" }))}
                   heading="Take remote"
                   detail={`Edited ${formatRelativeTime(conflict.remoteUpdatedAt)}`}
                 />

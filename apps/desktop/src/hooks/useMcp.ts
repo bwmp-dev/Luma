@@ -94,8 +94,7 @@ export function useMcpGrantMutations() {
 
 export function usePaneShareMutations() {
   const queryClient = useQueryClient();
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: SHARED_PANES_KEY });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: SHARED_PANES_KEY });
 
   const share = useMutation({
     mutationFn: ({

@@ -37,7 +37,9 @@ const ANSI_KEYS = [
 
 /** Accept #rgb, #rgba, #rrggbb, and #rrggbbaa (CSS hex colors xterm understands). */
 function isHexColor(value: unknown): value is string {
-  return typeof value === "string" && /^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value);
+  return (
+    typeof value === "string" && /^#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value)
+  );
 }
 
 /** Estimate whether a background hex reads as dark, for grouping/preview chrome.
@@ -46,7 +48,10 @@ export function deriveThemeKind(background: string): ImportedThemeKind {
   const hex = background.replace("#", "");
   const full =
     hex.length === 3
-      ? hex.split("").map((c) => c + c).join("")
+      ? hex
+          .split("")
+          .map((c) => c + c)
+          .join("")
       : hex.slice(0, 6);
   if (full.length < 6) return "dark";
   const r = parseInt(full.slice(0, 2), 16);
@@ -215,7 +220,8 @@ export type ParsedImportedTheme = { theme: ITheme; kind: ImportedThemeKind };
 export function parseImportedTheme(text: string): ParsedImportedTheme {
   const trimmed = text.trim();
   if (!trimmed) throw new Error("Paste a theme to import.");
-  const looksXml = trimmed.startsWith("<?xml") || trimmed.startsWith("<plist") || trimmed.startsWith("<");
+  const looksXml =
+    trimmed.startsWith("<?xml") || trimmed.startsWith("<plist") || trimmed.startsWith("<");
   const theme = looksXml ? parseItermColors(trimmed) : parseVsCodeTheme(trimmed);
   return { theme, kind: deriveThemeKind(theme.background ?? "#000000") };
 }

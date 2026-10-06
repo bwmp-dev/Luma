@@ -59,11 +59,7 @@ export type ConflictResolution = {
 /** Where Luma Cloud lives unless the user points at their own deployment. */
 export const DEFAULT_LUMA_CLOUD_URL = "https://sync.luma.bwmp.dev";
 
-export type SyncProvider =
-  | "local-folder"
-  | "webdav"
-  | "github-gist"
-  | "luma-cloud";
+export type SyncProvider = "local-folder" | "webdav" | "github-gist" | "luma-cloud";
 
 /**
  * When local changes are pushed without the user asking. "on-change" pushes
@@ -117,10 +113,7 @@ export function pushScheduleValue(auto: AutoSyncSettings): string {
 }
 
 /** Apply a push dropdown value, leaving the pull side untouched. */
-export function withPushSchedule(
-  auto: AutoSyncSettings,
-  value: string,
-): AutoSyncSettings {
+export function withPushSchedule(auto: AutoSyncSettings, value: string): AutoSyncSettings {
   if (value === "off" || value === "on-change") {
     return { ...auto, pushMode: value };
   }
@@ -167,12 +160,7 @@ export type SyncReport = {
 export const AUTO_SYNC_EVENT = "sync-auto";
 
 /** What made the scheduler act. Every reason runs the same bidirectional sync. */
-export type AutoSyncReason =
-  | "startup"
-  | "focus"
-  | "change"
-  | "push-interval"
-  | "pull-interval";
+export type AutoSyncReason = "startup" | "focus" | "change" | "push-interval" | "pull-interval";
 
 export type AutoSyncEvent = {
   vaultId: string;
@@ -258,10 +246,7 @@ export function syncConfigure(vaultId: string, input: SyncConfigureInput): Promi
 }
 
 /** Replace this device's automatic schedule for one vault. */
-export function syncSetAuto(
-  vaultId: string,
-  settings: AutoSyncSettings,
-): Promise<null> {
+export function syncSetAuto(vaultId: string, settings: AutoSyncSettings): Promise<null> {
   return invoke<null>("sync_set_auto", { vaultId, settings });
 }
 

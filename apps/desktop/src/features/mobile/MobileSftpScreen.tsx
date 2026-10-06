@@ -33,16 +33,8 @@ import {
   useSftpStore,
   type PaneSide,
 } from "../../stores/sftpStore";
-import {
-  applyViewPrefs,
-  hiddenCount,
-  type ViewPrefs,
-} from "../sftp/viewPrefs";
-import {
-  MENU_CONTENT_CLASS,
-  MENU_ITEM_CLASS,
-  ViewMenuItems,
-} from "../sftp/ViewMenu";
+import { applyViewPrefs, hiddenCount, type ViewPrefs } from "../sftp/viewPrefs";
+import { MENU_CONTENT_CLASS, MENU_ITEM_CLASS, ViewMenuItems } from "../sftp/ViewMenu";
 import {
   breadcrumbSegments,
   formatBytes,
@@ -129,31 +121,17 @@ export function MobileSftpScreen() {
       </div>
     );
   }
-  return (
-    <ConnectedView
-      key={endpoint.sessionId}
-      sessionId={endpoint.sessionId}
-      side={side}
-    />
-  );
+  return <ConnectedView key={endpoint.sessionId} sessionId={endpoint.sessionId} side={side} />;
 }
 
-function ConnectedView({
-  sessionId,
-  side,
-}: {
-  sessionId: string;
-  side: PaneSide;
-}) {
+function ConnectedView({ sessionId, side }: { sessionId: string; side: PaneSide }) {
   const queryClient = useQueryClient();
   const { data: hosts } = useHosts();
 
   const session = useSftpStore((s) => s.sessions[sessionId]);
   const otherEndpoint = useSftpStore((s) => s.panes[OTHER_SIDE[side]]);
   const otherSession = useSftpStore((s) =>
-    otherEndpoint.kind === "remote"
-      ? (s.sessions[otherEndpoint.sessionId] ?? null)
-      : null,
+    otherEndpoint.kind === "remote" ? (s.sessions[otherEndpoint.sessionId] ?? null) : null,
   );
   const setRemotePath = useSftpStore((s) => s.setRemotePath);
   const setMobileSide = useSftpStore((s) => s.setMobileSide);
@@ -167,9 +145,7 @@ function ConnectedView({
   const viewPrefs = useSftpStore((s) => s.viewPrefs);
   const setViewPrefs = useSftpStore((s) => s.setViewPrefs);
   const loadViewPrefs = useSftpStore((s) => s.loadViewPrefs);
-  const runningForSession = useSftpStore((s) =>
-    selectRunningForSession(s.transfers, sessionId),
-  );
+  const runningForSession = useSftpStore((s) => selectRunningForSession(s.transfers, sessionId));
 
   const remotePath = session?.remotePath ?? "";
   const listing = useSftpList(sessionId, remotePath);
@@ -229,19 +205,11 @@ function ConnectedView({
   const entries = listing.data?.entries ?? NO_ENTRIES;
   // Sort and hidden-file filtering are presentation over the same cached
   // listing, so changing either re-renders rather than re-fetching.
-  const ordered = useMemo(
-    () => applyViewPrefs(entries, viewPrefs),
-    [entries, viewPrefs],
-  );
-  const hidden = useMemo(
-    () => hiddenCount(entries, viewPrefs),
-    [entries, viewPrefs],
-  );
+  const ordered = useMemo(() => applyViewPrefs(entries, viewPrefs), [entries, viewPrefs]);
+  const hidden = useMemo(() => hiddenCount(entries, viewPrefs), [entries, viewPrefs]);
   const visible = useMemo(() => {
     const needle = filter.trim().toLowerCase();
-    return needle
-      ? ordered.filter((e) => e.name.toLowerCase().includes(needle))
-      : ordered;
+    return needle ? ordered.filter((e) => e.name.toLowerCase().includes(needle)) : ordered;
   }, [ordered, filter]);
 
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -254,20 +222,11 @@ function ConnectedView({
     if (listRef.current) listRef.current.scrollTop = 0;
   }, [remotePath, filter]);
 
-  const canPaste = selectCanPaste(
-    clipboard,
-    { kind: "remote", sessionId },
-    remotePath,
-  );
+  const canPaste = selectCanPaste(clipboard, { kind: "remote", sessionId }, remotePath);
 
   // Paste the clipboard here, confirming first when it would overwrite.
   const runPaste = (force = false) => {
-    const collisions = pasteInto(
-      { kind: "remote", sessionId },
-      remotePath,
-      "/",
-      { force },
-    );
+    const collisions = pasteInto({ kind: "remote", sessionId }, remotePath, "/", { force });
     if (collisions && collisions.length > 0) setPendingPaste(collisions);
     else setPendingPaste(null);
   };
@@ -478,9 +437,7 @@ function ConnectedView({
             type="button"
             aria-label="Disconnect"
             onClick={() =>
-              runningForSession > 0
-                ? setConfirmDisconnect(true)
-                : void clearPane(side)
+              runningForSession > 0 ? setConfirmDisconnect(true) : void clearPane(side)
             }
             className="flex h-10 w-10 items-center justify-center rounded-md border border-border text-muted active:bg-raised"
           >
@@ -585,9 +542,7 @@ function ConnectedView({
           <ul role="list">
             {/* Spacers stand in for the rows outside the window so the
                 scrollbar reflects the whole folder. */}
-            {rowWindow.padTop > 0 && (
-              <li aria-hidden style={{ height: rowWindow.padTop }} />
-            )}
+            {rowWindow.padTop > 0 && <li aria-hidden style={{ height: rowWindow.padTop }} />}
             {visible.slice(rowWindow.start, rowWindow.end).map((entry) => {
               const rowActions: MenuAction[] = [
                 {
@@ -596,11 +551,7 @@ function ConnectedView({
                   label: "Copy",
                   icon: <Copy size={15} />,
                   onSelect: () =>
-                    copyToClipboard(
-                      { kind: "remote", sessionId },
-                      [entry],
-                      remotePath,
-                    ),
+                    copyToClipboard({ kind: "remote", sessionId }, [entry], remotePath),
                 },
                 {
                   label: "Download",
@@ -662,9 +613,7 @@ function ConnectedView({
                 </ContextMenu>
               );
             })}
-            {rowWindow.padBottom > 0 && (
-              <li aria-hidden style={{ height: rowWindow.padBottom }} />
-            )}
+            {rowWindow.padBottom > 0 && <li aria-hidden style={{ height: rowWindow.padBottom }} />}
           </ul>
         )}
       </div>
@@ -733,11 +682,8 @@ function ConnectedView({
         }}
         message={
           <>
-            <span className="font-medium text-foreground">
-              {pendingCopy?.name}
-            </span>{" "}
-            already exists in the current folder on {pendingCopy?.target} and
-            will be overwritten.
+            <span className="font-medium text-foreground">{pendingCopy?.name}</span> already exists
+            in the current folder on {pendingCopy?.target} and will be overwritten.
           </>
         }
       />
@@ -752,8 +698,8 @@ function ConnectedView({
           <div className="space-y-2">
             <p>
               {pendingPaste?.length} item
-              {pendingPaste?.length === 1 ? "" : "s"} already exist in this
-              folder and will be overwritten:
+              {pendingPaste?.length === 1 ? "" : "s"} already exist in this folder and will be
+              overwritten:
             </p>
             <ul className="max-h-32 overflow-y-auto rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground/90">
               {pendingPaste?.map((name) => (
@@ -777,8 +723,8 @@ function ConnectedView({
         }}
         message={
           <>
-            {runningForSession} transfer{runningForSession === 1 ? "" : "s"} still running will
-            be cancelled. Disconnect anyway?
+            {runningForSession} transfer{runningForSession === 1 ? "" : "s"} still running will be
+            cancelled. Disconnect anyway?
           </>
         }
       />
@@ -828,20 +774,14 @@ function FolderMenu({
               is the folder the files came from. */}
           {canPaste && (
             <>
-              <DropdownMenu.Item
-                onSelect={onPaste}
-                className={cn(MENU_ITEM_CLASS, "min-h-11")}
-              >
+              <DropdownMenu.Item onSelect={onPaste} className={cn(MENU_ITEM_CLASS, "min-h-11")}>
                 <ClipboardPaste size={15} />
                 <span className="truncate">{pasteLabel}</span>
               </DropdownMenu.Item>
               <DropdownMenu.Separator className="my-1 h-px bg-border" />
             </>
           )}
-          <DropdownMenu.Item
-            onSelect={onNewFolder}
-            className={cn(MENU_ITEM_CLASS, "min-h-11")}
-          >
+          <DropdownMenu.Item onSelect={onNewFolder} className={cn(MENU_ITEM_CLASS, "min-h-11")}>
             <FolderPlus size={15} />
             New folder
           </DropdownMenu.Item>
@@ -864,11 +804,7 @@ function EndpointSwitcher({
   onSwitch: () => void;
 }) {
   if (!otherLabel) {
-    return (
-      <span className="min-w-0 flex-1 truncate text-sm font-semibold">
-        {label}
-      </span>
-    );
+    return <span className="min-w-0 flex-1 truncate text-sm font-semibold">{label}</span>;
   }
   return (
     <button
@@ -925,13 +861,7 @@ function RowMenu({ entry, actions }: { entry: SftpEntry; actions: MenuAction[] }
   );
 }
 
-function Message({
-  children,
-  tone,
-}: {
-  children: React.ReactNode;
-  tone?: "danger";
-}) {
+function Message({ children, tone }: { children: React.ReactNode; tone?: "danger" }) {
   return (
     <div
       className={cn(

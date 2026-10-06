@@ -13,10 +13,7 @@
 import * as realCore from "@luma-showcase/real-tauri-core";
 
 export type InvokeArgs = Record<string, unknown>;
-export type InvokeHandler = (
-  cmd: string,
-  args: InvokeArgs,
-) => unknown | Promise<unknown>;
+export type InvokeHandler = (cmd: string, args: InvokeArgs) => unknown | Promise<unknown>;
 
 let handler: InvokeHandler | null = null;
 
@@ -48,10 +45,7 @@ export function setInvokeHandler(fn: InvokeHandler): void {
   handler = fn;
 }
 
-export async function invoke<T = unknown>(
-  cmd: string,
-  args: InvokeArgs = {},
-): Promise<T> {
+export async function invoke<T = unknown>(cmd: string, args: InvokeArgs = {}): Promise<T> {
   if (isNativeHost() && (isPluginCommand(cmd) || NATIVE_SURFACE_COMMANDS.has(cmd))) {
     return realCore.invoke<T>(cmd, args);
   }
@@ -66,9 +60,7 @@ export class Channel<T = unknown> {
   onmessage: (message: T) => void = () => {};
 }
 
-export function transformCallback(
-  callback?: (response: unknown) => void,
-): number {
+export function transformCallback(callback?: (response: unknown) => void): number {
   void callback;
   return 0;
 }

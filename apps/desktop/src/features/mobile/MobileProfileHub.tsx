@@ -58,21 +58,13 @@ export function MobileProfileHub() {
       </button>
 
       <MobileList className="mt-6">
-        <MobileRow
-          icon={Palette}
-          label="Appearance"
-          onSelect={() => push("settings-appearance")}
-        />
+        <MobileRow icon={Palette} label="Appearance" onSelect={() => push("settings-appearance")} />
         <MobileRow
           icon={SquareTerminal}
           label="Terminal"
           onSelect={() => push("settings-terminal")}
         />
-        <MobileRow
-          icon={ShieldCheck}
-          label="SSH"
-          onSelect={() => push("settings-ssh")}
-        />
+        <MobileRow icon={ShieldCheck} label="SSH" onSelect={() => push("settings-ssh")} />
       </MobileList>
 
       <MobileList className="mt-6">

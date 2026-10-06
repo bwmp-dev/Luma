@@ -39,13 +39,48 @@ export type KeymapActionDef = {
  * settings editor listing and resolveAction()'s first-match precedence. */
 export const KEYMAP_ACTIONS: readonly KeymapActionDef[] = [
   { id: "workspace.newTab", label: "New tab", group: "Workspace", defaultChord: "Ctrl+Shift+T" },
-  { id: "workspace.splitRight", label: "Split right", group: "Workspace", defaultChord: "Ctrl+Shift+D" },
-  { id: "workspace.splitDown", label: "Split down", group: "Workspace", defaultChord: "Ctrl+Shift+E" },
-  { id: "workspace.closePane", label: "Close pane", group: "Workspace", defaultChord: "Ctrl+Shift+W" },
-  { id: "workspace.commandPalette", label: "Command palette", group: "Workspace", defaultChord: "Ctrl+Shift+P" },
-  { id: "workspace.toggleBroadcast", label: "Toggle broadcast input", group: "Workspace", defaultChord: "Ctrl+Shift+B" },
-  { id: "terminal.jumpPreviousPrompt", label: "Jump to previous prompt", group: "Terminal", defaultChord: "Ctrl+Alt+Up" },
-  { id: "terminal.jumpNextPrompt", label: "Jump to next prompt", group: "Terminal", defaultChord: "Ctrl+Alt+Down" },
+  {
+    id: "workspace.splitRight",
+    label: "Split right",
+    group: "Workspace",
+    defaultChord: "Ctrl+Shift+D",
+  },
+  {
+    id: "workspace.splitDown",
+    label: "Split down",
+    group: "Workspace",
+    defaultChord: "Ctrl+Shift+E",
+  },
+  {
+    id: "workspace.closePane",
+    label: "Close pane",
+    group: "Workspace",
+    defaultChord: "Ctrl+Shift+W",
+  },
+  {
+    id: "workspace.commandPalette",
+    label: "Command palette",
+    group: "Workspace",
+    defaultChord: "Ctrl+Shift+P",
+  },
+  {
+    id: "workspace.toggleBroadcast",
+    label: "Toggle broadcast input",
+    group: "Workspace",
+    defaultChord: "Ctrl+Shift+B",
+  },
+  {
+    id: "terminal.jumpPreviousPrompt",
+    label: "Jump to previous prompt",
+    group: "Terminal",
+    defaultChord: "Ctrl+Alt+Up",
+  },
+  {
+    id: "terminal.jumpNextPrompt",
+    label: "Jump to next prompt",
+    group: "Terminal",
+    defaultChord: "Ctrl+Alt+Down",
+  },
 ] as const;
 
 /** actionId -> current chord string. */
@@ -117,7 +152,11 @@ export function parseChord(chord: string): Chord | null {
     ctrl: mods.includes("ctrl") || mods.includes("control"),
     alt: mods.includes("alt") || mods.includes("option"),
     shift: mods.includes("shift"),
-    meta: mods.includes("meta") || mods.includes("cmd") || mods.includes("super") || mods.includes("win"),
+    meta:
+      mods.includes("meta") ||
+      mods.includes("cmd") ||
+      mods.includes("super") ||
+      mods.includes("win"),
     code: tokenToCode(token),
   };
 }

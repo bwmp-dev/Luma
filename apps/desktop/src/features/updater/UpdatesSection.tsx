@@ -1,12 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  AlertTriangle,
-  ArrowUpCircle,
-  Check,
-  Loader2,
-  RefreshCw,
-  RotateCw,
-} from "lucide-react";
+import { AlertTriangle, ArrowUpCircle, Check, Loader2, RefreshCw, RotateCw } from "lucide-react";
 import { useUpdaterStore } from "../../stores/updaterStore";
 import { formatBytes, getVersion } from "../../lib/updater";
 import { formatRelativeTime } from "../../lib/sync";
@@ -38,8 +31,7 @@ export function UpdatesSection() {
   const { data: settings } = useSettings();
   const setSetting = useSetSetting();
   const checkOnLaunch = settings?.[SETTING_KEYS.checkOnLaunch] !== false; // default on
-  const updateChannel =
-    settings?.[SETTING_KEYS.updateChannel] === "nightly" ? "nightly" : "stable";
+  const updateChannel = settings?.[SETTING_KEYS.updateChannel] === "nightly" ? "nightly" : "stable";
 
   const status = useUpdaterStore((s) => s.status);
   const info = useUpdaterStore((s) => s.info);
@@ -63,9 +55,7 @@ export function UpdatesSection() {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-2.5">
         <div className="min-w-0">
-          <p className="text-sm font-medium">
-            Luma {appVersion ?? info?.currentVersion ?? "—"}
-          </p>
+          <p className="text-sm font-medium">Luma {appVersion ?? info?.currentVersion ?? "—"}</p>
           <p className="mt-0.5 text-xs text-muted">
             {lastCheckedAt
               ? `Last checked ${formatRelativeTime(lastCheckedAt)}`
@@ -87,8 +77,7 @@ export function UpdatesSection() {
       <div aria-live="polite" className="space-y-2">
         {status === "up-to-date" && (
           <div className="flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted">
-            <Check size={13} className="text-accent" /> You&apos;re on the latest
-            version.
+            <Check size={13} className="text-accent" /> You&apos;re on the latest version.
           </div>
         )}
 
@@ -127,8 +116,8 @@ export function UpdatesSection() {
                   {status === "installed" ? (
                     <div className="mt-2.5 space-y-2">
                       <div className="flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-2 text-xs text-foreground">
-                        <Check size={13} className="text-accent" /> Update
-                        installed — restarting Luma…
+                        <Check size={13} className="text-accent" /> Update installed — restarting
+                        Luma…
                       </div>
                       <button
                         type="button"
@@ -244,12 +233,10 @@ export function UpdatesSection() {
       {/* Auto-check toggle -------------------------------------------------- */}
       <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background p-3">
         <div className="min-w-0">
-          <p className="text-sm font-medium">
-            Automatically check for updates on launch
-          </p>
+          <p className="text-sm font-medium">Automatically check for updates on launch</p>
           <p className="text-xs text-muted">
-            Runs one silent check shortly after startup. The check itself
-            contacts only the update server.
+            Runs one silent check shortly after startup. The check itself contacts only the update
+            server.
           </p>
         </div>
         <Toggle

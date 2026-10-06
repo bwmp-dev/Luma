@@ -1,8 +1,4 @@
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createSnippet,
   deleteSnippet,
@@ -25,16 +21,14 @@ export function useSnippets(vaultId?: string) {
 
 export function useSnippetMutations() {
   const queryClient = useQueryClient();
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: SNIPPETS_KEY });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: SNIPPETS_KEY });
 
   const create = useMutation({
     mutationFn: (input: SnippetInput) => createSnippet(input),
     onSuccess: invalidate,
   });
   const update = useMutation({
-    mutationFn: ({ id, input }: { id: string; input: SnippetInput }) =>
-      updateSnippet(id, input),
+    mutationFn: ({ id, input }: { id: string; input: SnippetInput }) => updateSnippet(id, input),
     onSuccess: invalidate,
   });
   const remove = useMutation({

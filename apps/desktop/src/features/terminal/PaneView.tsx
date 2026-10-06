@@ -1,5 +1,37 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronUp, CircleStop, ClipboardCopy, ClipboardPaste, Circle, Columns2, Container, Copy, Eraser, FolderInput, GitBranch, Globe, KeyRound, LayoutGrid, LoaderCircle, Mic, Paperclip, Radio, RadioTower, RotateCcw, Rows2, ScrollText, Search, Share2, ShieldAlert, ShieldCheck, TextSelect, Video, X } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  ChevronUp,
+  CircleStop,
+  ClipboardCopy,
+  ClipboardPaste,
+  Circle,
+  Columns2,
+  Container,
+  Copy,
+  Eraser,
+  FolderInput,
+  GitBranch,
+  Globe,
+  KeyRound,
+  LayoutGrid,
+  LoaderCircle,
+  Mic,
+  Paperclip,
+  Radio,
+  RadioTower,
+  RotateCcw,
+  Rows2,
+  ScrollText,
+  Search,
+  Share2,
+  ShieldAlert,
+  ShieldCheck,
+  TextSelect,
+  Video,
+  X,
+} from "lucide-react";
 import { terminalManager } from "./terminalManager";
 import { attachFileToSession, canAttachFile } from "./attachFile";
 import { useSessionStore } from "../../stores/sessionStore";
@@ -104,14 +136,8 @@ export function PaneView({
   const gesturePad = useTerminalGestures({
     sessionId: session.id,
     hostRef,
-    arrowPad:
-      isMobile &&
-      !selectMode &&
-      settings?.[SETTING_KEYS.gestureArrowPad] !== false,
-    doubleTapTab:
-      isMobile &&
-      !selectMode &&
-      settings?.[SETTING_KEYS.gestureDoubleTapTab] !== false,
+    arrowPad: isMobile && !selectMode && settings?.[SETTING_KEYS.gestureArrowPad] !== false,
+    doubleTapTab: isMobile && !selectMode && settings?.[SETTING_KEYS.gestureDoubleTapTab] !== false,
   });
   useTerminalSelection({ sessionId: session.id, hostRef, enabled: selectMode });
   useTerminalScroll({
@@ -185,27 +211,20 @@ export function PaneView({
   // banner then, not the generic disconnect banner. During the actual attempt
   // (status "connecting") the ConnectionOverlay takes over instead.
   const reconnecting =
-    isSsh &&
-    session.connectionState === "reconnecting" &&
-    session.status !== "connecting";
+    isSsh && session.connectionState === "reconnecting" && session.status !== "connecting";
   const showBanner =
-    !reconnecting &&
-    (session.status === "disconnected" || session.status === "error");
+    !reconnecting && (session.status === "disconnected" || session.status === "error");
 
   // host-key-changed is a security-critical, blocking state.
   const hostKeyChanged =
-    isSsh &&
-    session.status === "error" &&
-    session.errorCategory === "host-key-changed";
+    isSsh && session.status === "error" && session.errorCategory === "host-key-changed";
 
   // A host-key PREFLIGHT failure means the terminal never spawned (unreachable,
   // scan/known_hosts problem, timeout, …). Surface it as a prominent centered
   // card, not the easy-to-miss bottom banner. host-key-changed keeps its own
   // dedicated alert, so it wins over this generic card.
   const preflightError =
-    session.status === "error" &&
-    session.preflightError === true &&
-    !hostKeyChanged;
+    session.status === "error" && session.preflightError === true && !hostKeyChanged;
 
   const bannerMessage = () => {
     if (session.status === "error") {
@@ -502,269 +521,264 @@ export function PaneView({
 
   return (
     <>
-    <ContextMenu
-      actions={paneActions}
-      minWidth="min-w-52"
-      onOpenChange={(open) => {
-        if (!open) return;
-        // Evaluate the selection + shell-integration state before focusing so
-        // "Copy" and the OSC actions reflect reality, then focus this pane so
-        // split/close/search target it.
-        setHasSelection(terminalManager.hasSelection(session.id));
-        setHasMarks(terminalManager.hasCommandMarks(session.id));
-        setCwd(terminalManager.getCwd(session.id));
-        const point = contextPoint.current;
-        setLinkUrl(
-          point
-            ? terminalManager.urlAtPoint(session.id, point.x, point.y)
-            : null,
-        );
-        if (!focused) onFocus();
-      }}
-    >
-    <div
-      data-pane-session={session.id}
-      className={cn(
-        "relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden",
-        showFocusRing &&
-          (focused
-            ? "rounded-md ring-1 ring-accent/70"
-            : "rounded-md ring-1 ring-transparent"),
-      )}
-      onMouseDownCapture={() => {
-        if (!focused) onFocus();
-      }}
-      // Recorded in the capture phase so it lands before Radix opens the menu
-      // and onOpenChange reads it.
-      onContextMenuCapture={(event) => {
-        contextPoint.current = { x: event.clientX, y: event.clientY };
-      }}
-    >
-      {titleBar}
-      {/* The xterm host keeps its own padding and stays the terminal's direct
+      <ContextMenu
+        actions={paneActions}
+        minWidth="min-w-52"
+        onOpenChange={(open) => {
+          if (!open) return;
+          // Evaluate the selection + shell-integration state before focusing so
+          // "Copy" and the OSC actions reflect reality, then focus this pane so
+          // split/close/search target it.
+          setHasSelection(terminalManager.hasSelection(session.id));
+          setHasMarks(terminalManager.hasCommandMarks(session.id));
+          setCwd(terminalManager.getCwd(session.id));
+          const point = contextPoint.current;
+          setLinkUrl(point ? terminalManager.urlAtPoint(session.id, point.x, point.y) : null);
+          if (!focused) onFocus();
+        }}
+      >
+        <div
+          data-pane-session={session.id}
+          className={cn(
+            "relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden",
+            showFocusRing &&
+              (focused ? "rounded-md ring-1 ring-accent/70" : "rounded-md ring-1 ring-transparent"),
+          )}
+          onMouseDownCapture={() => {
+            if (!focused) onFocus();
+          }}
+          // Recorded in the capture phase so it lands before Radix opens the menu
+          // and onOpenChange reads it.
+          onContextMenuCapture={(event) => {
+            contextPoint.current = { x: event.clientX, y: event.clientY };
+          }}
+        >
+          {titleBar}
+          {/* The xterm host keeps its own padding and stays the terminal's direct
           parent: dropOverflowingRow measures this element's content box. */}
-      {/* touch-action: none is what makes the touch gestures reachable at all
+          {/* touch-action: none is what makes the touch gestures reachable at all
           on iOS: without it WebKit hands the drag to the webview's own scroll
           view, which rubber-bands an unscrollable page and flashes its scroll
           indicator while the listeners that were meant to answer never see
           the move. */}
-      <div
-        ref={hostRef}
-        className={cn("min-h-0 w-full flex-1 pl-2 pt-1.5", isMobile && "touch-none")}
-      />
+          <div
+            ref={hostRef}
+            className={cn("min-h-0 w-full flex-1 pl-2 pt-1.5", isMobile && "touch-none")}
+          />
 
-      {/* Arrow-key pad, shown only while a long press is driving it. Positioned
+          {/* Arrow-key pad, shown only while a long press is driving it. Positioned
           in viewport coordinates at the press point and pointer-events-none, so
           it neither affects the grid nor intercepts the drag. */}
-      {gesturePad && <TerminalGesturePad pad={gesturePad} />}
+          {gesturePad && <TerminalGesturePad pad={gesturePad} />}
 
-      {/* Broadcast indicator: a distinct accent-tinted inset border plus a
+          {/* Broadcast indicator: a distinct accent-tinted inset border plus a
           corner badge on every pane currently receiving fanned-out input.
           Purely decorative (pointer-events-none) so it never blocks the
           terminal or the pane's context menu. */}
-      {broadcasting && (
-        <>
-          <div className="pointer-events-none absolute inset-0 z-5 rounded-md ring-2 ring-inset ring-accent/60" />
-          <div className="pointer-events-none absolute right-2 top-1.5 z-6 flex items-center gap-1 rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent shadow-sm backdrop-blur-sm">
-            <RadioTower size={11} />
-            Broadcast
-          </div>
-        </>
-      )}
+          {broadcasting && (
+            <>
+              <div className="pointer-events-none absolute inset-0 z-5 rounded-md ring-2 ring-inset ring-accent/60" />
+              <div className="pointer-events-none absolute right-2 top-1.5 z-6 flex items-center gap-1 rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent shadow-sm backdrop-blur-sm">
+                <RadioTower size={11} />
+                Broadcast
+              </div>
+            </>
+          )}
 
-      {/* Recording indicator: a small pulsing badge while the pane is being
+          {/* Recording indicator: a small pulsing badge while the pane is being
           logged. Pointer-events-none so it never blocks the terminal. */}
-      {logEntry?.active && (
-        <div className="pointer-events-none absolute bottom-1.5 right-2 z-6 flex items-center gap-1 rounded bg-danger/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-danger shadow-sm backdrop-blur-sm">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-danger" />
-          {logEntry.mode === "asciicast" ? "Rec" : "Log"}
-        </div>
-      )}
-
-      {session.agentForwarding && (
-        <div
-          title="The remote host can use your local SSH agent while this session is active"
-          className="pointer-events-none absolute bottom-1.5 left-2 z-6 flex items-center gap-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-400 shadow-sm backdrop-blur-sm"
-        >
-          <ShieldAlert size={11} />
-          Agent forwarded
-        </div>
-      )}
-
-      {/* Resolved-path notice shown once logging starts. */}
-      {logNotice && logEntry?.active && (
-        <div className="absolute inset-x-2 top-2 z-8 flex items-start gap-2 rounded-lg border border-border bg-surface/95 px-3 py-2 text-xs shadow-glow backdrop-blur">
-          <ScrollText size={14} className="mt-0.5 shrink-0 text-accent" />
-          <div className="min-w-0 flex-1">
-            <div className="font-medium text-foreground">
-              {logEntry.mode === "asciicast"
-                ? "Recording this session"
-                : "Logging this session"}
+          {logEntry?.active && (
+            <div className="pointer-events-none absolute bottom-1.5 right-2 z-6 flex items-center gap-1 rounded bg-danger/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-danger shadow-sm backdrop-blur-sm">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-danger" />
+              {logEntry.mode === "asciicast" ? "Rec" : "Log"}
             </div>
-            <div className="mt-0.5 break-all font-mono text-[11px] text-muted">
-              {logNotice}
+          )}
+
+          {session.agentForwarding && (
+            <div
+              title="The remote host can use your local SSH agent while this session is active"
+              className="pointer-events-none absolute bottom-1.5 left-2 z-6 flex items-center gap-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-400 shadow-sm backdrop-blur-sm"
+            >
+              <ShieldAlert size={11} />
+              Agent forwarded
             </div>
-          </div>
-          <button
-            type="button"
-            aria-label="Copy log path"
-            title="Copy path"
-            onClick={() =>
-              void navigator.clipboard.writeText(logNotice).then(() => {
-                setNoticeCopied(true);
-                window.setTimeout(() => setNoticeCopied(false), 1500);
-              })
-            }
-            className="shrink-0 rounded p-1 text-muted hover:bg-raised hover:text-foreground"
-          >
-            {noticeCopied ? <Check size={14} /> : <Copy size={14} />}
-          </button>
-          <button
-            type="button"
-            aria-label="Dismiss"
-            onClick={() => setLogNotice(null)}
-            className="shrink-0 rounded p-1 text-muted hover:bg-raised hover:text-foreground"
-          >
-            <X size={14} />
-          </button>
-        </div>
-      )}
+          )}
 
-      {/* Logging failure notice. */}
-      {logError && (
-        <div
-          role="alert"
-          className="absolute inset-x-2 top-2 z-8 flex items-start gap-2 rounded-lg border border-danger/40 bg-surface/95 px-3 py-2 text-xs text-danger shadow-glow backdrop-blur"
-        >
-          <span className="min-w-0 flex-1">Could not start logging: {logError}</span>
-          <button
-            type="button"
-            aria-label="Dismiss"
-            onClick={() => setLogError(null)}
-            className="shrink-0 rounded p-1 text-danger/80 hover:text-danger"
-          >
-            <X size={14} />
-          </button>
-        </div>
-      )}
-
-      {forwardingError && (
-        <div role="alert" className="absolute inset-x-2 top-2 z-9 flex items-start gap-2 rounded-lg border border-danger/40 bg-surface/95 px-3 py-2 text-xs text-danger shadow-glow">
-          <span className="min-w-0 flex-1">Could not enable agent forwarding: {forwardingError}</span>
-          <button type="button" aria-label="Dismiss" onClick={() => setForwardingError(null)}><X size={14}/></button>
-        </div>
-      )}
-
-      {/* Non-blocking transport notice (Mosh → SSH auto-fallback). */}
-      {session.transportNotice && (
-        <div
-          role="status"
-          className="absolute inset-x-2 top-2 z-8 flex items-start gap-2 rounded-lg border border-border bg-surface/95 px-3 py-2 text-xs shadow-glow backdrop-blur"
-        >
-          <ShieldCheck size={14} className="mt-0.5 shrink-0 text-accent" />
-          <span className="min-w-0 flex-1 text-foreground">{session.transportNotice}</span>
-          <button
-            type="button"
-            aria-label="Dismiss"
-            onClick={() => setTransportNotice(session.id, undefined)}
-            className="shrink-0 rounded p-1 text-muted hover:bg-raised hover:text-foreground"
-          >
-            <X size={14} />
-          </button>
-        </div>
-      )}
-
-      {isSsh && session.status === "connecting" && (
-        <ConnectionOverlay session={session} onClose={() => closeSession(session.id)} />
-      )}
-
-      {hostKeyChanged && (
-        <HostKeyChangedAlert
-          hostTitle={session.title}
-          message={describeSshError(session.errorCategory, session.errorMessage)}
-          scannedKeys={session.hostKeyScanned}
-          knownKeys={session.hostKeyKnown}
-          onClose={() => closeSession(session.id)}
-          onOpenKnownHosts={() => useUiStore.getState().openKnownHosts()}
-        />
-      )}
-
-      {preflightError && (
-        <ConnectionErrorAlert
-          hostTitle={session.connectionTarget ?? session.title}
-          message={describeSshError(session.errorCategory, session.errorMessage)}
-          onRetry={
-            session.agentCommand
-              ? undefined
-              : () => void restartSession(session.id)
-          }
-          onClose={() => closeSession(session.id)}
-        />
-      )}
-
-      {reconnecting && !hostKeyChanged && (
-        <ReconnectBanner
-          attempt={session.reconnectAttempt ?? 1}
-          nextRetryAt={session.nextRetryAt ?? null}
-          message={describeSshError(session.errorCategory, session.errorMessage)}
-          onRetryNow={() => retryReconnectNow(session.id)}
-          onStop={() => stopReconnect(session.id)}
-        />
-      )}
-
-      {showBanner && !hostKeyChanged && !preflightError && (
-        <div className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-between gap-3 border-t border-border bg-surface/95 px-4 py-2.5 text-sm backdrop-blur">
-          <span className="min-w-0 flex-1 text-muted">{bannerMessage()}</span>
-          <div className="flex shrink-0 gap-2">
-            {!session.agentCommand && (
+          {/* Resolved-path notice shown once logging starts. */}
+          {logNotice && logEntry?.active && (
+            <div className="absolute inset-x-2 top-2 z-8 flex items-start gap-2 rounded-lg border border-border bg-surface/95 px-3 py-2 text-xs shadow-glow backdrop-blur">
+              <ScrollText size={14} className="mt-0.5 shrink-0 text-accent" />
+              <div className="min-w-0 flex-1">
+                <div className="font-medium text-foreground">
+                  {logEntry.mode === "asciicast"
+                    ? "Recording this session"
+                    : "Logging this session"}
+                </div>
+                <div className="mt-0.5 break-all font-mono text-[11px] text-muted">{logNotice}</div>
+              </div>
               <button
                 type="button"
-                onClick={() => void restartSession(session.id)}
-                className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-foreground hover:border-accent hover:text-accent"
+                aria-label="Copy log path"
+                title="Copy path"
+                onClick={() =>
+                  void navigator.clipboard.writeText(logNotice).then(() => {
+                    setNoticeCopied(true);
+                    window.setTimeout(() => setNoticeCopied(false), 1500);
+                  })
+                }
+                className="shrink-0 rounded p-1 text-muted hover:bg-raised hover:text-foreground"
               >
-                <RotateCcw size={13} /> {isSsh || isSerial ? "Reconnect" : "Restart"}
-                {!isMobile && <kbd className="font-sans text-[11px] text-muted">Ctrl+R</kbd>}
+                {noticeCopied ? <Check size={14} /> : <Copy size={14} />}
               </button>
-            )}
-            <button
-              type="button"
-              onClick={() => closeSession(session.id)}
-              className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-muted hover:border-danger hover:text-danger"
+              <button
+                type="button"
+                aria-label="Dismiss"
+                onClick={() => setLogNotice(null)}
+                className="shrink-0 rounded p-1 text-muted hover:bg-raised hover:text-foreground"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
+          {/* Logging failure notice. */}
+          {logError && (
+            <div
+              role="alert"
+              className="absolute inset-x-2 top-2 z-8 flex items-start gap-2 rounded-lg border border-danger/40 bg-surface/95 px-3 py-2 text-xs text-danger shadow-glow backdrop-blur"
             >
-              <X size={13} /> Close
-              {!isMobile && <kbd className="font-sans text-[11px] text-muted">Ctrl+D</kbd>}
-            </button>
+              <span className="min-w-0 flex-1">Could not start logging: {logError}</span>
+              <button
+                type="button"
+                aria-label="Dismiss"
+                onClick={() => setLogError(null)}
+                className="shrink-0 rounded p-1 text-danger/80 hover:text-danger"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
+          {forwardingError && (
+            <div
+              role="alert"
+              className="absolute inset-x-2 top-2 z-9 flex items-start gap-2 rounded-lg border border-danger/40 bg-surface/95 px-3 py-2 text-xs text-danger shadow-glow"
+            >
+              <span className="min-w-0 flex-1">
+                Could not enable agent forwarding: {forwardingError}
+              </span>
+              <button type="button" aria-label="Dismiss" onClick={() => setForwardingError(null)}>
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
+          {/* Non-blocking transport notice (Mosh → SSH auto-fallback). */}
+          {session.transportNotice && (
+            <div
+              role="status"
+              className="absolute inset-x-2 top-2 z-8 flex items-start gap-2 rounded-lg border border-border bg-surface/95 px-3 py-2 text-xs shadow-glow backdrop-blur"
+            >
+              <ShieldCheck size={14} className="mt-0.5 shrink-0 text-accent" />
+              <span className="min-w-0 flex-1 text-foreground">{session.transportNotice}</span>
+              <button
+                type="button"
+                aria-label="Dismiss"
+                onClick={() => setTransportNotice(session.id, undefined)}
+                className="shrink-0 rounded p-1 text-muted hover:bg-raised hover:text-foreground"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
+          {isSsh && session.status === "connecting" && (
+            <ConnectionOverlay session={session} onClose={() => closeSession(session.id)} />
+          )}
+
+          {hostKeyChanged && (
+            <HostKeyChangedAlert
+              hostTitle={session.title}
+              message={describeSshError(session.errorCategory, session.errorMessage)}
+              scannedKeys={session.hostKeyScanned}
+              knownKeys={session.hostKeyKnown}
+              onClose={() => closeSession(session.id)}
+              onOpenKnownHosts={() => useUiStore.getState().openKnownHosts()}
+            />
+          )}
+
+          {preflightError && (
+            <ConnectionErrorAlert
+              hostTitle={session.connectionTarget ?? session.title}
+              message={describeSshError(session.errorCategory, session.errorMessage)}
+              onRetry={session.agentCommand ? undefined : () => void restartSession(session.id)}
+              onClose={() => closeSession(session.id)}
+            />
+          )}
+
+          {reconnecting && !hostKeyChanged && (
+            <ReconnectBanner
+              attempt={session.reconnectAttempt ?? 1}
+              nextRetryAt={session.nextRetryAt ?? null}
+              message={describeSshError(session.errorCategory, session.errorMessage)}
+              onRetryNow={() => retryReconnectNow(session.id)}
+              onStop={() => stopReconnect(session.id)}
+            />
+          )}
+
+          {showBanner && !hostKeyChanged && !preflightError && (
+            <div className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-between gap-3 border-t border-border bg-surface/95 px-4 py-2.5 text-sm backdrop-blur">
+              <span className="min-w-0 flex-1 text-muted">{bannerMessage()}</span>
+              <div className="flex shrink-0 gap-2">
+                {!session.agentCommand && (
+                  <button
+                    type="button"
+                    onClick={() => void restartSession(session.id)}
+                    className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-foreground hover:border-accent hover:text-accent"
+                  >
+                    <RotateCcw size={13} /> {isSsh || isSerial ? "Reconnect" : "Restart"}
+                    {!isMobile && <kbd className="font-sans text-[11px] text-muted">Ctrl+R</kbd>}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => closeSession(session.id)}
+                  className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-muted hover:border-danger hover:text-danger"
+                >
+                  <X size={13} /> Close
+                  {!isMobile && <kbd className="font-sans text-[11px] text-muted">Ctrl+D</kbd>}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </ContextMenu>
+      <ConfirmDialog
+        open={forwardingConfirm}
+        onOpenChange={setForwardingConfirm}
+        title="Restart shell with SSH agent forwarding?"
+        confirmLabel="Restart and enable"
+        busy={forwardingBusy}
+        onConfirm={enableForwarding}
+        message={
+          <div className="space-y-2">
+            <p>
+              The remote host can ask your local agent to sign authentication requests for as long
+              as this session remains connected.
+            </p>
+            <p>
+              SSH requires forwarding before a shell starts. Luma will end the current remote
+              process and start a new shell in this terminal; the terminal buffer and SSH connection
+              remain.
+            </p>
+            <p className="font-medium text-danger">
+              A compromised remote host could use every key your agent exposes. Enable this only for
+              a host you trust.
+            </p>
+            <p>This choice applies only to this live session and is not saved.</p>
           </div>
-        </div>
-      )}
-    </div>
-    </ContextMenu>
-    <ConfirmDialog
-      open={forwardingConfirm}
-      onOpenChange={setForwardingConfirm}
-      title="Restart shell with SSH agent forwarding?"
-      confirmLabel="Restart and enable"
-      busy={forwardingBusy}
-      onConfirm={enableForwarding}
-      message={
-        <div className="space-y-2">
-          <p>
-            The remote host can ask your local agent to sign authentication
-            requests for as long as this session remains connected.
-          </p>
-          <p>
-            SSH requires forwarding before a shell starts. Luma will end the
-            current remote process and start a new shell in this terminal; the
-            terminal buffer and SSH connection remain.
-          </p>
-          <p className="font-medium text-danger">
-            A compromised remote host could use every key your agent exposes.
-            Enable this only for a host you trust.
-          </p>
-          <p>This choice applies only to this live session and is not saved.</p>
-        </div>
-      }
-    />
+        }
+      />
     </>
   );
 }
@@ -829,7 +843,13 @@ function ReconnectBanner({
   );
 }
 
-function ConnectionOverlay({ session, onClose }: { session: TerminalSession; onClose: () => void }) {
+function ConnectionOverlay({
+  session,
+  onClose,
+}: {
+  session: TerminalSession;
+  onClose: () => void;
+}) {
   const [secret, setSecret] = useState("");
   const [showDetails, setShowDetails] = useState(false);
   const trustHostKey = useSessionStore((s) => s.trustHostKey);
@@ -841,7 +861,10 @@ function ConnectionOverlay({ session, onClose }: { session: TerminalSession; onC
     { id: "authentication", label: "Authenticating credentials" },
     { id: "ready", label: "Starting terminal session" },
   ] as const;
-  const activeIndex = Math.max(0, stages.findIndex((stage) => stage.id === (session.connectionStage ?? "starting")));
+  const activeIndex = Math.max(
+    0,
+    stages.findIndex((stage) => stage.id === (session.connectionStage ?? "starting")),
+  );
   const submitSecret = () => {
     if (!secret) return;
     terminalManager.answerSshPrompt(session.id, secret);
@@ -856,68 +879,146 @@ function ConnectionOverlay({ session, onClose }: { session: TerminalSession; onC
       className="absolute inset-0 z-10 flex items-start justify-center overflow-y-auto bg-background p-3 sm:items-center sm:p-6"
     >
       <div className="w-full max-w-md rounded-2xl border border-border bg-surface p-4 shadow-xl sm:p-6">
-        {session.connectionIssue && <div role="alert" className="mb-4 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">{session.connectionIssue}</div>}
-        {!prompt && <div className="text-center">
-          <LoaderCircle className="mx-auto animate-spin text-accent" size={28} />
-          <h2 className="mt-4 text-base font-semibold">Connecting to {session.connectionTarget ?? session.title}</h2>
-          <p className="mt-1 text-sm text-muted">Negotiating a secure SSH connection…</p>
-        </div>}
+        {session.connectionIssue && (
+          <div
+            role="alert"
+            className="mb-4 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger"
+          >
+            {session.connectionIssue}
+          </div>
+        )}
+        {!prompt && (
+          <div className="text-center">
+            <LoaderCircle className="mx-auto animate-spin text-accent" size={28} />
+            <h2 className="mt-4 text-base font-semibold">
+              Connecting to {session.connectionTarget ?? session.title}
+            </h2>
+            <p className="mt-1 text-sm text-muted">Negotiating a secure SSH connection…</p>
+          </div>
+        )}
 
-        {prompt?.type === "host-key" && <>
-          <ShieldCheck className="text-accent" size={28} />
-          <h2 className="mt-4 text-base font-semibold">Trust this host?</h2>
-          <p className="mt-1 text-sm text-muted">
-            {session.connectionTarget ?? session.title} has not been trusted before. Verify {prompt.keys.length === 1 ? "this fingerprint" : "these fingerprints"} through a trusted channel before continuing.
-          </p>
-          <div className="mt-4 rounded-lg border border-border bg-background p-3">
-            <div className="text-xs text-muted">Host</div>
-            <div className="mt-0.5 break-all font-mono text-sm">{session.connectionTarget ?? session.title}</div>
-            <div className="mt-3 space-y-3">
-              {prompt.keys.map((key) => (
-                <div key={`${key.keyType}:${key.fingerprint}`}>
-                  <div className="text-xs uppercase tracking-wide text-muted">{key.keyType} fingerprint</div>
-                  <div className="mt-0.5 break-all font-mono text-sm text-accent">{key.fingerprint}</div>
-                </div>
-              ))}
-              {prompt.keys.length === 0 && (
-                <div className="text-xs text-danger">The server presented no host keys to verify.</div>
-              )}
+        {prompt?.type === "host-key" && (
+          <>
+            <ShieldCheck className="text-accent" size={28} />
+            <h2 className="mt-4 text-base font-semibold">Trust this host?</h2>
+            <p className="mt-1 text-sm text-muted">
+              {session.connectionTarget ?? session.title} has not been trusted before. Verify{" "}
+              {prompt.keys.length === 1 ? "this fingerprint" : "these fingerprints"} through a
+              trusted channel before continuing.
+            </p>
+            <div className="mt-4 rounded-lg border border-border bg-background p-3">
+              <div className="text-xs text-muted">Host</div>
+              <div className="mt-0.5 break-all font-mono text-sm">
+                {session.connectionTarget ?? session.title}
+              </div>
+              <div className="mt-3 space-y-3">
+                {prompt.keys.map((key) => (
+                  <div key={`${key.keyType}:${key.fingerprint}`}>
+                    <div className="text-xs uppercase tracking-wide text-muted">
+                      {key.keyType} fingerprint
+                    </div>
+                    <div className="mt-0.5 break-all font-mono text-sm text-accent">
+                      {key.fingerprint}
+                    </div>
+                  </div>
+                ))}
+                {prompt.keys.length === 0 && (
+                  <div className="text-xs text-danger">
+                    The server presented no host keys to verify.
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-          <div className="mt-5 flex justify-end gap-2">
-            <button onClick={onClose} className="rounded-md border border-border px-3 py-2 text-sm text-muted hover:text-foreground">Cancel</button>
-            <button disabled={prompt.keys.length === 0} onClick={() => trustHostKey(session.id)} className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-foreground disabled:opacity-40">Trust and continue</button>
-          </div>
-        </>}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={onClose}
+                className="rounded-md border border-border px-3 py-2 text-sm text-muted hover:text-foreground"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={prompt.keys.length === 0}
+                onClick={() => trustHostKey(session.id)}
+                className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-foreground disabled:opacity-40"
+              >
+                Trust and continue
+              </button>
+            </div>
+          </>
+        )}
 
-        {prompt?.type === "credential" && <>
-          <KeyRound className="text-accent" size={28} />
-          <h2 className="mt-4 text-base font-semibold">Authentication required</h2>
-          <p className="mt-1 text-sm text-muted">{prompt.label}</p>
-          <p className="mt-1 text-xs text-muted">Requested by {prompt.target ?? session.connectionTarget ?? session.title}.</p>
-          <input autoFocus type={prompt.secret === false ? "text" : "password"} value={secret} onChange={(event) => setSecret(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") submitSecret(); }} aria-label={prompt.label} className="mt-4 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-accent" />
-          <div className="mt-5 flex justify-end gap-2">
-            <button onClick={onClose} className="rounded-md border border-border px-3 py-2 text-sm text-muted hover:text-foreground">Cancel</button>
-            <button disabled={!secret} onClick={submitSecret} className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-foreground disabled:opacity-40">Continue</button>
-          </div>
-        </>}
+        {prompt?.type === "credential" && (
+          <>
+            <KeyRound className="text-accent" size={28} />
+            <h2 className="mt-4 text-base font-semibold">Authentication required</h2>
+            <p className="mt-1 text-sm text-muted">{prompt.label}</p>
+            <p className="mt-1 text-xs text-muted">
+              Requested by {prompt.target ?? session.connectionTarget ?? session.title}.
+            </p>
+            <input
+              autoFocus
+              type={prompt.secret === false ? "text" : "password"}
+              value={secret}
+              onChange={(event) => setSecret(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") submitSecret();
+              }}
+              aria-label={prompt.label}
+              className="mt-4 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-accent"
+            />
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={onClose}
+                className="rounded-md border border-border px-3 py-2 text-sm text-muted hover:text-foreground"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={!secret}
+                onClick={submitSecret}
+                className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-foreground disabled:opacity-40"
+              >
+                Continue
+              </button>
+            </div>
+          </>
+        )}
 
-        <button type="button" onClick={() => setShowDetails((value) => !value)} className="mt-5 flex w-full items-center justify-between border-t border-border pt-4 text-xs font-medium text-muted hover:text-foreground">
+        <button
+          type="button"
+          onClick={() => setShowDetails((value) => !value)}
+          className="mt-5 flex w-full items-center justify-between border-t border-border pt-4 text-xs font-medium text-muted hover:text-foreground"
+        >
           Connection details
           {showDetails ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
         </button>
-        {showDetails && <div className="mt-3 space-y-2">
-          {stages.map((stage, index) => {
-            const complete = index < activeIndex;
-            const active = index === activeIndex;
-            return <div key={stage.id} className={`flex items-center gap-2 text-xs ${active ? "text-foreground" : "text-muted"}`}>
-              {complete ? <Check size={14} className="text-accent" /> : active ? <LoaderCircle size={14} className="animate-spin text-accent" /> : <Circle size={12} />}
-              <span>{stage.label}</span>
-              {active && <span className="ml-auto text-accent">In progress</span>}
-            </div>;
-          })}
-          <div className="mt-3 rounded-md bg-background px-3 py-2 font-mono text-[11px] text-muted">Target: {session.connectionTarget ?? session.title}</div>
-        </div>}
+        {showDetails && (
+          <div className="mt-3 space-y-2">
+            {stages.map((stage, index) => {
+              const complete = index < activeIndex;
+              const active = index === activeIndex;
+              return (
+                <div
+                  key={stage.id}
+                  className={`flex items-center gap-2 text-xs ${active ? "text-foreground" : "text-muted"}`}
+                >
+                  {complete ? (
+                    <Check size={14} className="text-accent" />
+                  ) : active ? (
+                    <LoaderCircle size={14} className="animate-spin text-accent" />
+                  ) : (
+                    <Circle size={12} />
+                  )}
+                  <span>{stage.label}</span>
+                  {active && <span className="ml-auto text-accent">In progress</span>}
+                </div>
+              );
+            })}
+            <div className="mt-3 rounded-md bg-background px-3 py-2 font-mono text-[11px] text-muted">
+              Target: {session.connectionTarget ?? session.title}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

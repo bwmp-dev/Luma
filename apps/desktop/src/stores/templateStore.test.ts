@@ -1,9 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  buildHostGroupLayout,
-  countTemplatePanes,
-  parseTemplates,
-} from "./templateStore";
+import { buildHostGroupLayout, countTemplatePanes, parseTemplates } from "./templateStore";
 import type { SnapshotPaneNode } from "../features/terminal/sessionSnapshot";
 
 const leaf: SnapshotPaneNode = { kind: "leaf", restore: { kind: "local" } };
@@ -41,9 +37,7 @@ describe("parseTemplates fails closed", () => {
       children: [leaf, leaf],
       sizes: [50, 50],
     };
-    const parsed = parseTemplates(
-      validStored([{ id: "1", name: "grp", createdAt: "x", root }]),
-    );
+    const parsed = parseTemplates(validStored([{ id: "1", name: "grp", createdAt: "x", root }]));
     expect(parsed).toHaveLength(1);
     expect(parsed[0].root).toEqual(root);
   });

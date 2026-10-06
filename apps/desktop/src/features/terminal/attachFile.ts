@@ -55,10 +55,7 @@ export async function uploadAttachment(
     setTransportNotice(session.id, undefined);
     return escapeRemotePathArg(remotePath);
   } catch (error) {
-    setTransportNotice(
-      session.id,
-      `Attachment upload failed: ${parseLumaError(error).message}`,
-    );
+    setTransportNotice(session.id, `Attachment upload failed: ${parseLumaError(error).message}`);
     throw error;
   }
 }

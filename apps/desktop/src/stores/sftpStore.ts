@@ -3,11 +3,7 @@ import { parseLumaError } from "../lib/hosts";
 import { queryClient } from "../lib/queryClient";
 import { getAllSettings, setSetting } from "../lib/settings";
 import { SETTING_KEYS } from "../types";
-import {
-  DEFAULT_VIEW_PREFS,
-  parseViewPrefs,
-  type ViewPrefs,
-} from "../features/sftp/viewPrefs";
+import { DEFAULT_VIEW_PREFS, parseViewPrefs, type ViewPrefs } from "../features/sftp/viewPrefs";
 import {
   inferSeparator,
   joinPath,
@@ -214,11 +210,7 @@ type SftpState = {
   transfer: (request: TransferRequest) => void;
 
   /** Put files on the clipboard, replacing whatever was there. */
-  copyToClipboard: (
-    source: TransferEndpoint,
-    files: SftpEntry[],
-    sourceDir: string,
-  ) => void;
+  copyToClipboard: (source: TransferEndpoint, files: SftpEntry[], sourceDir: string) => void;
   clearClipboard: () => void;
   /**
    * Paste the clipboard into a directory. Returns the names that would be
@@ -254,24 +246,17 @@ const isTerminal = (state: TransferState) => state !== "running";
 
 /** Whole-job byte total for a record, preferring the aggregate snapshot so
  * directory rows show overall (not current-file) progress. */
-function overallBytes(
-  record: Pick<TransferRecord, "transferred" | "aggregate">,
-): number {
+function overallBytes(record: Pick<TransferRecord, "transferred" | "aggregate">): number {
   return record.aggregate ? record.aggregate.bytesDone : record.transferred;
 }
 
 /** True when the transfer reads from or writes to the given session. */
 function touchesSession(record: TransferRecord, sessionId: string): boolean {
-  return (
-    record.sourceSessionId === sessionId || record.destSessionId === sessionId
-  );
+  return record.sourceSessionId === sessionId || record.destSessionId === sessionId;
 }
 
 /** The pane holding a session, if any. */
-function sideForSession(
-  panes: SideRecord<PaneEndpoint>,
-  sessionId: string,
-): PaneSide | null {
+function sideForSession(panes: SideRecord<PaneEndpoint>, sessionId: string): PaneSide | null {
   if (panes.left.kind === "remote" && panes.left.sessionId === sessionId) {
     return "left";
   }
@@ -292,23 +277,17 @@ export const useSftpStore = create<SftpState>((set, get) => {
   }
 
   function pruneFinishedHistory() {
-    const finished = get().transfers.filter((transfer) =>
-      isTerminal(transfer.state),
-    );
+    const finished = get().transfers.filter((transfer) => isTerminal(transfer.state));
     const removeCount = finished.length - MAX_FINISHED_TRANSFERS;
     if (removeCount <= 0) return;
 
     // An event can finish before its invoke returns. Keep that metadata-less
     // stub until registerTransfer merges it, or it would be recreated as running.
-    const removed = finished
-      .filter((transfer) => transfer.name !== "")
-      .slice(0, removeCount);
+    const removed = finished.filter((transfer) => transfer.name !== "").slice(0, removeCount);
     if (removed.length === 0) return;
     const removedIds = new Set(removed.map((transfer) => transfer.transferId));
     set((state) => ({
-      transfers: state.transfers.filter(
-        (transfer) => !removedIds.has(transfer.transferId),
-      ),
+      transfers: state.transfers.filter((transfer) => !removedIds.has(transfer.transferId)),
     }));
     forgetTransferRecords(removed);
   }
@@ -340,16 +319,12 @@ export const useSftpStore = create<SftpState>((set, get) => {
                         ...record.entries,
                         {
                           path: progress.filePath ?? "",
-                          state:
-                            progress.state === "skipped" ? "skipped" : "failed",
+                          state: progress.state === "skipped" ? "skipped" : "failed",
                           errorMessage: progress.errorMessage,
                         },
                       ],
-                skippedOutcomes:
-                  record.skippedOutcomes +
-                  (progress.state === "skipped" ? 1 : 0),
-                failedOutcomes:
-                  record.failedOutcomes + (progress.state === "skipped" ? 0 : 1),
+                skippedOutcomes: record.skippedOutcomes + (progress.state === "skipped" ? 1 : 0),
+                failedOutcomes: record.failedOutcomes + (progress.state === "skipped" ? 0 : 1),
               }
             : record,
         ),
@@ -441,9 +416,7 @@ export const useSftpStore = create<SftpState>((set, get) => {
       return { transfers };
     });
     if (isTerminal(progress.state)) {
-      const record = get().transfers.find(
-        (t) => t.transferId === progress.transferId,
-      );
+      const record = get().transfers.find((t) => t.transferId === progress.transferId);
       if (record && record.targetDir) invalidateTarget(record);
       pruneFinishedHistory();
     }
@@ -654,8 +627,7 @@ export const useSftpStore = create<SftpState>((set, get) => {
     set({ panes: { ...state.panes, [side]: { kind: "none" } } });
     if (endpoint.kind !== "remote") return null;
     const other = state.panes[OTHER_SIDE[side]];
-    const stillUsed =
-      other.kind === "remote" && other.sessionId === endpoint.sessionId;
+    const stillUsed = other.kind === "remote" && other.sessionId === endpoint.sessionId;
     return stillUsed ? null : endpoint.sessionId;
   }
 
@@ -672,8 +644,7 @@ export const useSftpStore = create<SftpState>((set, get) => {
       // Files copied from this session can no longer be read, so drop them
       // rather than leaving a Paste that would fail on every entry.
       clipboard:
-        state.clipboard?.source.kind === "remote" &&
-        state.clipboard.source.sessionId === sessionId
+        state.clipboard?.source.kind === "remote" && state.clipboard.source.sessionId === sessionId
           ? null
           : state.clipboard,
     }));
@@ -704,9 +675,7 @@ export const useSftpStore = create<SftpState>((set, get) => {
       if (get().initialized) return;
       set((state) => ({
         initialized: true,
-        panes: localAvailable
-          ? { ...state.panes, left: { kind: "local" } }
-          : state.panes,
+        panes: localAvailable ? { ...state.panes, left: { kind: "local" } } : state.panes,
       }));
     },
 
@@ -866,12 +835,8 @@ export const useSftpStore = create<SftpState>((set, get) => {
         // Overwrites happen without backend prompting, so surface collisions
         // from the destination's cached listing and let the caller confirm.
         const destKey =
-          dest.kind === "remote"
-            ? ["sftp-list", dest.sessionId, destDir]
-            : ["local-list", destDir];
-        const listing = queryClient.getQueryData<{ entries: SftpEntry[] }>(
-          destKey,
-        );
+          dest.kind === "remote" ? ["sftp-list", dest.sessionId, destDir] : ["local-list", destDir];
+        const listing = queryClient.getQueryData<{ entries: SftpEntry[] }>(destKey);
         const existing = new Set((listing?.entries ?? []).map((e) => e.name));
         const collisions = clipboard.files
           .filter((file) => existing.has(file.name))
@@ -934,9 +899,7 @@ export const useSftpStore = create<SftpState>((set, get) => {
     },
 
     clearFinished: () => {
-      const finished = get().transfers.filter((transfer) =>
-        isTerminal(transfer.state),
-      );
+      const finished = get().transfers.filter((transfer) => isTerminal(transfer.state));
       forgetTransferRecords(finished);
       set((state) => ({
         transfers: state.transfers.filter((transfer) => !isTerminal(transfer.state)),
@@ -951,24 +914,14 @@ export function selectActiveTransferCount(state: SftpState): number {
 }
 
 /** True when any transfer for the given session is still running. */
-export function selectRunningForSession(
-  transfers: TransferRecord[],
-  sessionId: string,
-): number {
-  return transfers.filter(
-    (t) => touchesSession(t, sessionId) && t.state === "running",
-  ).length;
+export function selectRunningForSession(transfers: TransferRecord[], sessionId: string): number {
+  return transfers.filter((t) => touchesSession(t, sessionId) && t.state === "running").length;
 }
 
 /** The session a pane is showing, or null when it is empty or local. */
-export function selectPaneSession(
-  state: SftpState,
-  side: PaneSide,
-): SftpSession | null {
+export function selectPaneSession(state: SftpState, side: PaneSide): SftpSession | null {
   const endpoint = state.panes[side];
-  return endpoint.kind === "remote"
-    ? (state.sessions[endpoint.sessionId] ?? null)
-    : null;
+  return endpoint.kind === "remote" ? (state.sessions[endpoint.sessionId] ?? null) : null;
 }
 
 /** Derive the local separator from the current local path (defaults to "/"). */

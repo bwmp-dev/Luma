@@ -1,9 +1,4 @@
-import {
-  ChevronLeft,
-  ChevronRight,
-  ExternalLink,
-  type LucideIcon,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "../../lib/utils";
 
@@ -113,13 +108,7 @@ export function MobileScreen({
 
 /** Grouped inset list container, the iOS Settings visual. Rows are separated by
  * hairlines and the group is a single rounded card. */
-export function MobileList({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
+export function MobileList({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <ul
       className={cn(
@@ -171,9 +160,7 @@ export function MobileRow({
         />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[17px] leading-tight">{label}</span>
-          {detail && (
-            <span className="mt-0.5 block truncate text-xs text-muted">{detail}</span>
-          )}
+          {detail && <span className="mt-0.5 block truncate text-xs text-muted">{detail}</span>}
         </span>
         {count !== undefined && (
           <span className="shrink-0 text-sm tabular-nums text-muted">{count}</span>

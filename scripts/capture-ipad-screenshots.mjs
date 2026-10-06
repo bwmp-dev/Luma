@@ -34,7 +34,9 @@ try {
       await page.goto(`${base}showcase.html?view=${view}&theme=${theme}&platform=ios`);
       await page.waitForSelector('html[data-showcase-ready="true"]', { timeout: 45000 });
       if (view === "terminal") {
-        await page.waitForFunction(() => (document.querySelector(".xterm-rows")?.textContent ?? "").trim().length > 20);
+        await page.waitForFunction(
+          () => (document.querySelector(".xterm-rows")?.textContent ?? "").trim().length > 20,
+        );
       }
       await page.waitForTimeout(250);
       const path = resolve(outDir, `${view}.png`);

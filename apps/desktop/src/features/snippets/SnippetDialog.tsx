@@ -75,8 +75,7 @@ export function SnippetDialog({
     if (variableList.length > 32) {
       next.variables = "At most 32 variables.";
     } else if (variableList.some((v) => !VARIABLE_RE.test(v))) {
-      next.variables =
-        "Variables may only contain letters, digits, '_' or '-' (1-64 chars).";
+      next.variables = "Variables may only contain letters, digits, '_' or '-' (1-64 chars).";
     }
     setErrors(next);
     if (Object.keys(next).length > 0) return null;
@@ -178,11 +177,7 @@ export function SnippetDialog({
             </span>
           </p>
         )}
-        <SelectField
-          label="Host association"
-          value={hostId}
-          onChange={setHostId}
-        >
+        <SelectField label="Host association" value={hostId} onChange={setHostId}>
           <option value="">None (available everywhere)</option>
           {hosts.map((host) => (
             <option key={host.id} value={host.id}>

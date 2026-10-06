@@ -84,8 +84,7 @@ export function KeymapSection() {
     <div className="space-y-5">
       <div className="flex items-center justify-between">
         <p className="text-xs text-muted">
-          Click a shortcut, then press the new keys. Esc cancels. Bindings need
-          Ctrl, Alt, or Meta.
+          Click a shortcut, then press the new keys. Esc cancels. Bindings need Ctrl, Alt, or Meta.
         </p>
         <button
           type="button"
@@ -117,9 +116,7 @@ export function KeymapSection() {
                 return (
                   <div key={action.id}>
                     <div className="flex items-center justify-between gap-3 rounded-md px-1 py-1">
-                      <span className="min-w-0 flex-1 truncate text-sm">
-                        {action.label}
-                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm">{action.label}</span>
                       <div className="flex shrink-0 items-center gap-1.5">
                         <button
                           type="button"

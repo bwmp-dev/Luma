@@ -158,10 +158,7 @@ export class Terminal {
 
   get parser() {
     return {
-      registerOscHandler: (
-        ident: number,
-        cb: (data: string) => boolean | Promise<boolean>,
-      ) => {
+      registerOscHandler: (ident: number, cb: (data: string) => boolean | Promise<boolean>) => {
         this.oscHandlers.set(ident, cb);
         return { dispose: () => this.oscHandlers.delete(ident) };
       },

@@ -13,26 +13,26 @@ const prompt = (user: string, host: string, path: string) =>
   `${green(`${user}@${host}`)}:${blue(path)}$ `;
 
 const UBUNTU_LOGO = [
-"                             ....          ",
-"              .',:clooo:  .:looooo:.       ",
-"           .;looooooooc  .oooooooooo'      ",
-"        .;looooool:,''.  :ooooooooooc      ",
-"       ;looool;.         'oooooooooo,      ",
-"      ;clool'             .cooooooc.  ,,   ",
-"         ...                ......  .:oo,  ",
-"  .;clol:,.                        .loooo' ",
-" :ooooooooo,                        'ooool ",
-"'ooooooooooo.                        loooo.",
-"'ooooooooool                         coooo.",
-" ,loooooooc.                        .loooo.",
-"   .,;;;'.                          ;ooooc ",
-"       ...                         ,ooool. ",
-"    .cooooc.              ..',,'.  .cooo.  ",
-"      ;ooooo:.           ;oooooooc.  :l.   ",
-"       .coooooc,..      coooooooooo.       ",
-"         .:ooooooolc:. .ooooooooooo'       ",
-"           .':loooooo;  ,oooooooooc        ",
-"               ..';::c'  .;loooo:'         "
+  "                             ....          ",
+  "              .',:clooo:  .:looooo:.       ",
+  "           .;looooooooc  .oooooooooo'      ",
+  "        .;looooool:,''.  :ooooooooooc      ",
+  "       ;looool;.         'oooooooooo,      ",
+  "      ;clool'             .cooooooc.  ,,   ",
+  "         ...                ......  .:oo,  ",
+  "  .;clol:,.                        .loooo' ",
+  " :ooooooooo,                        'ooool ",
+  "'ooooooooooo.                        loooo.",
+  "'ooooooooool                         coooo.",
+  " ,loooooooc.                        .loooo.",
+  "   .,;;;'.                          ;ooooc ",
+  "       ...                         ,ooool. ",
+  "    .cooooc.              ..',,'.  .cooo.  ",
+  "      ;ooooo:.           ;oooooooc.  :l.   ",
+  "       .coooooc,..      coooooooooo.       ",
+  "         .:ooooooolc:. .ooooooooooo'       ",
+  "           .':loooooo;  ,oooooooooc        ",
+  "               ..';::c'  .;loooo:'         ",
 ];
 const LOGO_W = 41;
 const GAP = "   ";
@@ -56,8 +56,7 @@ const UBUNTU_INFO = [
   `${orange("Locale")}: en_US.UTF-8`,
 ];
 
-const paletteRow = (codes: number[]) =>
-  codes.map((c) => `\x1b[${c}m   `).join("") + R;
+const paletteRow = (codes: number[]) => codes.map((c) => `\x1b[${c}m   `).join("") + R;
 
 const ubuntuFetch = (): string[] => {
   const lines = UBUNTU_LOGO.map((art, i) => {

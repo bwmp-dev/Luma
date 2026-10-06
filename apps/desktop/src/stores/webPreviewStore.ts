@@ -91,9 +91,7 @@ export const useWebPreviewStore = create<WebPreviewState>((set, get) => ({
       set((state) => ({
         opening: omitPort(state.opening, port),
         previews: { ...state.previews, [preview.tunnelId]: preview },
-        owners: sessionId
-          ? { ...state.owners, [preview.tunnelId]: sessionId }
-          : state.owners,
+        owners: sessionId ? { ...state.owners, [preview.tunnelId]: sessionId } : state.owners,
       }));
       await get().launch(preview);
       return preview;
@@ -155,9 +153,7 @@ export const useWebPreviewStore = create<WebPreviewState>((set, get) => ({
     try {
       const previews = await listWebPreviews();
       set({
-        previews: Object.fromEntries(
-          previews.map((preview) => [preview.tunnelId, preview]),
-        ),
+        previews: Object.fromEntries(previews.map((preview) => [preview.tunnelId, preview])),
       });
     } catch {
       // Non-fatal: the dialog simply starts with no known previews.
@@ -167,10 +163,7 @@ export const useWebPreviewStore = create<WebPreviewState>((set, get) => ({
   clearErrors: () => set({ discoverError: null, openError: null }),
 }));
 
-function omitPort(
-  record: Record<number, boolean>,
-  port: number,
-): Record<number, boolean> {
+function omitPort(record: Record<number, boolean>, port: number): Record<number, boolean> {
   if (!(port in record)) return record;
   const next = { ...record };
   delete next[port];

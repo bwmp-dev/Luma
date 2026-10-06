@@ -57,8 +57,7 @@ function driveSsh(
 ): void {
   const host = HOSTS.find((h) => h.id === hostId);
   const content =
-    sessions[hostId] ??
-    fillerSession(host?.username ?? "user", host?.name ?? "server");
+    sessions[hostId] ?? fillerSession(host?.username ?? "user", host?.name ?? "server");
   const osId = (host?.osId ?? "linux") as SshRemoteOsId;
 
   /* Connection state travels on the control channel and the screen boundary in
@@ -81,10 +80,7 @@ function driveSsh(
 }
 
 function driveLocal(channel: ByteChannel): void {
-  setTimeout(
-    () => channel.onmessage(fillerSession("alex", "workstation")),
-    40,
-  );
+  setTimeout(() => channel.onmessage(fillerSession("alex", "workstation")), 40);
 }
 
 export function createInvokeHandler(
@@ -100,33 +96,42 @@ export function createInvokeHandler(
   return (cmd, args) => {
     switch (cmd) {
       case "platform_capabilities":
-        return platform !== "desktop" ? {
-          os: platform,
-          isMobile: true,
-          features: {
-            localTerminal: false, serial: false, sshConfigImport: false, puttyImport: false, sftp: true,
-            portForwarding: false, updater: false,
-            // Android exposes no biometric unlock yet; iOS does.
-            biometrics: platform === "ios",
-            windowControls: false, folderSync: false, dragAndDrop: false,
-          },
-        } : {
-          os: "linux",
-          isMobile: false,
-          features: {
-            localTerminal: true,
-            serial: true,
-            sshConfigImport: true,
-            puttyImport: true,
-            sftp: true,
-            portForwarding: true,
-            updater: true,
-            biometrics: false,
-            windowControls: true,
-            folderSync: true,
-            dragAndDrop: true,
-          },
-        };
+        return platform !== "desktop"
+          ? {
+              os: platform,
+              isMobile: true,
+              features: {
+                localTerminal: false,
+                serial: false,
+                sshConfigImport: false,
+                puttyImport: false,
+                sftp: true,
+                portForwarding: false,
+                updater: false,
+                // Android exposes no biometric unlock yet; iOS does.
+                biometrics: platform === "ios",
+                windowControls: false,
+                folderSync: false,
+                dragAndDrop: false,
+              },
+            }
+          : {
+              os: "linux",
+              isMobile: false,
+              features: {
+                localTerminal: true,
+                serial: true,
+                sshConfigImport: true,
+                puttyImport: true,
+                sftp: true,
+                portForwarding: true,
+                updater: true,
+                biometrics: false,
+                windowControls: true,
+                folderSync: true,
+                dragAndDrop: true,
+              },
+            };
 
       case "settings_get_all":
         return settings;
@@ -159,8 +164,11 @@ export function createInvokeHandler(
         return [];
       case "putty_key_inspect":
         return {
-          version: 3, algorithm: "ssh-ed25519", comment: "alice@laptop",
-          encrypted: true, publicKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5",
+          version: 3,
+          algorithm: "ssh-ed25519",
+          comment: "alice@laptop",
+          encrypted: true,
+          publicKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5",
           fingerprint: "SHA256:8s2Rp1uWnQKcJ0y5vGmT3xLdF7bZaEwHrNqYo4CkVuI",
         };
       case "identities_list":
@@ -201,12 +209,7 @@ export function createInvokeHandler(
         const hostId = request.hostId ?? "";
         const host = HOSTS.find((h) => h.id === hostId);
         const backendId = `ssh-${++backendSeq}`;
-        driveSsh(
-          args.onData as ByteChannel,
-          args.onControl as ControlChannel,
-          hostId,
-          sessions,
-        );
+        driveSsh(args.onData as ByteChannel, args.onControl as ControlChannel, hostId, sessions);
         return { sessionId: backendId, title: host?.name ?? "SSH" };
       }
       case "pty_spawn": {

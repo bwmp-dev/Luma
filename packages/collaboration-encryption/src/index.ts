@@ -4,8 +4,7 @@ import {
   type EncryptedEventMessage,
 } from "@luma/collaboration-protocol";
 
-export const ROOM_KEY_ENVELOPE_ALGORITHM =
-  "ECDH-P256-HKDF-SHA256-AES-256-GCM" as const;
+export const ROOM_KEY_ENVELOPE_ALGORITHM = "ECDH-P256-HKDF-SHA256-AES-256-GCM" as const;
 export const DEVICE_KEY_ALGORITHM = "ECDH-P256" as const;
 
 export interface DeviceKeyPair {
@@ -53,11 +52,9 @@ export interface RoomEventHeader {
 }
 
 export async function generateDeviceKeyPair(): Promise<DeviceKeyPair> {
-  const pair = await crypto.subtle.generateKey(
-    { name: "ECDH", namedCurve: "P-256" },
-    true,
-    ["deriveBits"],
-  );
+  const pair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, [
+    "deriveBits",
+  ]);
   if (!("publicKey" in pair)) throw new CollaborationCryptoError("device key generation failed");
   return pair;
 }
@@ -79,7 +76,9 @@ export async function exportDevicePrivateKey(key: CryptoKey): Promise<Serialized
   return { algorithm: DEVICE_KEY_ALGORITHM, pkcs8: encodeBase64Url(new Uint8Array(bytes)) };
 }
 
-export async function importDevicePrivateKey(serialized: SerializedDevicePrivateKey): Promise<CryptoKey> {
+export async function importDevicePrivateKey(
+  serialized: SerializedDevicePrivateKey,
+): Promise<CryptoKey> {
   if (serialized.algorithm !== DEVICE_KEY_ALGORITHM) {
     throw new CollaborationCryptoError("unsupported device private key algorithm");
   }
@@ -133,7 +132,12 @@ export async function sealRoomKey(
   );
   const metadata = envelopeAssociatedData(context, ephemeralPublicKey);
   const ciphertext = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: toArrayBuffer(nonce), additionalData: toArrayBuffer(metadata), tagLength: 128 },
+    {
+      name: "AES-GCM",
+      iv: toArrayBuffer(nonce),
+      additionalData: toArrayBuffer(metadata),
+      tagLength: 128,
+    },
     wrappingKey,
     toArrayBuffer(roomKey),
   );
@@ -166,11 +170,7 @@ export async function openRoomKey(
   const ephemeralPublicKey = await importDevicePublicKey(envelope.ephemeralPublicKey);
   const salt = decodeBase64Url(envelope.salt, 16, "room key envelope salt");
   const nonce = decodeBase64Url(envelope.nonce, 12, "room key envelope nonce");
-  const ciphertext = decodeBase64Url(
-    envelope.ciphertext,
-    48,
-    "room key envelope ciphertext",
-  );
+  const ciphertext = decodeBase64Url(envelope.ciphertext, 48, "room key envelope ciphertext");
   const wrappingKey = await deriveWrappingKey(
     recipientPrivateKey,
     ephemeralPublicKey,
@@ -366,13 +366,9 @@ async function deriveWrappingKey(
     await crypto.subtle.deriveBits({ name: "ECDH", public: publicKey }, privateKey, 256),
   );
   try {
-    const hkdfKey = await crypto.subtle.importKey(
-      "raw",
-      toArrayBuffer(sharedBits),
-      "HKDF",
-      false,
-      ["deriveKey"],
-    );
+    const hkdfKey = await crypto.subtle.importKey("raw", toArrayBuffer(sharedBits), "HKDF", false, [
+      "deriveKey",
+    ]);
     return await crypto.subtle.deriveKey(
       {
         name: "HKDF",
@@ -518,8 +514,13 @@ function encodeBase64Url(bytes: Uint8Array): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/u, "");
 }
 
-function decodeBase64Url(value: string, expectedLength: number | undefined, name: string): Uint8Array {
-  if (!BASE64URL.test(value)) throw new CollaborationCryptoError(`${name} is not base64url encoded`);
+function decodeBase64Url(
+  value: string,
+  expectedLength: number | undefined,
+  name: string,
+): Uint8Array {
+  if (!BASE64URL.test(value))
+    throw new CollaborationCryptoError(`${name} is not base64url encoded`);
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
   let binary: string;

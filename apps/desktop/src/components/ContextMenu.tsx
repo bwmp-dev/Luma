@@ -80,10 +80,7 @@ export function ContextMenu({
         >
           {actions.map((action, index) =>
             "separator" in action && action.separator ? (
-              <RadixContextMenu.Separator
-                key={`sep-${index}`}
-                className="my-1 h-px bg-border"
-              />
+              <RadixContextMenu.Separator key={`sep-${index}`} className="my-1 h-px bg-border" />
             ) : (
               <RadixContextMenu.Item
                 key={action.label}
@@ -98,9 +95,7 @@ export function ContextMenu({
               >
                 {action.icon && <span className="shrink-0">{action.icon}</span>}
                 <span className="min-w-0 flex-1 truncate">{action.label}</span>
-                {action.hint && (
-                  <span className="shrink-0 text-xs text-muted">{action.hint}</span>
-                )}
+                {action.hint && <span className="shrink-0 text-xs text-muted">{action.hint}</span>}
               </RadixContextMenu.Item>
             ),
           )}

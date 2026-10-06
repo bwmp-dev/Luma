@@ -25,9 +25,27 @@ export function Sidebar() {
   const openKnownHosts = useUiStore((s) => s.openKnownHosts);
 
   const items: RailItem[] = [
-    { key: "hosts", label: "Hosts", icon: Server, active: mainView === "hosts", onClick: () => selectSection("hosts") },
-    { key: "keychain", label: "Keychain", icon: KeyRound, active: mainView === "keychain", onClick: openKeychain },
-    { key: "known-hosts", label: "Known hosts", icon: ShieldCheck, active: mainView === "known-hosts", onClick: openKnownHosts },
+    {
+      key: "hosts",
+      label: "Hosts",
+      icon: Server,
+      active: mainView === "hosts",
+      onClick: () => selectSection("hosts"),
+    },
+    {
+      key: "keychain",
+      label: "Keychain",
+      icon: KeyRound,
+      active: mainView === "keychain",
+      onClick: openKeychain,
+    },
+    {
+      key: "known-hosts",
+      label: "Known hosts",
+      icon: ShieldCheck,
+      active: mainView === "known-hosts",
+      onClick: openKnownHosts,
+    },
     ...ITEMS.map((item) => ({
       key: item.section,
       label: item.label,
@@ -35,11 +53,20 @@ export function Sidebar() {
       active: mainView === item.section,
       onClick: () => selectSection(item.section),
     })),
-    { key: "settings", label: "Settings", icon: Settings, active: mainView === "settings", onClick: openSettings },
+    {
+      key: "settings",
+      label: "Settings",
+      icon: Settings,
+      active: mainView === "settings",
+      onClick: openSettings,
+    },
   ];
   // Roving tabindex: only the active (or first) rail button is in the Tab order;
   // Arrow/Home/End move focus between them.
-  const activeIndex = Math.max(0, items.findIndex((item) => item.active));
+  const activeIndex = Math.max(
+    0,
+    items.findIndex((item) => item.active),
+  );
   const btnRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const onKeyDown = (event: React.KeyboardEvent, index: number) => {

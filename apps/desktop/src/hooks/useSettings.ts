@@ -14,8 +14,7 @@ export function useSettings() {
 export function useSetSetting() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ key, value }: { key: string; value: unknown }) =>
-      setSetting(key, value),
+    mutationFn: ({ key, value }: { key: string; value: unknown }) => setSetting(key, value),
     onMutate: async ({ key, value }) => {
       await queryClient.cancelQueries({ queryKey: SETTINGS_QUERY_KEY });
       const previous = queryClient.getQueryData<SettingsMap>(SETTINGS_QUERY_KEY);

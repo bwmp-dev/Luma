@@ -1,13 +1,5 @@
 import { useState } from "react";
-import {
-  Bot,
-  KeyRound,
-  MonitorPlay,
-  Pencil,
-  Plus,
-  ShieldCheck,
-  Trash2,
-} from "lucide-react";
+import { Bot, KeyRound, MonitorPlay, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { formatRelativeTime } from "../../lib/sync";
 import {
@@ -74,9 +66,7 @@ export function McpSection() {
                 <Bot size={16} className="shrink-0 text-muted" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {grant.label}
-                    </p>
+                    <p className="truncate text-sm font-medium text-foreground">{grant.label}</p>
                     {grant.requireApproval && (
                       <span className="flex shrink-0 items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[11px] text-muted">
                         <ShieldCheck size={10} /> Asks first
@@ -85,10 +75,7 @@ export function McpSection() {
                   </div>
                   <p className="mt-0.5 truncate text-xs text-muted">
                     <span className="font-mono">{grant.tokenPrefix}…</span> ·{" "}
-                    {grant.hostIds.length === 1
-                      ? "1 host"
-                      : `${grant.hostIds.length} hosts`}{" "}
-                    ·{" "}
+                    {grant.hostIds.length === 1 ? "1 host" : `${grant.hostIds.length} hosts`} ·{" "}
                     {grant.lastUsedAt
                       ? `used ${formatRelativeTime(grant.lastUsedAt * 1000)}`
                       : "never used"}
@@ -118,8 +105,8 @@ export function McpSection() {
             <KeyRound size={18} className="mx-auto text-muted" />
             <p className="mt-2 text-sm text-foreground">No grants yet</p>
             <p className="mx-auto mt-1 max-w-sm text-xs text-muted">
-              A grant is a token scoped to specific hosts. The agent runs
-              commands through Luma, so your keys and passwords stay here.
+              A grant is a token scoped to specific hosts. The agent runs commands through Luma, so
+              your keys and passwords stay here.
             </p>
           </div>
         )}
@@ -130,18 +117,14 @@ export function McpSection() {
           <div>
             <h3 className="text-sm font-medium text-foreground">Shared panes</h3>
             <p className="mt-0.5 text-xs text-muted">
-              Terminals an agent can currently read and type into. Sharing ends
-              when the tab closes.
+              Terminals an agent can currently read and type into. Sharing ends when the tab closes.
             </p>
           </div>
           <ul className="divide-y divide-border rounded-lg border border-border">
             {sharedPanes.map((pane) => {
               const grant = grants?.find((entry) => entry.id === pane.grantId);
               return (
-                <li
-                  key={pane.sessionId}
-                  className="flex items-center gap-3 px-3 py-2.5"
-                >
+                <li key={pane.sessionId} className="flex items-center gap-3 px-3 py-2.5">
                   <MonitorPlay size={16} className="shrink-0 text-accent" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm text-foreground">{pane.title}</p>
@@ -167,8 +150,8 @@ export function McpSection() {
         <div>
           <h3 className="text-sm font-medium text-foreground">Recent activity</h3>
           <p className="mt-0.5 text-xs text-muted">
-            What agents have done. Luma records the shape of each action, never
-            the command text or terminal contents.
+            What agents have done. Luma records the shape of each action, never the command text or
+            terminal contents.
           </p>
         </div>
         {activity?.length ? (
@@ -206,11 +189,7 @@ export function McpSection() {
         )}
       </section>
 
-      <GrantEditorDialog
-        open={editorOpen}
-        onOpenChange={setEditorOpen}
-        grant={editing}
-      />
+      <GrantEditorDialog open={editorOpen} onOpenChange={setEditorOpen} grant={editing} />
 
       <ConfirmDialog
         open={pendingDelete !== null}
@@ -218,9 +197,9 @@ export function McpSection() {
         title="Delete this grant?"
         message={
           <>
-            Any agent using <strong>{pendingDelete?.label}</strong> loses access
-            immediately, and its shared panes stop being readable. This cannot be
-            undone — you would have to issue a new token.
+            Any agent using <strong>{pendingDelete?.label}</strong> loses access immediately, and
+            its shared panes stop being readable. This cannot be undone — you would have to issue a
+            new token.
           </>
         }
         confirmLabel="Delete grant"

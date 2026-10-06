@@ -13,10 +13,7 @@ import { useSettings } from "../hooks/useSettings";
 import { useTheme } from "../hooks/useTheme";
 import { parseShellRef } from "../lib/terminal";
 import { getAllSettings } from "../lib/settings";
-import {
-  parseSnapshot,
-  startSnapshotPersistence,
-} from "../features/terminal/sessionSnapshot";
+import { parseSnapshot, startSnapshotPersistence } from "../features/terminal/sessionSnapshot";
 import { startLiveActivitySync } from "../features/mobile/liveActivity";
 import { SETTING_KEYS } from "../types";
 import { useKeymapStore } from "../stores/keymapStore";
@@ -175,12 +172,9 @@ export function useAppInit(): void {
   useTheme();
   const { data: settings } = useSettings();
   const updaterAvailable = useCapabilityStore((s) => s.capabilities.features.updater);
-  const portForwardingAvailable = useCapabilityStore(
-    (s) => s.capabilities.features.portForwarding,
-  );
+  const portForwardingAvailable = useCapabilityStore((s) => s.capabilities.features.portForwarding);
   const isIos = useCapabilityStore((s) => s.capabilities.os === "ios");
-  const liveActivityEnabled =
-    isIos && !!settings && settings[SETTING_KEYS.liveActivity] !== false; // default on
+  const liveActivityEnabled = isIos && !!settings && settings[SETTING_KEYS.liveActivity] !== false; // default on
 
   // Push persisted terminal settings into the manager (outside React state).
   useEffect(() => {
@@ -296,19 +290,10 @@ export function useAppInit(): void {
     void (async () => {
       try {
         const restoreSettings = await getAllSettings();
-        const restoreEnabled =
-          restoreSettings[SETTING_KEYS.restoreSessions] !== false; // default on
-        const snapshot = parseSnapshot(
-          restoreSettings[SETTING_KEYS.workspaceSnapshot],
-        );
+        const restoreEnabled = restoreSettings[SETTING_KEYS.restoreSessions] !== false; // default on
+        const snapshot = parseSnapshot(restoreSettings[SETTING_KEYS.workspaceSnapshot]);
         const alreadyOpen = useSessionStore.getState().tabs.length > 0;
-        if (
-          !cancelled &&
-          !alreadyOpen &&
-          restoreEnabled &&
-          snapshot &&
-          snapshot.tabs.length > 0
-        ) {
+        if (!cancelled && !alreadyOpen && restoreEnabled && snapshot && snapshot.tabs.length > 0) {
           useSessionStore.getState().restoreFromSnapshot(snapshot);
         }
       } catch {

@@ -1,10 +1,7 @@
 import { create } from "zustand";
 import { fetchServerStats, type ServerStatsSnapshot } from "../lib/serverStats";
 import { parseLumaError } from "../lib/hosts";
-import {
-  summarizeFleetHealth,
-  type FleetHealth,
-} from "../features/fleet/fleetHealth";
+import { summarizeFleetHealth, type FleetHealth } from "../features/fleet/fleetHealth";
 
 export type FleetEntry = {
   status: "checking" | "online" | "offline";
@@ -90,10 +87,7 @@ export const useFleetStore = create<FleetState>((set, get) => ({
     };
 
     await Promise.all(
-      Array.from(
-        { length: Math.min(MAX_CONCURRENT_FETCHES, hosts.length) },
-        () => worker(),
-      ),
+      Array.from({ length: Math.min(MAX_CONCURRENT_FETCHES, hosts.length) }, () => worker()),
     );
     if (generation === refreshGeneration) {
       // Favorites may have changed while the request was in flight.
@@ -115,4 +109,3 @@ function emptyEntry(): FleetEntry {
     checkedAtMs: null,
   };
 }
-

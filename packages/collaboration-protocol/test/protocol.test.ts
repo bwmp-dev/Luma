@@ -60,8 +60,8 @@ describe("collaboration protocol", () => {
       type: "history.replay",
       afterSequence: 42,
     });
-    expect(() =>
-      parseClientMessage('{"type":"history.replay","afterSequence":-1}', 4096),
-    ).toThrow(ProtocolError);
+    expect(() => parseClientMessage('{"type":"history.replay","afterSequence":-1}', 4096)).toThrow(
+      ProtocolError,
+    );
   });
 });

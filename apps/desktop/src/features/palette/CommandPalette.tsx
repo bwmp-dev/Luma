@@ -98,9 +98,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   }, [query]);
 
   useEffect(() => {
-    const el = listRef.current?.querySelector<HTMLElement>(
-      `[data-index="${active}"]`,
-    );
+    const el = listRef.current?.querySelector<HTMLElement>(`[data-index="${active}"]`);
     el?.scrollIntoView({ block: "nearest" });
   }, [active]);
 
@@ -144,9 +142,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
           aria-expanded
           aria-controls="command-palette-list"
           aria-autocomplete="list"
-          aria-activedescendant={
-            filtered.length > 0 ? `command-option-${active}` : undefined
-          }
+          aria-activedescendant={filtered.length > 0 ? `command-option-${active}` : undefined}
           className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted"
         />
         <button
@@ -176,9 +172,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
         aria-label="Commands"
       >
         {filtered.length === 0 ? (
-          <p className="px-3 py-6 text-center text-sm text-muted">
-            No matching commands.
-          </p>
+          <p className="px-3 py-6 text-center text-sm text-muted">No matching commands.</p>
         ) : (
           filtered.map((command, index) => {
             const showGroup = command.group !== lastGroup;
@@ -308,9 +302,7 @@ function useCommands(
         label: `New terminal: ${profile.name}`,
         keywords: "profile shell",
         icon: <SquareTerminal size={15} />,
-        run: wrap(() =>
-          void openLocalSession({ kind: "profile", id: profile.id }, profile.name),
-        ),
+        run: wrap(() => void openLocalSession({ kind: "profile", id: profile.id }, profile.name)),
       });
     }
 
@@ -434,7 +426,9 @@ function useCommands(
         hint: host.hostname,
         keywords: `ssh ${host.hostname} ${host.username ?? ""} ${host.tags.join(" ")}`,
         icon: <Server size={15} />,
-        run: wrap(() => void openSshSession(host.id, host.name, host.hostname, false, host.tabColor)),
+        run: wrap(
+          () => void openSshSession(host.id, host.name, host.hostname, false, host.tabColor),
+        ),
       });
     }
 

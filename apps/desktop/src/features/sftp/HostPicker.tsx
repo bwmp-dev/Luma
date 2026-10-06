@@ -84,11 +84,7 @@ export function HostPicker({
       type="button"
       onClick={() => setPaneLocal(side)}
       disabled={localDisabled}
-      title={
-        localDisabled
-          ? "The other pane is already showing this computer"
-          : undefined
-      }
+      title={localDisabled ? "The other pane is already showing this computer" : undefined}
       className={cn(
         "flex w-full items-center text-left",
         compact
@@ -112,15 +108,8 @@ export function HostPicker({
         >
           This computer
         </span>
-        <span
-          className={cn(
-            "block truncate text-muted",
-            compact ? "text-[11px]" : "text-xs",
-          )}
-        >
-          {localDisabled
-            ? "Already open in the other pane"
-            : "Browse local files"}
+        <span className={cn("block truncate text-muted", compact ? "text-[11px]" : "text-xs")}>
+          {localDisabled ? "Already open in the other pane" : "Browse local files"}
         </span>
       </span>
     </button>
@@ -137,9 +126,7 @@ export function HostPicker({
         )}
       >
         <Server size={compact ? 18 : 24} className="text-muted" />
-        <p className={cn("mt-2 font-medium", compact ? "text-xs" : "text-sm")}>
-          No saved hosts
-        </p>
+        <p className={cn("mt-2 font-medium", compact ? "text-xs" : "text-sm")}>No saved hosts</p>
         <p className={cn("mt-1 text-muted", compact ? "text-[11px]" : "text-xs")}>
           Add an SSH host in the Hosts section, then connect here.
         </p>
@@ -176,9 +163,7 @@ export function HostPicker({
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         {error}
         {localOption}
-        {allowLocal && ordered.length > 0 && (
-          <div className="my-1 h-px bg-border" />
-        )}
+        {allowLocal && ordered.length > 0 && <div className="my-1 h-px bg-border" />}
         {list}
       </div>
     );
@@ -230,18 +215,14 @@ function HostRow({
         <Server size={15} className="shrink-0 text-accent" />
       )}
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-xs font-medium text-foreground">
-          {host.name}
-        </span>
+        <span className="block truncate text-xs font-medium text-foreground">{host.name}</span>
         <span className="block truncate text-[11px] text-muted">
           {host.username ? `${host.username}@` : ""}
           {host.hostname}:{host.port}
         </span>
       </span>
       {connecting && (
-        <span className="shrink-0 text-[11px] font-medium text-accent">
-          Connecting…
-        </span>
+        <span className="shrink-0 text-[11px] font-medium text-accent">Connecting…</span>
       )}
     </button>
   );
@@ -266,16 +247,10 @@ function HostCard({
       className="flex items-center gap-3 rounded-xl bg-raised px-4 py-3 text-left transition-all hover:ring-1 hover:ring-accent disabled:opacity-60 disabled:hover:ring-0"
     >
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
-        {connecting ? (
-          <Loader2 size={18} className="animate-spin" />
-        ) : (
-          <Server size={18} />
-        )}
+        {connecting ? <Loader2 size={18} className="animate-spin" /> : <Server size={18} />}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold text-foreground">
-          {host.name}
-        </span>
+        <span className="block truncate text-sm font-semibold text-foreground">{host.name}</span>
         <span className="block truncate text-xs text-muted">
           {host.username ? `${host.username}@` : ""}
           {host.hostname}:{host.port}

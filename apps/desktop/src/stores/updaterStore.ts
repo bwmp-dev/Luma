@@ -191,8 +191,7 @@ export const useUpdaterStore = create<UpdaterState>((set, get) => ({
       set({
         status: "restart-failed",
         relaunching: false,
-        errorMessage:
-          "Update installed — please restart Luma to finish updating.",
+        errorMessage: "Update installed — please restart Luma to finish updating.",
       });
     }
   },

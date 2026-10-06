@@ -60,7 +60,9 @@ const request = async (path) => {
     },
   });
   if (!response.ok) {
-    throw new Error(`GitHub API request to ${path} failed: ${response.status} ${response.statusText}`);
+    throw new Error(
+      `GitHub API request to ${path} failed: ${response.status} ${response.statusText}`,
+    );
   }
   return response.json();
 };
@@ -75,7 +77,9 @@ if (!release) throw new Error(`Release ${tag} was not found in ${repository}`);
 
 const assets = [];
 for (let page = 1; ; page += 1) {
-  const batch = await request(`/repos/${repository}/releases/${release.id}/assets?per_page=100&page=${page}`);
+  const batch = await request(
+    `/repos/${repository}/releases/${release.id}/assets?per_page=100&page=${page}`,
+  );
   assets.push(...batch);
   if (batch.length < 100) break;
 }

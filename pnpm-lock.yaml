@@ -10,7 +10,11 @@ overrides:
 
 importers:
 
-  .: {}
+  .:
+    devDependencies:
+      vite-plus:
+        specifier: 0.2.5
+        version: 0.2.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(jsdom@29.1.1)(tsx@4.23.1)(typescript@5.8.3)(vite@8.1.5(@types/node@26.1.1)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1))
 
   apps/desktop:
     dependencies:

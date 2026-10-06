@@ -43,10 +43,8 @@ export function MobileTerminalSettingsScreen({ onBack }: { onBack: () => void })
   // opening the key row. Each one takes a gesture away from xterm, which is why
   // they can be turned off individually.
   const gestureArrowPad = settings?.[SETTING_KEYS.gestureArrowPad] !== false;
-  const gestureDoubleTapTab =
-    settings?.[SETTING_KEYS.gestureDoubleTapTab] !== false;
-  const connectionPreviews =
-    settings?.[SETTING_KEYS.connectionPreviews] !== false;
+  const gestureDoubleTapTab = settings?.[SETTING_KEYS.gestureDoubleTapTab] !== false;
+  const connectionPreviews = settings?.[SETTING_KEYS.connectionPreviews] !== false;
   // Both default OFF. Dictation because the only engine a webview can reach may
   // be cloud-backed; auto-send because it skips the review step.
   const voiceDictation = settings?.[SETTING_KEYS.voiceDictation] === true;
@@ -187,8 +185,8 @@ export function MobileTerminalSettingsScreen({ onBack }: { onBack: () => void })
         </Field>
         {voiceAutoSend && voiceDictation && speechSupport.available && (
           <p className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-2.5 text-xs text-amber-400">
-            Auto-send puts transcribed text at your prompt without you reading it
-            first. It still never presses Enter, so nothing runs until you do.
+            Auto-send puts transcribed text at your prompt without you reading it first. It still
+            never presses Enter, so nothing runs until you do.
           </p>
         )}
       </Section>
@@ -317,13 +315,10 @@ export function MobilePrivacyScreen({ onBack }: { onBack: () => void }) {
       </Section>
       {analytics.installId && (
         <Section title="This install's id">
-          <p className="break-all font-mono text-xs text-muted">
-            {analytics.installId}
-          </p>
+          <p className="break-all font-mono text-xs text-muted">{analytics.installId}</p>
           <p className="mt-2 text-sm text-muted">
-            Quote this if you ask us to delete the analytics records for this
-            install. Turning the setting off deletes the id here and starts a
-            new one if you turn it back on.
+            Quote this if you ask us to delete the analytics records for this install. Turning the
+            setting off deletes the id here and starts a new one if you turn it back on.
           </p>
         </Section>
       )}

@@ -16,17 +16,12 @@ export function makeLeaf(sessionId: string): PaneNode {
 }
 
 /** Depth-first list of leaf panes in visual order. */
-export function collectLeaves(
-  node: PaneNode,
-): Array<{ id: string; sessionId: string }> {
+export function collectLeaves(node: PaneNode): Array<{ id: string; sessionId: string }> {
   if (node.kind === "leaf") return [{ id: node.id, sessionId: node.sessionId }];
   return node.children.flatMap(collectLeaves);
 }
 
-export function findLeaf(
-  node: PaneNode,
-  paneId: string,
-): { id: string; sessionId: string } | null {
+export function findLeaf(node: PaneNode, paneId: string): { id: string; sessionId: string } | null {
   if (node.kind === "leaf") {
     return node.id === paneId ? { id: node.id, sessionId: node.sessionId } : null;
   }
@@ -68,9 +63,7 @@ export function splitLeaf(
     };
   }
 
-  const idx = node.children.findIndex(
-    (child) => child.kind === "leaf" && child.id === targetId,
-  );
+  const idx = node.children.findIndex((child) => child.kind === "leaf" && child.id === targetId);
 
   if (idx >= 0 && node.direction === direction) {
     const half = node.sizes[idx] / 2;
@@ -89,9 +82,7 @@ export function splitLeaf(
       id: uid(),
       direction,
       children:
-        placement === "before"
-          ? [newLeaf, node.children[idx]]
-          : [node.children[idx], newLeaf],
+        placement === "before" ? [newLeaf, node.children[idx]] : [node.children[idx], newLeaf],
       sizes: [50, 50],
     };
     return { ...node, children };
@@ -128,18 +119,12 @@ export function removeLeaf(node: PaneNode, targetId: string): PaneNode | null {
 
   const total = sizes.reduce((a, b) => a + b, 0);
   const normalized =
-    total > 0
-      ? sizes.map((s) => (s / total) * 100)
-      : children.map(() => 100 / children.length);
+    total > 0 ? sizes.map((s) => (s / total) * 100) : children.map(() => 100 / children.length);
   return { ...node, children, sizes: normalized };
 }
 
 /** Replace the sizes array of the split with the given id. */
-export function setSplitSizes(
-  node: PaneNode,
-  splitId: string,
-  sizes: number[],
-): PaneNode {
+export function setSplitSizes(node: PaneNode, splitId: string, sizes: number[]): PaneNode {
   if (node.kind === "leaf") return node;
   if (node.id === splitId) return { ...node, sizes };
   return {
@@ -149,18 +134,12 @@ export function setSplitSizes(
 }
 
 /** Reassign which session a leaf hosts (used when moving/swapping panes). */
-export function setLeafSession(
-  node: PaneNode,
-  paneId: string,
-  sessionId: string,
-): PaneNode {
+export function setLeafSession(node: PaneNode, paneId: string, sessionId: string): PaneNode {
   if (node.kind === "leaf") {
     return node.id === paneId ? { ...node, sessionId } : node;
   }
   return {
     ...node,
-    children: node.children.map((child) =>
-      setLeafSession(child, paneId, sessionId),
-    ),
+    children: node.children.map((child) => setLeafSession(child, paneId, sessionId)),
   };
 }

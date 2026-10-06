@@ -33,9 +33,7 @@ const configFile = resolve(desktopRoot, "showcase.vite.config.ts");
  * declares them. */
 const fromDesktop = createRequire(resolve(desktopRoot, "package.json"));
 // vite is ESM, playwright is CJS — each has to be loaded the way it ships.
-const { build, preview } = await import(
-  pathToFileURL(fromDesktop.resolve("vite")).href
-);
+const { build, preview } = await import(pathToFileURL(fromDesktop.resolve("vite")).href);
 const { chromium } = fromDesktop("playwright");
 
 const THEMES = ["dark", "light"];
@@ -80,8 +78,7 @@ const selected = parseArgs();
 
 await build({ configFile, root: desktopRoot, logLevel: "warn" });
 const server = await preview({ configFile, root: desktopRoot, logLevel: "warn" });
-const base =
-  server.resolvedUrls?.local?.[0] ?? `http://localhost:${server.config.preview.port}/`;
+const base = server.resolvedUrls?.local?.[0] ?? `http://localhost:${server.config.preview.port}/`;
 const browser = await chromium.launch();
 
 let failed = false;

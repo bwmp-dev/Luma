@@ -63,12 +63,7 @@ import {
   type ViewPrefs,
 } from "./viewPrefs";
 import { MENU_CONTENT_CLASS, MENU_ITEM_CLASS, ViewMenuItems } from "./ViewMenu";
-import {
-  NO_ENTRIES,
-  rowsInBand,
-  scrollRowIntoView,
-  useVirtualRows,
-} from "./useVirtualRows";
+import { NO_ENTRIES, rowsInBand, scrollRowIntoView, useVirtualRows } from "./useVirtualRows";
 
 /** Row height in px, applied inline so layout and the windowing arithmetic
  * cannot drift apart. Matches what the row's padding and its tallest child (the
@@ -102,11 +97,7 @@ type FilePaneProps = {
   canTransfer: boolean;
   /** Why the transfer button is disabled, shown as its tooltip. */
   transferDisabledReason?: string;
-  onRequestTransfer: (
-    sourceSide: PaneSide,
-    entries: SftpEntry[],
-    targetDir: string,
-  ) => void;
+  onRequestTransfer: (sourceSide: PaneSide, entries: SftpEntry[], targetDir: string) => void;
   headerExtra?: React.ReactNode;
 };
 
@@ -204,14 +195,8 @@ export function FilePane({
   const entries = listing.data?.entries ?? NO_ENTRIES;
   // Sort + hidden filtering are presentation over the cached listing, so
   // changing either re-renders without re-fetching.
-  const ordered = useMemo(
-    () => applyViewPrefs(entries, viewPrefs),
-    [entries, viewPrefs],
-  );
-  const hidden = useMemo(
-    () => hiddenCount(entries, viewPrefs),
-    [entries, viewPrefs],
-  );
+  const ordered = useMemo(() => applyViewPrefs(entries, viewPrefs), [entries, viewPrefs]);
+  const hidden = useMemo(() => hiddenCount(entries, viewPrefs), [entries, viewPrefs]);
   const visible = useMemo(() => {
     const needle = filter.trim().toLowerCase();
     const filtered = needle
@@ -647,10 +632,7 @@ export function FilePane({
           >
             <CornerLeftUp size={14} />
           </IconButton>
-          <IconButton
-            label="Refresh"
-            onClick={() => void listing.refetch()}
-          >
+          <IconButton label="Refresh" onClick={() => void listing.refetch()}>
             <RefreshCw size={14} className={listing.isFetching ? "animate-spin" : undefined} />
           </IconButton>
           {editingPath ? (
@@ -728,9 +710,7 @@ export function FilePane({
                 ? (transferDisabledReason ?? "Connect the other pane first")
                 : `${transferLabel} ${transferableSelected.length} item${transferableSelected.length === 1 ? "" : "s"}`
             }
-            onClick={() =>
-              onRequestTransfer(side, transferableSelected, "__counterpart__")
-            }
+            onClick={() => onRequestTransfer(side, transferableSelected, "__counterpart__")}
             className="flex shrink-0 items-center gap-1.5 rounded-md bg-accent px-2.5 py-1.5 text-xs font-medium text-accent-foreground hover:brightness-110 disabled:opacity-40"
           >
             {transferIcon}
@@ -761,206 +741,200 @@ export function FilePane({
           onChange={setViewPrefs}
           className="hidden w-32 justify-end sm:flex"
         />
-        {isRemote && (
-          <span className="hidden w-24 text-right md:block">Perms</span>
-        )}
+        {isRemote && <span className="hidden w-24 text-right md:block">Perms</span>}
         <span className="w-6" />
       </div>
 
       {/* Body -------------------------------------------------------------- */}
       <ContextMenu actions={backgroundActions} minWidth="min-w-36">
-      <div
-        ref={bodyRef}
-        tabIndex={-1}
-        onMouseDown={onBodyMouseDown}
-        className={cn(
-          "relative min-h-0 flex-1 overflow-y-auto outline-none",
-          lassoing && "select-none",
-        )}
-      >
-        {marquee && marquee.height > 0 && (
-          <div
-            aria-hidden
-            className="pointer-events-none absolute z-10 border border-accent bg-accent/10"
-            style={marquee}
-          />
-        )}
-        {listing.isLoading ? (
-          <PaneMessage>Loading…</PaneMessage>
-        ) : listing.isError ? (
-          <PaneMessage tone="danger">
-            <AlertTriangle size={18} className="mb-1" />
-            {parseLumaError(listing.error).message}
-            <button
-              type="button"
-              onClick={() => void listing.refetch()}
-              className="mt-2 rounded-md border border-border px-2.5 py-1 text-xs text-foreground hover:border-accent"
-            >
-              Retry
-            </button>
-          </PaneMessage>
-        ) : visible.length === 0 ? (
-          <PaneMessage>
-            {filter
-              ? "No matching entries."
-              : hidden > 0
-                ? // Not actually empty — without this the Hidden files toggle
-                  // is the last place anyone would think to look.
-                  `This folder has only hidden files (${hidden}).`
-                : "This folder is empty."}
-          </PaneMessage>
-        ) : (
-          <ul role="list">
-            {/* Spacers stand in for the rows outside the window so the
+        <div
+          ref={bodyRef}
+          tabIndex={-1}
+          onMouseDown={onBodyMouseDown}
+          className={cn(
+            "relative min-h-0 flex-1 overflow-y-auto outline-none",
+            lassoing && "select-none",
+          )}
+        >
+          {marquee && marquee.height > 0 && (
+            <div
+              aria-hidden
+              className="pointer-events-none absolute z-10 border border-accent bg-accent/10"
+              style={marquee}
+            />
+          )}
+          {listing.isLoading ? (
+            <PaneMessage>Loading…</PaneMessage>
+          ) : listing.isError ? (
+            <PaneMessage tone="danger">
+              <AlertTriangle size={18} className="mb-1" />
+              {parseLumaError(listing.error).message}
+              <button
+                type="button"
+                onClick={() => void listing.refetch()}
+                className="mt-2 rounded-md border border-border px-2.5 py-1 text-xs text-foreground hover:border-accent"
+              >
+                Retry
+              </button>
+            </PaneMessage>
+          ) : visible.length === 0 ? (
+            <PaneMessage>
+              {filter
+                ? "No matching entries."
+                : hidden > 0
+                  ? // Not actually empty — without this the Hidden files toggle
+                    // is the last place anyone would think to look.
+                    `This folder has only hidden files (${hidden}).`
+                  : "This folder is empty."}
+            </PaneMessage>
+          ) : (
+            <ul role="list">
+              {/* Spacers stand in for the rows outside the window so the
                 scrollbar reflects the whole folder. */}
-            {rowWindow.padTop > 0 && (
-              <li aria-hidden style={{ height: rowWindow.padTop }} />
-            )}
-            {visible.slice(rowWindow.start, rowWindow.end).map((entry, offset) => {
-              const index = rowWindow.start + offset;
-              const isSelected = selected.has(entry.path);
-              // Files and directories alike can be transferred.
-              const canRowTransfer = canTransfer;
-              const rowActions: MenuAction[] = [];
-              if (canRowTransfer) {
+              {rowWindow.padTop > 0 && <li aria-hidden style={{ height: rowWindow.padTop }} />}
+              {visible.slice(rowWindow.start, rowWindow.end).map((entry, offset) => {
+                const index = rowWindow.start + offset;
+                const isSelected = selected.has(entry.path);
+                // Files and directories alike can be transferred.
+                const canRowTransfer = canTransfer;
+                const rowActions: MenuAction[] = [];
+                if (canRowTransfer) {
+                  rowActions.push({
+                    label: transferLabel,
+                    onSelect: () => onRequestTransfer(side, [entry], "__counterpart__"),
+                  });
+                }
+                // Copies the whole selection when this row is part of it, so the
+                // menu matches what dragging the same row would move.
                 rowActions.push({
-                  label: transferLabel,
-                  onSelect: () => onRequestTransfer(side, [entry], "__counterpart__"),
+                  label:
+                    isSelected && selectedEntries.length > 1
+                      ? `Copy ${selectedEntries.length} items`
+                      : "Copy",
+                  icon: <Copy size={14} />,
+                  hint: "Ctrl+C",
+                  onSelect: () =>
+                    copyEntries(
+                      isSelected && selectedEntries.length > 0 ? selectedEntries : [entry],
+                    ),
                 });
-              }
-              // Copies the whole selection when this row is part of it, so the
-              // menu matches what dragging the same row would move.
-              rowActions.push({
-                label:
-                  isSelected && selectedEntries.length > 1
-                    ? `Copy ${selectedEntries.length} items`
-                    : "Copy",
-                icon: <Copy size={14} />,
-                hint: "Ctrl+C",
-                onSelect: () =>
-                  copyEntries(
-                    isSelected && selectedEntries.length > 0
-                      ? selectedEntries
-                      : [entry],
-                  ),
-              });
-              if (entry.kind === "dir" || entry.kind === "symlink") {
+                if (entry.kind === "dir" || entry.kind === "symlink") {
+                  rowActions.push({
+                    label: "Open",
+                    icon: <Folder size={14} />,
+                    onSelect: () => openEntry(entry),
+                  });
+                }
                 rowActions.push({
-                  label: "Open",
-                  icon: <Folder size={14} />,
-                  onSelect: () => openEntry(entry),
+                  label: "Rename",
+                  icon: <Pencil size={14} />,
+                  onSelect: () => {
+                    setRenameError(null);
+                    setRenaming(entry);
+                  },
                 });
-              }
-              rowActions.push({
-                label: "Rename",
-                icon: <Pencil size={14} />,
-                onSelect: () => {
-                  setRenameError(null);
-                  setRenaming(entry);
-                },
-              });
-              rowActions.push({ separator: true });
-              rowActions.push({
-                label: "Delete",
-                icon: <Trash2 size={14} />,
-                destructive: true,
-                onSelect: () => {
-                  setDeleteError(null);
-                  setDeleteRecursive(false);
-                  setDeleting(entry);
-                },
-              });
-              return (
-                <ContextMenu
-                  key={entry.path}
-                  actions={rowActions}
-                  minWidth="min-w-36"
-                  // Right-clicking an unselected row targets just that row,
-                  // mirroring onRowDragStart's selection behavior.
-                  onOpenChange={(open) => {
-                    if (open && !isSelected) {
-                      setSelected(new Set([entry.path]));
-                      anchorIndex.current = index;
-                    }
-                  }}
-                >
-                <li
-                  role="row"
-                  aria-selected={isSelected}
-                  tabIndex={0}
-                  data-selected={isSelected}
-                  data-row-index={index}
-                  ref={(node) => {
-                    if (node) rowRefs.current.set(index, node);
-                    else rowRefs.current.delete(index);
-                  }}
-                  // Only selected rows drag, so a press on any other row starts
-                  // a lasso instead of an HTML5 drag.
-                  draggable={isSelected}
-                  // Stop the native contextmenu from also reaching the pane
-                  // background menu wrapping the body.
-                  onContextMenu={(e) => e.stopPropagation()}
-                  onDragStart={(e) => onRowDragStart(e, entry)}
-                  onDragEnd={endDrag}
-                  onDragOver={(e) => {
-                    if (entry.kind === "dir" && acceptsDrop()) {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }
-                  }}
-                  onDrop={(e) => {
-                    if (entry.kind === "dir") onPaneDrop(e, entry.path);
-                  }}
-                  onClick={(e) => onRowClick(e, index, entry)}
-                  onDoubleClick={() => openEntry(entry)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      openEntry(entry);
-                    } else if (e.key === " ") {
-                      e.preventDefault();
-                      setSelected(new Set([entry.path]));
-                      anchorIndex.current = index;
-                    }
-                  }}
-                  style={{ height: ROW_HEIGHT }}
-                  className={cn(
-                    "flex cursor-default items-center gap-2 px-3 text-xs outline-none",
-                    isSelected
-                      ? "bg-accent/15 text-foreground"
-                      : "text-foreground/90 hover:bg-raised focus-visible:bg-raised",
-                  )}
-                >
-                  <span className="flex min-w-0 flex-1 items-center gap-2">
-                    <span className="shrink-0">
-                      <KindIcon kind={entry.kind} />
-                    </span>
-                    <span className="truncate">{entry.name}</span>
-                  </span>
-                  <span className="w-20 shrink-0 text-right text-muted">
-                    {entry.kind === "dir" ? "—" : formatBytes(entry.size)}
-                  </span>
-                  <span className="hidden w-32 shrink-0 text-right text-muted sm:block">
-                    {formatModified(entry.modifiedAt)}
-                  </span>
-                  {isRemote && (
-                    <span className="hidden w-24 shrink-0 text-right font-mono text-[10px] text-muted md:block">
-                      {formatPermissions(entry.permissions)}
-                    </span>
-                  )}
-                  <span className="w-6 shrink-0">
-                    <RowMenu entry={entry} actions={rowActions} />
-                  </span>
-                </li>
-                </ContextMenu>
-              );
-            })}
-            {rowWindow.padBottom > 0 && (
-              <li aria-hidden style={{ height: rowWindow.padBottom }} />
-            )}
-          </ul>
-        )}
-      </div>
+                rowActions.push({ separator: true });
+                rowActions.push({
+                  label: "Delete",
+                  icon: <Trash2 size={14} />,
+                  destructive: true,
+                  onSelect: () => {
+                    setDeleteError(null);
+                    setDeleteRecursive(false);
+                    setDeleting(entry);
+                  },
+                });
+                return (
+                  <ContextMenu
+                    key={entry.path}
+                    actions={rowActions}
+                    minWidth="min-w-36"
+                    // Right-clicking an unselected row targets just that row,
+                    // mirroring onRowDragStart's selection behavior.
+                    onOpenChange={(open) => {
+                      if (open && !isSelected) {
+                        setSelected(new Set([entry.path]));
+                        anchorIndex.current = index;
+                      }
+                    }}
+                  >
+                    <li
+                      role="row"
+                      aria-selected={isSelected}
+                      tabIndex={0}
+                      data-selected={isSelected}
+                      data-row-index={index}
+                      ref={(node) => {
+                        if (node) rowRefs.current.set(index, node);
+                        else rowRefs.current.delete(index);
+                      }}
+                      // Only selected rows drag, so a press on any other row starts
+                      // a lasso instead of an HTML5 drag.
+                      draggable={isSelected}
+                      // Stop the native contextmenu from also reaching the pane
+                      // background menu wrapping the body.
+                      onContextMenu={(e) => e.stopPropagation()}
+                      onDragStart={(e) => onRowDragStart(e, entry)}
+                      onDragEnd={endDrag}
+                      onDragOver={(e) => {
+                        if (entry.kind === "dir" && acceptsDrop()) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }
+                      }}
+                      onDrop={(e) => {
+                        if (entry.kind === "dir") onPaneDrop(e, entry.path);
+                      }}
+                      onClick={(e) => onRowClick(e, index, entry)}
+                      onDoubleClick={() => openEntry(entry)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          openEntry(entry);
+                        } else if (e.key === " ") {
+                          e.preventDefault();
+                          setSelected(new Set([entry.path]));
+                          anchorIndex.current = index;
+                        }
+                      }}
+                      style={{ height: ROW_HEIGHT }}
+                      className={cn(
+                        "flex cursor-default items-center gap-2 px-3 text-xs outline-none",
+                        isSelected
+                          ? "bg-accent/15 text-foreground"
+                          : "text-foreground/90 hover:bg-raised focus-visible:bg-raised",
+                      )}
+                    >
+                      <span className="flex min-w-0 flex-1 items-center gap-2">
+                        <span className="shrink-0">
+                          <KindIcon kind={entry.kind} />
+                        </span>
+                        <span className="truncate">{entry.name}</span>
+                      </span>
+                      <span className="w-20 shrink-0 text-right text-muted">
+                        {entry.kind === "dir" ? "—" : formatBytes(entry.size)}
+                      </span>
+                      <span className="hidden w-32 shrink-0 text-right text-muted sm:block">
+                        {formatModified(entry.modifiedAt)}
+                      </span>
+                      {isRemote && (
+                        <span className="hidden w-24 shrink-0 text-right font-mono text-[10px] text-muted md:block">
+                          {formatPermissions(entry.permissions)}
+                        </span>
+                      )}
+                      <span className="w-6 shrink-0">
+                        <RowMenu entry={entry} actions={rowActions} />
+                      </span>
+                    </li>
+                  </ContextMenu>
+                );
+              })}
+              {rowWindow.padBottom > 0 && (
+                <li aria-hidden style={{ height: rowWindow.padBottom }} />
+              )}
+            </ul>
+          )}
+        </div>
       </ContextMenu>
 
       {/* Footer summary ---------------------------------------------------- */}
@@ -1004,8 +978,8 @@ export function FilePane({
           <div className="space-y-2">
             <p>
               {pendingPaste?.length} item
-              {pendingPaste?.length === 1 ? "" : "s"} already exist in this
-              folder and will be overwritten:
+              {pendingPaste?.length === 1 ? "" : "s"} already exist in this folder and will be
+              overwritten:
             </p>
             <ul className="max-h-32 overflow-y-auto rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground/90">
               {pendingPaste?.map((name) => (
@@ -1028,9 +1002,8 @@ export function FilePane({
         message={
           <div className="space-y-2">
             <p>
-              Delete{" "}
-              <span className="font-medium text-foreground">{deleting?.name}</span>?
-              This cannot be undone.
+              Delete <span className="font-medium text-foreground">{deleting?.name}</span>? This
+              cannot be undone.
             </p>
             {deleting?.kind === "dir" && (
               <label className="flex items-center gap-2 text-xs text-foreground">
@@ -1091,13 +1064,7 @@ function SortHeader({
 }
 
 /** Header dropdown carrying the shared sort + hidden-files controls. */
-function ViewMenu({
-  prefs,
-  onChange,
-}: {
-  prefs: ViewPrefs;
-  onChange: (next: ViewPrefs) => void;
-}) {
+function ViewMenu({ prefs, onChange }: { prefs: ViewPrefs; onChange: (next: ViewPrefs) => void }) {
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
@@ -1124,13 +1091,7 @@ function ViewMenu({
 }
 
 /** Renders nothing until the backend reports drives, which only Windows does. */
-function DrivesMenu({
-  path,
-  onNavigate,
-}: {
-  path: string;
-  onNavigate: (drive: string) => void;
-}) {
+function DrivesMenu({ path, onNavigate }: { path: string; onNavigate: (drive: string) => void }) {
   const drives = useLocalDrives();
   if (!drives.data?.length) return null;
   const current = path.toUpperCase();
@@ -1200,13 +1161,7 @@ function IconButton({
   );
 }
 
-function PaneMessage({
-  children,
-  tone,
-}: {
-  children: React.ReactNode;
-  tone?: "danger";
-}) {
+function PaneMessage({ children, tone }: { children: React.ReactNode; tone?: "danger" }) {
   return (
     <div
       className={cn(
@@ -1219,13 +1174,7 @@ function PaneMessage({
   );
 }
 
-function RowMenu({
-  entry,
-  actions,
-}: {
-  entry: SftpEntry;
-  actions: MenuAction[];
-}) {
+function RowMenu({ entry, actions }: { entry: SftpEntry; actions: MenuAction[] }) {
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
@@ -1246,10 +1195,7 @@ function RowMenu({
         >
           {actions.map((action, index) =>
             "separator" in action && action.separator ? (
-              <DropdownMenu.Separator
-                key={`sep-${index}`}
-                className="my-1 h-px bg-border"
-              />
+              <DropdownMenu.Separator key={`sep-${index}`} className="my-1 h-px bg-border" />
             ) : (
               <MenuItem
                 key={action.label}

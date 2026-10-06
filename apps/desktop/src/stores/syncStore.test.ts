@@ -1,10 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { setInvoke } from "../test/tauriMock";
-import {
-  selectAggregateStatus,
-  selectVault,
-  useSyncStore,
-} from "./syncStore";
+import { selectAggregateStatus, selectVault, useSyncStore } from "./syncStore";
 import type { AutoSyncEvent, Conflict, SyncReport } from "../lib/sync";
 
 const VAULT_A = "vault-a";
@@ -105,9 +101,7 @@ describe("syncStore conflict presentation", () => {
     await useSyncStore.getState().syncNow(VAULT_A);
     expect(vaultState(VAULT_A).status).toBe("error");
     expect(vaultState(VAULT_A).errorCategory).toBe("sync-conflict");
-    expect(vaultState(VAULT_A).errorMessage).toBe(
-      "Remote changed during sync — try again.",
-    );
+    expect(vaultState(VAULT_A).errorMessage).toBe("Remote changed during sync — try again.");
   });
 
   it("resolve applies the returned report and closes the dialog", async () => {
@@ -131,9 +125,9 @@ describe("syncStore conflict presentation", () => {
       throw new Error(`unexpected ${cmd}`);
     });
 
-    await useSyncStore.getState().resolve(VAULT_A, [
-      { objectType: "host", objectId: "a", resolution: "keep-local" },
-    ]);
+    await useSyncStore
+      .getState()
+      .resolve(VAULT_A, [{ objectType: "host", objectId: "a", resolution: "keep-local" }]);
     expect(vaultState(VAULT_A).status).toBe("idle");
     expect(vaultState(VAULT_A).conflicts).toHaveLength(0);
     expect(vaultState(VAULT_A).busy).toBe(false);
@@ -256,8 +250,7 @@ describe("syncStore background schedule", () => {
     };
   }
 
-  const apply = (event: AutoSyncEvent) =>
-    useSyncStore.getState().applyAutoSyncEvent(event);
+  const apply = (event: AutoSyncEvent) => useSyncStore.getState().applyAutoSyncEvent(event);
 
   it("marks the vault as syncing on the scheduler's behalf, then clears it", () => {
     apply(autoEvent({ phase: "started" }));

@@ -19,10 +19,7 @@ import {
 } from "./vaults";
 import type { AuthenticatedUser, Env, VaultRole } from "./types";
 
-export type Authenticator = (
-  request: Request,
-  env: Env,
-) => Promise<AuthenticatedUser>;
+export type Authenticator = (request: Request, env: Env) => Promise<AuthenticatedUser>;
 
 export function createHandler(authenticator: Authenticator = authenticate) {
   return {

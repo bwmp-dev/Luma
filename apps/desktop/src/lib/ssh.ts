@@ -13,10 +13,31 @@ import type { MultiplexerAttach } from "./multiplexer";
 /** Remote OS ids the backend reports. Exactly one of these fixed values is
  * reported per authenticated session. */
 export type SshRemoteOsId =
-  | "ubuntu" | "debian" | "fedora" | "rhel" | "centos" | "rocky" | "almalinux"
-  | "arch" | "manjaro" | "alpine" | "opensuse" | "suse" | "mint" | "kali"
-  | "gentoo" | "void" | "nixos" | "amazon" | "oracle" | "raspbian"
-  | "freebsd" | "macos" | "windows" | "linux" | "unknown";
+  | "ubuntu"
+  | "debian"
+  | "fedora"
+  | "rhel"
+  | "centos"
+  | "rocky"
+  | "almalinux"
+  | "arch"
+  | "manjaro"
+  | "alpine"
+  | "opensuse"
+  | "suse"
+  | "mint"
+  | "kali"
+  | "gentoo"
+  | "void"
+  | "nixos"
+  | "amazon"
+  | "oracle"
+  | "raspbian"
+  | "freebsd"
+  | "macos"
+  | "windows"
+  | "linux"
+  | "unknown";
 
 /*
  * Facts about a session's own state, delivered on the spawn's control channel
@@ -42,9 +63,7 @@ function updateCachedHostOs(
   for (const key of [["hosts"], ["recent-hosts"]] as const) {
     queryClient.setQueryData<Host[]>(key, (hosts) =>
       hosts?.map((host) =>
-        host.id === hostId
-          ? { ...host, osId: event.osId, osPrettyName: event.prettyName }
-          : host,
+        host.id === hostId ? { ...host, osId: event.osId, osPrettyName: event.prettyName } : host,
       ),
     );
   }
@@ -173,11 +192,7 @@ export function sshWrite(sessionId: string, data: string): Promise<void> {
 }
 
 /** Resize an embedded SSH session's PTY (cols/rows must be > 0). */
-export function sshResize(
-  sessionId: string,
-  cols: number,
-  rows: number,
-): Promise<void> {
+export function sshResize(sessionId: string, cols: number, rows: number): Promise<void> {
   return invoke<void>("ssh_resize", { sessionId, cols, rows });
 }
 

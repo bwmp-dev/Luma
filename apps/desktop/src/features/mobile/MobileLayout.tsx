@@ -104,10 +104,7 @@ export function MobileLayout() {
   if (showingSession) {
     return (
       <>
-        <MobileTerminalView
-          onExit={() => setFullscreen(false)}
-          onNewConnection={goToHosts}
-        />
+        <MobileTerminalView onExit={() => setFullscreen(false)} onNewConnection={goToHosts} />
         <SnippetRunner />
         <MultiHostRunDialog />
         {/* Only reachable from the terminal accessory bar, so it is mounted
@@ -168,9 +165,7 @@ export function MobileLayout() {
       </main>
       {/* The native bar owns the chrome when it attached; otherwise the web
           capsule renders. Never both. */}
-      {!native && !sheetOpen && !collabViewing && (
-        <MobileTabBar sessionCount={tabCount} />
-      )}
+      {!native && !sheetOpen && !collabViewing && <MobileTabBar sessionCount={tabCount} />}
       <SnippetRunner />
       <MultiHostRunDialog />
       <MobileHostSurfaces />
@@ -231,10 +226,7 @@ function MobileFleetRoute({ onBack }: { onBack: () => void }) {
   const push = useMobileNavStore((s) => s.push);
   return (
     <MobileScreen onBack={onBack} scroll={false} padded={false}>
-      <FleetOverviewScreen
-        onOpenHost={() => push("servers")}
-        onChooseHosts={() => push("hosts")}
-      />
+      <FleetOverviewScreen onOpenHost={() => push("servers")} onChooseHosts={() => push("hosts")} />
     </MobileScreen>
   );
 }
@@ -259,9 +251,7 @@ function RouteScreen({
     case "fleet":
       return <MobileFleetRoute onBack={onBack} />;
     case "agent-inbox":
-      return (
-        <MobileAgentInboxScreen onBack={onBack} onOpenSession={onOpenSession} />
-      );
+      return <MobileAgentInboxScreen onBack={onBack} onOpenSession={onOpenSession} />;
     case "keychain":
       return (
         <MobileScreen onBack={onBack} scroll={false} padded={false}>

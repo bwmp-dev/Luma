@@ -175,8 +175,7 @@ function validate(state: FormState): FieldErrors {
     const low = match ? Number(match[1]) : NaN;
     const high = match?.[2] !== undefined ? Number(match[2]) : low;
     if (!match || low < 1 || high > 65535 || low > high) {
-      errors.moshPortRange =
-        "Use a port or low-high range between 1 and 65535 (e.g. 60000-61000).";
+      errors.moshPortRange = "Use a port or low-high range between 1 and 65535 (e.g. 60000-61000).";
     }
   }
   return errors;
@@ -213,7 +212,9 @@ function toInput(state: FormState): HostInput {
 }
 
 function groupLabel(group: HostGroup, groups: HostGroup[]): string {
-  const parent = group.parentId ? groups.find((candidate) => candidate.id === group.parentId) : null;
+  const parent = group.parentId
+    ? groups.find((candidate) => candidate.id === group.parentId)
+    : null;
   return parent ? `${parent.name} / ${group.name}` : group.name;
 }
 
@@ -258,10 +259,7 @@ export function HostEditorDialog({
     }
   }, [open, host, initialGroupId]);
 
-  const proxyOptions = useMemo(
-    () => hosts.filter((h) => h.id !== host?.id),
-    [hosts, host?.id],
-  );
+  const proxyOptions = useMemo(() => hosts.filter((h) => h.id !== host?.id), [hosts, host?.id]);
 
   /* What the group selected in the form would supply for each field. Resolved
    * by the backend against the same rules the connection path runs, so these
@@ -329,16 +327,14 @@ export function HostEditorDialog({
   const hasErrors = Object.keys(errors).length > 0;
 
   const save = useMutation({
-    mutationFn: (input: HostInput) =>
-      host ? updateHost(host.id, input) : createHost(input),
+    mutationFn: (input: HostInput) => (host ? updateHost(host.id, input) : createHost(input)),
     onSuccess: () => {
       invalidate();
       onOpenChange(false);
     },
   });
 
-  const patch = (partial: Partial<FormState>) =>
-    setState((prev) => ({ ...prev, ...partial }));
+  const patch = (partial: Partial<FormState>) => setState((prev) => ({ ...prev, ...partial }));
 
   const submit = () => {
     setShowErrors(true);
@@ -393,7 +389,11 @@ export function HostEditorDialog({
             hint={hint("identityId", Boolean(state.identityId), () => patch({ identityId: "" }))}
           >
             <option value="">Host-specific credentials</option>
-            {identities.map((identity) => <option key={identity.id} value={identity.id}>{identity.name} ({identity.username})</option>)}
+            {identities.map((identity) => (
+              <option key={identity.id} value={identity.id}>
+                {identity.name} ({identity.username})
+              </option>
+            ))}
           </SelectField>
           <TextField
             label="Name"
@@ -499,13 +499,14 @@ export function HostEditorDialog({
           </div>
         )}
 
-        {!state.identityId && (state.authenticationType === "password" ||
-          state.authenticationType === "interactive") && (
-          <p className="rounded-md border border-border bg-background px-3 py-2 text-xs text-muted">
-            You will be prompted for the password in the terminal. Luma does not
-            store SSH passwords.
-          </p>
-        )}
+        {!state.identityId &&
+          (state.authenticationType === "password" ||
+            state.authenticationType === "interactive") && (
+            <p className="rounded-md border border-border bg-background px-3 py-2 text-xs text-muted">
+              You will be prompted for the password in the terminal. Luma does not store SSH
+              passwords.
+            </p>
+          )}
 
         <div className="grid grid-cols-2 gap-3">
           <SelectField

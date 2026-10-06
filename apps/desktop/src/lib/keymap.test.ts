@@ -54,9 +54,9 @@ describe("parseChord / matchesChord", () => {
     const chord = parseChord("Ctrl+Shift+T")!;
     expect(matchesChord(chord, ev("KeyT", { ctrlKey: true, shiftKey: true }))).toBe(true);
     // Extra Alt held -> no match (prevents accidental over-broad firing).
-    expect(
-      matchesChord(chord, ev("KeyT", { ctrlKey: true, shiftKey: true, altKey: true })),
-    ).toBe(false);
+    expect(matchesChord(chord, ev("KeyT", { ctrlKey: true, shiftKey: true, altKey: true }))).toBe(
+      false,
+    );
     // Different key -> no match.
     expect(matchesChord(chord, ev("KeyD", { ctrlKey: true, shiftKey: true }))).toBe(false);
   });
@@ -82,12 +82,8 @@ describe("hasRequiredModifier / isBindableChord", () => {
 
 describe("chordFromEvent / canonicalizeChord", () => {
   it("builds a canonical chord from a keydown", () => {
-    expect(
-      chordFromEvent(ev("KeyB", { ctrlKey: true, shiftKey: true })),
-    ).toBe("Ctrl+Shift+B");
-    expect(chordFromEvent(ev("ArrowUp", { ctrlKey: true, altKey: true }))).toBe(
-      "Ctrl+Alt+Up",
-    );
+    expect(chordFromEvent(ev("KeyB", { ctrlKey: true, shiftKey: true }))).toBe("Ctrl+Shift+B");
+    expect(chordFromEvent(ev("ArrowUp", { ctrlKey: true, altKey: true }))).toBe("Ctrl+Alt+Up");
   });
 
   it("ignores modifier-only presses (keeps capture waiting)", () => {
@@ -104,12 +100,12 @@ describe("chordFromEvent / canonicalizeChord", () => {
 
 describe("resolveAction", () => {
   it("resolves the bound action for an event", () => {
-    expect(
-      resolveAction(DEFAULT_KEYMAP, ev("KeyT", { ctrlKey: true, shiftKey: true })),
-    ).toBe("workspace.newTab");
-    expect(
-      resolveAction(DEFAULT_KEYMAP, ev("ArrowUp", { ctrlKey: true, altKey: true })),
-    ).toBe("terminal.jumpPreviousPrompt");
+    expect(resolveAction(DEFAULT_KEYMAP, ev("KeyT", { ctrlKey: true, shiftKey: true }))).toBe(
+      "workspace.newTab",
+    );
+    expect(resolveAction(DEFAULT_KEYMAP, ev("ArrowUp", { ctrlKey: true, altKey: true }))).toBe(
+      "terminal.jumpPreviousPrompt",
+    );
   });
 
   it("returns null for unbound chords", () => {
@@ -118,13 +114,11 @@ describe("resolveAction", () => {
 
   it("honors a rebind", () => {
     const remapped = { ...DEFAULT_KEYMAP, "workspace.newTab": "Ctrl+Alt+N" };
-    expect(
-      resolveAction(remapped, ev("KeyN", { ctrlKey: true, altKey: true })),
-    ).toBe("workspace.newTab");
+    expect(resolveAction(remapped, ev("KeyN", { ctrlKey: true, altKey: true }))).toBe(
+      "workspace.newTab",
+    );
     // The old chord no longer resolves to it.
-    expect(
-      resolveAction(remapped, ev("KeyT", { ctrlKey: true, shiftKey: true })),
-    ).toBeNull();
+    expect(resolveAction(remapped, ev("KeyT", { ctrlKey: true, shiftKey: true }))).toBeNull();
   });
 });
 
@@ -137,9 +131,7 @@ describe("findConflict", () => {
   });
 
   it("ignores the action's own current chord and free chords", () => {
-    expect(
-      findConflict(DEFAULT_KEYMAP, "workspace.splitRight", "Ctrl+Shift+D"),
-    ).toBeNull();
+    expect(findConflict(DEFAULT_KEYMAP, "workspace.splitRight", "Ctrl+Shift+D")).toBeNull();
     expect(findConflict(DEFAULT_KEYMAP, "workspace.newTab", "Ctrl+Alt+N")).toBeNull();
   });
 

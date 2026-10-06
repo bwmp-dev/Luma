@@ -32,10 +32,7 @@ export function MobileLogsScreen({ onBack }: { onBack: () => void }) {
           <ul className="divide-y divide-border/70 overflow-hidden rounded-xl border border-border bg-surface">
             {recording.map(([sessionId, entry]) => (
               <li key={sessionId} className="flex items-center gap-3 px-4 py-3">
-                <Circle
-                  size={10}
-                  className="shrink-0 animate-pulse fill-danger text-danger"
-                />
+                <Circle size={10} className="shrink-0 animate-pulse fill-danger text-danger" />
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[17px] leading-tight">
                     {sessions.find((s) => s.id === sessionId)?.title ?? "Session"}
@@ -44,9 +41,7 @@ export function MobileLogsScreen({ onBack }: { onBack: () => void }) {
                     {entry.path}
                   </span>
                 </span>
-                <span className="shrink-0 text-xs uppercase text-muted">
-                  {entry.mode}
-                </span>
+                <span className="shrink-0 text-xs uppercase text-muted">{entry.mode}</span>
               </li>
             ))}
           </ul>
@@ -64,9 +59,7 @@ export function MobileLogsScreen({ onBack }: { onBack: () => void }) {
               <ScrollText size={24} className="text-accent" />
             </div>
             <p className="text-base font-semibold">No connection history</p>
-            <p className="text-sm text-muted">
-              Hosts you connect to will appear here.
-            </p>
+            <p className="text-sm text-muted">Hosts you connect to will appear here.</p>
           </div>
         )}
         {(recents ?? []).length > 0 && (
@@ -75,9 +68,7 @@ export function MobileLogsScreen({ onBack }: { onBack: () => void }) {
               <li key={host.id} className="flex items-center gap-3 px-4 py-3">
                 <Server size={20} strokeWidth={1.75} className="shrink-0 text-muted" />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[17px] leading-tight">
-                    {host.name}
-                  </span>
+                  <span className="block truncate text-[17px] leading-tight">{host.name}</span>
                   <span className="mt-0.5 block truncate font-mono text-xs text-muted">
                     {host.username ? `${host.username}@` : ""}
                     {host.hostname}:{host.port}

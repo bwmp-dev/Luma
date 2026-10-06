@@ -23,8 +23,7 @@ export function Modal({
   footer?: React.ReactNode;
   size?: "sm" | "md" | "lg";
 }) {
-  const maxWidth =
-    size === "sm" ? "max-w-sm" : size === "lg" ? "max-w-2xl" : "max-w-lg";
+  const maxWidth = size === "sm" ? "max-w-sm" : size === "lg" ? "max-w-2xl" : "max-w-lg";
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -38,9 +37,7 @@ export function Modal({
         >
           <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-3.5">
             <div className="min-w-0">
-              <Dialog.Title className="text-sm font-semibold text-foreground">
-                {title}
-              </Dialog.Title>
+              <Dialog.Title className="text-sm font-semibold text-foreground">{title}</Dialog.Title>
               {description && (
                 <Dialog.Description className="mt-0.5 text-xs text-muted">
                   {description}

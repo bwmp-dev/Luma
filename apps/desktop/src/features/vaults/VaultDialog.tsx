@@ -57,7 +57,10 @@ export function VaultDialog({
     const done = () => onOpenChange(false);
     if (vault) {
       update.mutate(
-        { id: vault.id, input: { name: trimmed, shareSecrets: vault.shareSecrets, sortOrder: vault.sortOrder } },
+        {
+          id: vault.id,
+          input: { name: trimmed, shareSecrets: vault.shareSecrets, sortOrder: vault.sortOrder },
+        },
         { onSuccess: done },
       );
     } else if (managed) {
@@ -130,8 +133,8 @@ export function VaultDialog({
               <span className="text-sm">
                 Passphrase
                 <span className="mt-0.5 block text-xs text-muted">
-                  Works with any remote. Members need the location and a passphrase
-                  you pass on yourself.
+                  Works with any remote. Members need the location and a passphrase you pass on
+                  yourself.
                 </span>
               </span>
             </label>
@@ -146,8 +149,8 @@ export function VaultDialog({
               <span className="text-sm">
                 Luma Cloud
                 <span className="mt-0.5 block text-xs text-muted">
-                  Invite by link, no passphrase to pass on, and members can be
-                  removed. Requires a signed-in Luma account.
+                  Invite by link, no passphrase to pass on, and members can be removed. Requires a
+                  signed-in Luma account.
                 </span>
               </span>
             </label>
@@ -178,9 +181,9 @@ export function VaultDialog({
                 )}
               >
                 <ShieldAlert size={14} className="mt-0.5 shrink-0" />
-                Every member of this vault gets its private keys and passwords,
-                permanently. Removing someone later does not take back what they
-                already have. Only share with people you trust.
+                Every member of this vault gets its private keys and passwords, permanently.
+                Removing someone later does not take back what they already have. Only share with
+                people you trust.
               </div>
             )}
           </div>

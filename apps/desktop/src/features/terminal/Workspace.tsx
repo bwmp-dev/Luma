@@ -23,27 +23,20 @@ export function Workspace() {
     <div className="relative h-full min-w-0">
       {/* data-tab-drop-workspace carries the visible tab's id so a tab dragged
           from the strip into this area groups (splits) with it — see TabBar. */}
-      <div
-        className={activeNewTabId ? "hidden" : "h-full"}
-        data-tab-drop-workspace={activeTab?.id}
-      >
-      {activeTab ? (
-        <>
-          {searchOpen && activeSessionId && <SearchBar sessionId={activeSessionId} />}
-          {/* Keying by tab id detaches the previous tab's terminals and attaches
+      <div className={activeNewTabId ? "hidden" : "h-full"} data-tab-drop-workspace={activeTab?.id}>
+        {activeTab ? (
+          <>
+            {searchOpen && activeSessionId && <SearchBar sessionId={activeSessionId} />}
+            {/* Keying by tab id detaches the previous tab's terminals and attaches
               this tab's on switch, exactly matching the single-terminal flow. */}
-          <PaneTreeView key={activeTab.id} tab={activeTab} sessions={sessions} />
-        </>
-      ) : (
-        <EmptyState />
-      )}
+            <PaneTreeView key={activeTab.id} tab={activeTab} sessions={sessions} />
+          </>
+        ) : (
+          <EmptyState />
+        )}
       </div>
       {newTabIds.map((tabId) => (
-        <NewTabLauncher
-          key={tabId}
-          tabId={tabId}
-          active={tabId === activeNewTabId}
-        />
+        <NewTabLauncher key={tabId} tabId={tabId} active={tabId === activeNewTabId} />
       ))}
     </div>
   );

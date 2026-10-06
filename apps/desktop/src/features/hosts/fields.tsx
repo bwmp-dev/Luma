@@ -53,7 +53,11 @@ export function TextField({
           mono && "font-mono",
         )}
       />
-      {error && <p id={`${id}-error`} className="mt-1 text-xs text-danger">{error}</p>}
+      {error && (
+        <p id={`${id}-error`} className="mt-1 text-xs text-danger">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -103,7 +107,11 @@ export function TextAreaField({
           mono && "font-mono",
         )}
       />
-      {error && <p id={`${id}-error`} className="mt-1 text-xs text-danger">{error}</p>}
+      {error && (
+        <p id={`${id}-error`} className="mt-1 text-xs text-danger">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -148,7 +156,11 @@ export function SelectField({
       >
         {children}
       </select>
-      {error && <p id={`${id}-error`} className="mt-1 text-xs text-danger">{error}</p>}
+      {error && (
+        <p id={`${id}-error`} className="mt-1 text-xs text-danger">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

@@ -86,8 +86,12 @@ for (const theme of THEMES) {
     for (const [suffix, outWidth, outHeight] of OUTPUTS) {
       const path = resolve(target, `${viewName(file)}${suffix}.png`);
       await run("sips", [
-        "--resampleHeightWidth", String(outHeight), String(outWidth),
-        source, "--out", path,
+        "--resampleHeightWidth",
+        String(outHeight),
+        String(outWidth),
+        source,
+        "--out",
+        path,
       ]);
       written += 1;
       console.log(`[website-mobile] ${theme}/${viewName(file)}${suffix} ${outWidth}x${outHeight}`);

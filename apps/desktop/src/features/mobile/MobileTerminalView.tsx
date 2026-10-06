@@ -48,9 +48,7 @@ export function MobileTerminalView({
   const { height, offsetTop } = useVisualViewportMetrics(activeSessionId);
   const activeSession = sessions.find((s) => s.id === activeSessionId);
   const terminalKeysAvailable =
-    Boolean(activeSessionId) &&
-    !searchOpen &&
-    !activeSession?.connectionPrompt;
+    Boolean(activeSessionId) && !searchOpen && !activeSession?.connectionPrompt;
 
   // If every tab closed while full-screen, drop back to the session list.
   useEffect(() => {
@@ -65,9 +63,7 @@ export function MobileTerminalView({
   useEffect(() => () => setSelectMode(false), [setSelectMode]);
 
   const title = activeSession?.title ?? "Terminal";
-  const status = activeSession
-    ? (STATUS_LABEL[activeSession.status] ?? activeSession.status)
-    : "";
+  const status = activeSession ? (STATUS_LABEL[activeSession.status] ?? activeSession.status) : "";
 
   return (
     <div
@@ -149,10 +145,7 @@ export function MobileTerminalView({
       </div>
 
       {terminalKeysAvailable && selectMode && activeSessionId ? (
-        <MobileSelectionBar
-          sessionId={activeSessionId}
-          onDone={() => setSelectMode(false)}
-        />
+        <MobileSelectionBar sessionId={activeSessionId} onDone={() => setSelectMode(false)} />
       ) : null}
 
       {terminalKeysAvailable && accessoryOpen && activeSessionId ? (
@@ -205,18 +198,13 @@ function SessionSheet({
         <Dialog.Content className="fixed inset-x-0 bottom-0 z-50 max-h-[80vh] rounded-t-2xl border-t border-border bg-surface pb-safe focus:outline-none">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <Dialog.Title className="text-sm font-semibold">Sessions</Dialog.Title>
-            <Dialog.Close
-              aria-label="Close"
-              className="rounded-md p-1 text-muted active:bg-raised"
-            >
+            <Dialog.Close aria-label="Close" className="rounded-md p-1 text-muted active:bg-raised">
               <X size={18} />
             </Dialog.Close>
           </div>
           <ul className="max-h-[55vh] overflow-y-auto p-2">
             {tabs.length === 0 ? (
-              <li className="px-3 py-6 text-center text-sm text-muted">
-                No open sessions.
-              </li>
+              <li className="px-3 py-6 text-center text-sm text-muted">No open sessions.</li>
             ) : (
               tabs.map((tab) => (
                 <li key={tab.id} className="flex items-center gap-1">

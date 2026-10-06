@@ -4,10 +4,7 @@ import { AUTO_SCHEME_ID, type CustomTheme } from "../features/terminal/themes";
 import { useTerminalStyleStore } from "./terminalStyleStore";
 import { APP_TOKEN_KEYS } from "../lib/appTheme";
 import { SETTING_KEYS } from "../types";
-import {
-  DESKTOP_CAPABILITIES,
-  useCapabilityStore,
-} from "./capabilityStore";
+import { DESKTOP_CAPABILITIES, useCapabilityStore } from "./capabilityStore";
 
 const custom: CustomTheme = {
   id: "custom:1",
@@ -126,9 +123,7 @@ describe("terminalStyleStore", () => {
 
   it("adds and de-duplicates custom themes", async () => {
     await useTerminalStyleStore.getState().addCustomTheme(custom);
-    await useTerminalStyleStore
-      .getState()
-      .addCustomTheme({ ...custom, name: "Renamed" });
+    await useTerminalStyleStore.getState().addCustomTheme({ ...custom, name: "Renamed" });
     const themes = useTerminalStyleStore.getState().customThemes;
     expect(themes).toHaveLength(1);
     expect(themes[0].name).toBe("Renamed");

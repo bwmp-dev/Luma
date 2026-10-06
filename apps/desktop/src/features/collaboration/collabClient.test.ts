@@ -12,12 +12,7 @@ import { setInvoke, type InvokeHandler } from "../../test/tauriMock";
 import { createdTerminals } from "../../test/xtermMock";
 import { terminalManager } from "../terminal/terminalManager";
 import { resetDeviceIdentityCache } from "./deviceIdentity";
-import {
-  joinRoom,
-  getCollabStates,
-  resetCollabClientForTests,
-  startSharing,
-} from "./collabClient";
+import { joinRoom, getCollabStates, resetCollabClientForTests, startSharing } from "./collabClient";
 
 /*
  * Verifies the non-React collaboration bridge: owner output is encrypted and
@@ -148,9 +143,7 @@ describe("owner sharing bridges + encrypts PTY output", () => {
     await flush();
 
     const events = ws.parsedSent();
-    const output = events.find(
-      (m) => m.type === "encrypted.event" && m.kind === "terminal.output",
-    );
+    const output = events.find((m) => m.type === "encrypted.event" && m.kind === "terminal.output");
     expect(output).toBeTruthy();
     expect(output!.ciphertext).toBeTruthy();
     // The plaintext must never appear on the wire.

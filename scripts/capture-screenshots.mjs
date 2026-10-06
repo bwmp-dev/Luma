@@ -29,7 +29,7 @@ const VIEWPORTS = [
   },
   {
     name: "mobile",
-    dimensions: { width: 1284, height: 2778 }
+    dimensions: { width: 1284, height: 2778 },
   },
 ];
 const SCALES = [1, 2];

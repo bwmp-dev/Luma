@@ -76,8 +76,8 @@ function StatsHostPicker() {
         </div>
         <h1 className="text-2xl font-semibold tracking-tight">Server stats</h1>
         <p className="mt-1 text-sm text-muted">
-          Pick a saved host to see CPU, memory, disk, network, processes and
-          docker health over SSH — no agent required.
+          Pick a saved host to see CPU, memory, disk, network, processes and docker health over SSH
+          — no agent required.
         </p>
         <div className="mt-6">
           {ordered.length === 0 ? (
@@ -112,9 +112,7 @@ function HostCard({ host, onSelect }: { host: Host; onSelect: () => void }) {
         <Server size={18} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold text-foreground">
-          {host.name}
-        </span>
+        <span className="block truncate text-sm font-semibold text-foreground">{host.name}</span>
         <span className="block truncate text-xs text-muted">
           {host.username ? `${host.username}@` : ""}
           {host.hostname}:{host.port}
@@ -344,7 +342,11 @@ function Meter({ percent, danger }: { percent: number; danger?: boolean }) {
   return (
     <div className="h-1.5 w-full overflow-hidden rounded-full bg-border">
       <div
-        className={danger ?? clamped > 90 ? "h-full rounded-full bg-danger" : "h-full rounded-full bg-accent"}
+        className={
+          (danger ?? clamped > 90)
+            ? "h-full rounded-full bg-danger"
+            : "h-full rounded-full bg-accent"
+        }
         style={{ width: `${clamped}%` }}
       />
     </div>
@@ -424,10 +426,7 @@ function SystemCard({ snapshot }: { snapshot: ServerStatsSnapshot }) {
       ) : (
         <div>
           <Row label="Hostname" value={system.hostname ?? "—"} />
-          <Row
-            label="OS"
-            value={system.osPrettyName ?? system.os ?? "—"}
-          />
+          <Row label="OS" value={system.osPrettyName ?? system.os ?? "—"} />
           <Row label="Kernel" value={system.kernel ?? "—"} />
           <Row label="Architecture" value={system.arch ?? "—"} />
           <Row
@@ -435,7 +434,7 @@ function SystemCard({ snapshot }: { snapshot: ServerStatsSnapshot }) {
             value={
               system.uptimeSeconds !== null
                 ? formatUptime(system.uptimeSeconds)
-                : system.uptimeText ?? "—"
+                : (system.uptimeText ?? "—")
             }
           />
         </div>
@@ -452,13 +451,9 @@ function CpuCard({
   previous: ServerStatsSnapshot | null;
 }) {
   const cpu = snapshot.cpu;
-  const prevCores = new Map(
-    (previous?.cpu?.cores ?? []).map((core) => [core.name, core]),
-  );
+  const prevCores = new Map((previous?.cpu?.cores ?? []).map((core) => [core.name, core]));
   const totalBusy =
-    cpu?.total && previous?.cpu?.total
-      ? busyPercent(previous.cpu.total, cpu.total)
-      : null;
+    cpu?.total && previous?.cpu?.total ? busyPercent(previous.cpu.total, cpu.total) : null;
   return (
     <Card icon={<Cpu size={15} />} title="CPU">
       {!cpu ? (
@@ -541,12 +536,8 @@ function MemoryCard({ snapshot }: { snapshot: ServerStatsSnapshot }) {
             <Meter percent={(swapUsed / swapTotal) * 100} />
           </div>
         )}
-        {memory.cachedKb !== null && (
-          <Row label="Page cache" value={formatKb(memory.cachedKb)} />
-        )}
-        {memory.buffersKb !== null && (
-          <Row label="Buffers" value={formatKb(memory.buffersKb)} />
-        )}
+        {memory.cachedKb !== null && <Row label="Page cache" value={formatKb(memory.cachedKb)} />}
+        {memory.buffersKb !== null && <Row label="Buffers" value={formatKb(memory.buffersKb)} />}
         {swapTotal === 0 && <Row label="Swap" value="none" />}
       </div>
     </Card>
@@ -563,8 +554,7 @@ function DisksCard({ snapshot }: { snapshot: ServerStatsSnapshot }) {
         <div className="space-y-2.5">
           {disks.map((disk) => {
             const percent =
-              disk.usedPercent ??
-              (disk.totalKb > 0 ? (disk.usedKb / disk.totalKb) * 100 : 0);
+              disk.usedPercent ?? (disk.totalKb > 0 ? (disk.usedKb / disk.totalKb) * 100 : 0);
             return (
               <div key={`${disk.filesystem}:${disk.mountPoint}`}>
                 <div className="mb-0.5 flex items-baseline justify-between gap-3 text-xs">
@@ -594,9 +584,7 @@ function NetworkCard({
   previous: ServerStatsSnapshot | null;
 }) {
   const network = snapshot.network;
-  const prevByName = new Map(
-    (previous?.network ?? []).map((iface) => [iface.name, iface]),
-  );
+  const prevByName = new Map((previous?.network ?? []).map((iface) => [iface.name, iface]));
   return (
     <Card icon={<Network size={15} />} title="Network">
       {!network ? (
@@ -654,8 +642,7 @@ function DockerCard({ snapshot }: { snapshot: ServerStatsSnapshot }) {
     <Card icon={<Container size={15} />} title="Docker">
       {docker === null ? (
         <p className="text-xs text-muted">
-          Docker CLI not available on this host (or the daemon is not reachable
-          without root).
+          Docker CLI not available on this host (or the daemon is not reachable without root).
         </p>
       ) : docker.length === 0 ? (
         <p className="text-xs text-muted">No containers.</p>
@@ -680,9 +667,7 @@ function DockerCard({ snapshot }: { snapshot: ServerStatsSnapshot }) {
                 <span className="font-medium text-foreground">{container.name}</span>
                 <span className="ml-1.5 text-muted">{container.image}</span>
               </span>
-              <span className="shrink-0 text-muted">
-                {container.health ?? container.state}
-              </span>
+              <span className="shrink-0 text-muted">{container.health ?? container.state}</span>
             </div>
           ))}
         </div>
@@ -708,9 +693,7 @@ function FailedServicesCard({ snapshot }: { snapshot: ServerStatsSnapshot }) {
             <div key={service.unit} className="flex items-start gap-2 text-xs">
               <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-danger" />
               <span className="min-w-0">
-                <span className="block truncate font-medium text-foreground">
-                  {service.unit}
-                </span>
+                <span className="block truncate font-medium text-foreground">{service.unit}</span>
                 {service.description && (
                   <span className="block truncate text-muted">{service.description}</span>
                 )}
@@ -745,14 +728,18 @@ function ProcessTable({
   metric,
 }: {
   title: string;
-  processes: { pid: number | null; user: string; cpuPercent: number; memPercent: number; command: string }[];
+  processes: {
+    pid: number | null;
+    user: string;
+    cpuPercent: number;
+    memPercent: number;
+    command: string;
+  }[];
   metric: "cpu" | "mem";
 }) {
   return (
     <div>
-      <h3 className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted">
-        {title}
-      </h3>
+      <h3 className="mb-1 text-[10px] font-medium uppercase tracking-wide text-muted">{title}</h3>
       <table className="w-full text-xs">
         <thead>
           <tr className="text-left text-[10px] uppercase tracking-wide text-muted">
@@ -770,7 +757,10 @@ function ProcessTable({
               <td className="py-1 text-right font-medium text-foreground">
                 {(metric === "cpu" ? process.cpuPercent : process.memPercent).toFixed(1)}
               </td>
-              <td className="max-w-0 truncate py-1 pl-3 font-mono text-[11px] text-foreground" title={process.command}>
+              <td
+                className="max-w-0 truncate py-1 pl-3 font-mono text-[11px] text-foreground"
+                title={process.command}
+              >
                 {process.command}
               </td>
             </tr>

@@ -95,8 +95,7 @@ function flagsOf(text: string): Set<string> {
 const isRecursive = (flags: Set<string>): boolean =>
   flags.has("r") || flags.has("R") || flags.has("recursive");
 
-const isForced = (flags: Set<string>): boolean =>
-  flags.has("f") || flags.has("force");
+const isForced = (flags: Set<string>): boolean => flags.has("f") || flags.has("force");
 
 /** Whether a command's operands include a bare `/` (or `/*`). */
 function targetsFilesystemRoot(text: string): boolean {
@@ -176,8 +175,7 @@ const RULES: Rule[] = [
     label: "World-writable permissions (chmod 777)",
     level: "warn",
     pattern: atCommand(String.raw`chmod\b${SEGMENT_TAIL}`),
-    refine: (m) =>
-      /\s['"]?777['"]?(?:\s|$)/.test(m[0]) && !isRecursive(flagsOf(m[0])),
+    refine: (m) => /\s['"]?777['"]?(?:\s|$)/.test(m[0]) && !isRecursive(flagsOf(m[0])),
   },
   {
     label: "Recursive ownership change on / (chown -R … /)",
@@ -208,9 +206,7 @@ const RULES: Rule[] = [
   {
     label: "Force-remove containers (docker rm -f)",
     level: "warn",
-    pattern: atCommand(
-      String.raw`docker\s+(?:container\s+)?rm\b[^\n;|&]*?(?:--force\b|-f\b)`,
-    ),
+    pattern: atCommand(String.raw`docker\s+(?:container\s+)?rm\b[^\n;|&]*?(?:--force\b|-f\b)`),
   },
   {
     label: "Bulk Docker cleanup (docker system prune)",
@@ -312,7 +308,6 @@ export function classifyDraft(draft: string): DestructiveReport {
   }
 
   const matches = [...danger, ...warn].slice(0, MAX_MATCHES);
-  const level: DestructiveLevel =
-    danger.length > 0 ? "danger" : warn.length > 0 ? "warn" : "none";
+  const level: DestructiveLevel = danger.length > 0 ? "danger" : warn.length > 0 ? "warn" : "none";
   return { level, matches };
 }

@@ -41,9 +41,7 @@ export type FoundUpdate = {
  * Resolves to the update handle + metadata, or `null` when up to date.
  * Rejects when the endpoint/pubkey is unreachable or invalid (dev builds).
  */
-export async function checkForUpdate(
-  channel: UpdateChannel,
-): Promise<FoundUpdate | null> {
+export async function checkForUpdate(channel: UpdateChannel): Promise<FoundUpdate | null> {
   const info = await invoke<UpdateInfo | null>("updater_check", { channel });
   if (!info) return null;
   return {

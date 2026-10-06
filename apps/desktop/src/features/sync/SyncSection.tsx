@@ -74,9 +74,7 @@ function SyncSectionBody({ vault, config }: { vault: Vault; config: SyncConfig }
   // The folder-based provider needs arbitrary filesystem access, which mobile
   // does not grant; hide it there. WebDAV and GitHub Gist remain on every
   // platform. Desktop keeps all providers (folderSync=true).
-  const folderSyncEnabled = useCapabilityStore(
-    (s) => s.capabilities.features.folderSync,
-  );
+  const folderSyncEnabled = useCapabilityStore((s) => s.capabilities.features.folderSync);
   // On Luma Cloud a vault is either the account's own blob (personal) or a
   // server-side vault with its own membership (managed). A passphrase-shared
   // vault is neither, so it belongs on one of the other providers; the backend
@@ -109,9 +107,7 @@ function SyncSectionBody({ vault, config }: { vault: Vault; config: SyncConfig }
   const [password, setPassword] = useState("");
   const [gistId, setGistId] = useState(config.gistId ?? "");
   const [token, setToken] = useState("");
-  const [cloudUrl, setCloudUrl] = useState(
-    config.cloudUrl ?? DEFAULT_LUMA_CLOUD_URL,
-  );
+  const [cloudUrl, setCloudUrl] = useState(config.cloudUrl ?? DEFAULT_LUMA_CLOUD_URL);
 
   const [confirmChange, setConfirmChange] = useState(false);
   const [confirmDisable, setConfirmDisable] = useState(false);
@@ -209,22 +205,16 @@ function SyncSectionBody({ vault, config }: { vault: Vault; config: SyncConfig }
           status={status}
           automatic={automatic}
           lastReportSummary={
-            lastReport && status !== "syncing"
-              ? summarizeReport(lastReport)
-              : null
+            lastReport && status !== "syncing" ? summarizeReport(lastReport) : null
           }
           privateKeysApplied={
             lastReport && status !== "syncing" ? lastReport.privateKeysApplied : 0
           }
           privateKeysSkippedLocked={
-            lastReport && status !== "syncing"
-              ? lastReport.privateKeysSkippedLocked
-              : 0
+            lastReport && status !== "syncing" ? lastReport.privateKeysSkippedLocked : 0
           }
           runtimeError={
-            status === "error" && errorCategory !== "sync-passphrase-required"
-              ? errorMessage
-              : null
+            status === "error" && errorCategory !== "sync-passphrase-required" ? errorMessage : null
           }
           onSyncNow={() => void runSyncNow(vaultId)}
         />
@@ -326,12 +316,9 @@ function SyncSectionBody({ vault, config }: { vault: Vault; config: SyncConfig }
                 </>
               ) : (
                 <>
-                  <AlertTriangle
-                    size={14}
-                    className="mt-0.5 shrink-0 text-amber-400"
-                  />
-                  Sign in to your Luma account under Settings → Account before
-                  enabling Luma Cloud sync.
+                  <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-400" />
+                  Sign in to your Luma account under Settings → Account before enabling Luma Cloud
+                  sync.
                 </>
               )}
             </div>
@@ -346,11 +333,7 @@ function SyncSectionBody({ vault, config }: { vault: Vault; config: SyncConfig }
               disabled={!input || configure.isPending}
               className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground disabled:opacity-50"
             >
-              {configure.isPending
-                ? "Saving…"
-                : config.enabled
-                  ? "Update provider"
-                  : "Enable sync"}
+              {configure.isPending ? "Saving…" : config.enabled ? "Update provider" : "Enable sync"}
             </button>
             {config.enabled && (
               <button
@@ -403,9 +386,7 @@ function SyncSectionBody({ vault, config }: { vault: Vault; config: SyncConfig }
           <button
             type="button"
             onClick={() =>
-              config.passphraseSet
-                ? setConfirmPassphraseChange(true)
-                : setPassphraseOpen(true)
+              config.passphraseSet ? setConfirmPassphraseChange(true) : setPassphraseOpen(true)
             }
             className="shrink-0 rounded-md border border-border bg-raised px-3 py-1.5 text-sm font-medium text-foreground hover:border-accent/60 hover:bg-surface"
           >
@@ -439,14 +420,13 @@ function SyncSectionBody({ vault, config }: { vault: Vault; config: SyncConfig }
         {shared && shareSecrets && (
           <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
             <ShieldAlert size={14} className="mt-0.5 shrink-0" />
-            Everyone with this vault's location and passphrase gets its private keys
-            and passwords. Removing someone later does not take back what they
-            already have.
+            Everyone with this vault's location and passphrase gets its private keys and passwords.
+            Removing someone later does not take back what they already have.
           </div>
         )}
         <p className="text-xs text-muted">
-          Secrets are only included when the keystore is unlocked at sync time. On
-          other devices the keystore must be unlocked to import them.
+          Secrets are only included when the keystore is unlocked at sync time. On other devices the
+          keystore must be unlocked to import them.
         </p>
       </div>
 
@@ -487,9 +467,9 @@ function SyncSectionBody({ vault, config }: { vault: Vault; config: SyncConfig }
         message={
           <div className="space-y-2">
             <p>
-              Changing this passphrase does not re-encrypt data already stored by
-              your sync provider. That data and devices using the old passphrase
-              will no longer be readable with the new one.
+              Changing this passphrase does not re-encrypt data already stored by your sync
+              provider. That data and devices using the old passphrase will no longer be readable
+              with the new one.
             </p>
             <p>Only continue if you intend to replace the passphrase on every device.</p>
           </div>
@@ -534,15 +514,15 @@ function SyncSectionBody({ vault, config }: { vault: Vault; config: SyncConfig }
             </div>
             {shared && (
               <p>
-                Anyone with this vault's location and passphrase is a member. Removing
-                someone later does not retract secrets they already hold, and anyone
-                who has had shell access to a host may have left their own access
-                behind. Only share secrets with people you trust.
+                Anyone with this vault's location and passphrase is a member. Removing someone later
+                does not retract secrets they already hold, and anyone who has had shell access to a
+                host may have left their own access behind. Only share secrets with people you
+                trust.
               </p>
             )}
             <p>
-              Secrets are only included when the keystore is unlocked at sync time, and
-              other devices must unlock the keystore to import them.
+              Secrets are only included when the keystore is unlocked at sync time, and other
+              devices must unlock the keystore to import them.
             </p>
             {!shared && <p>Only enable this if you understand and accept the risk.</p>}
           </div>
@@ -570,20 +550,13 @@ function SyncSectionBody({ vault, config }: { vault: Vault; config: SyncConfig }
  * device — a laptop that is awake all day and a phone on cellular want
  * different answers — so nothing here is shared with the vault's other members.
  */
-function AutomaticSyncPanel({
-  vault,
-  config,
-}: {
-  vault: Vault;
-  config: SyncConfig;
-}) {
+function AutomaticSyncPanel({ vault, config }: { vault: Vault; config: SyncConfig }) {
   const vaultId = vault.id;
   const setAuto = useSetAutoSync(vaultId);
   // While a change is in flight the pending value is what the user just chose,
   // so the controls move immediately instead of snapping back until the config
   // query refetches.
-  const auto =
-    setAuto.isPending && setAuto.variables ? setAuto.variables : config.auto;
+  const auto = setAuto.isPending && setAuto.variables ? setAuto.variables : config.auto;
   const error = setAuto.isError ? parseLumaError(setAuto.error).message : null;
   const update = (next: AutoSyncSettings) => setAuto.mutate(next);
 
@@ -591,8 +564,7 @@ function AutomaticSyncPanel({
   // is not on this device simply waits — worth saying, because the schedule
   // would otherwise look broken. A managed vault has no passphrase to wait for:
   // its key comes from Luma Cloud, sealed to this device.
-  const waitingForPassphrase =
-    vault.kind !== "managed" && !config.passphraseRemembered;
+  const waitingForPassphrase = vault.kind !== "managed" && !config.passphraseRemembered;
 
   return (
     <div className="space-y-3 rounded-lg border border-border bg-background p-3">
@@ -601,9 +573,9 @@ function AutomaticSyncPanel({
           <Timer size={14} /> Automatic sync
         </p>
         <p className="text-xs text-muted">
-          Applies to this device only. Every sync is two-way — Luma reads the
-          remote before it writes — so either schedule below keeps both
-          directions current. Conflicts still wait for you to resolve them.
+          Applies to this device only. Every sync is two-way — Luma reads the remote before it
+          writes — so either schedule below keeps both directions current. Conflicts still wait for
+          you to resolve them.
         </p>
       </div>
 
@@ -631,9 +603,7 @@ function AutomaticSyncPanel({
         label="Check for changes"
         hint="Picks up what your other devices have pushed."
         value={String(auto.pullIntervalMinutes)}
-        onChange={(value) =>
-          update({ ...auto, pullIntervalMinutes: Number(value) })
-        }
+        onChange={(value) => update({ ...auto, pullIntervalMinutes: Number(value) })}
         disabled={setAuto.isPending}
         options={[
           { value: "0", label: "Never on a schedule" },
@@ -663,9 +633,8 @@ function AutomaticSyncPanel({
       {waitingForPassphrase && auto.pushMode !== "off" && (
         <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
           <AlertTriangle size={13} className="mt-0.5 shrink-0" />
-          Automatic sync never asks for a passphrase. Until you remember this
-          vault's passphrase on this device, the schedule only runs after you
-          have entered it once this session.
+          Automatic sync never asks for a passphrase. Until you remember this vault's passphrase on
+          this device, the schedule only runs after you have entered it once this session.
         </div>
       )}
       {error && (
@@ -818,16 +787,16 @@ function StatusPanel({
       )}
       {!syncing && privateKeysApplied > 0 && (
         <div className="mt-2.5 flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-2 text-xs text-muted">
-          <KeyRound size={13} className="text-accent" />{" "}
-          {privateKeysApplied} private key{privateKeysApplied === 1 ? "" : "s"} imported
+          <KeyRound size={13} className="text-accent" /> {privateKeysApplied} private key
+          {privateKeysApplied === 1 ? "" : "s"} imported
         </div>
       )}
       {!syncing && privateKeysSkippedLocked > 0 && (
         <div className="mt-2.5 flex items-start gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
           <AlertTriangle size={13} className="mt-0.5 shrink-0" /> Keystore locked —{" "}
           {privateKeysSkippedLocked} private key
-          {privateKeysSkippedLocked === 1 ? " was" : "s were"} not synced. Unlock the
-          keystore and sync again.
+          {privateKeysSkippedLocked === 1 ? " was" : "s were"} not synced. Unlock the keystore and
+          sync again.
         </div>
       )}
       {syncing && (
@@ -840,11 +809,7 @@ function StatusPanel({
   );
 }
 
-function summarizeReport(report: {
-  pulled: boolean;
-  pushed: boolean;
-  upToDate: boolean;
-}): string {
+function summarizeReport(report: { pulled: boolean; pushed: boolean; upToDate: boolean }): string {
   if (report.upToDate) return "Already up to date.";
   const parts: string[] = [];
   if (report.pulled) parts.push("pulled remote changes");

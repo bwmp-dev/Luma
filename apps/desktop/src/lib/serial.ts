@@ -36,9 +36,7 @@ export type SerialSpawnResult = { sessionId: string; portName: string };
 export const SERIAL_BAUD_MIN = 300;
 export const SERIAL_BAUD_MAX = 4_000_000;
 
-export const SERIAL_BAUD_PRESETS = [
-  9600, 19200, 38400, 57600, 115200, 230400,
-] as const;
+export const SERIAL_BAUD_PRESETS = [9600, 19200, 38400, 57600, 115200, 230400] as const;
 
 /** List the serial ports the backend can see. */
 export function listSerialPorts(): Promise<SerialPortInfo[]> {

@@ -120,8 +120,7 @@ export function PassphrasePrompt({
             <span>
               Remember on this device
               <span className="block text-xs text-muted">
-                Stores the passphrase in your OS keychain so sync runs without
-                prompting.
+                Stores the passphrase in your OS keychain so sync runs without prompting.
               </span>
             </span>
           </label>

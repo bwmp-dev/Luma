@@ -144,14 +144,13 @@ export function VaultsSection() {
         message={
           <div className="space-y-2">
             <p>
-              Delete{" "}
-              <span className="font-medium text-foreground">{deleting?.name}</span> and
-              everything in it — hosts, groups, snippets, keys and identities, including
-              the private keys stored on this device.
+              Delete <span className="font-medium text-foreground">{deleting?.name}</span> and
+              everything in it — hosts, groups, snippets, keys and identities, including the private
+              keys stored on this device.
             </p>
             <p>
-              This only affects this device. Other members keep their copies, and the
-              data stored at the remote is left untouched.
+              This only affects this device. Other members keep their copies, and the data stored at
+              the remote is left untouched.
             </p>
           </div>
         }
@@ -179,8 +178,7 @@ function VaultRow({
   const isMobile = useCapabilityStore((state) => state.capabilities.isMobile);
   const [sharing, setSharing] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
-  const canShare =
-    vault.kind !== "personal" && Boolean(syncConfig?.enabled && syncConfig.provider);
+  const canShare = vault.kind !== "personal" && Boolean(syncConfig?.enabled && syncConfig.provider);
 
   const share = async () => {
     if (!canShare || !syncConfig?.provider || sharing) return;
@@ -229,7 +227,9 @@ function VaultRow({
       <div
         className={cn(
           "group flex items-center gap-2 rounded-lg border px-3 py-2.5 transition-colors",
-          selected ? "border-accent bg-accent/10" : "border-border bg-surface hover:border-accent/50",
+          selected
+            ? "border-accent bg-accent/10"
+            : "border-border bg-surface hover:border-accent/50",
         )}
       >
         <button

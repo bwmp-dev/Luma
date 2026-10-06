@@ -1,9 +1,5 @@
 import { create } from "zustand";
-import {
-  snippetRunCancel,
-  snippetRunHosts,
-  type SnippetRunEvent,
-} from "../lib/snippets";
+import { snippetRunCancel, snippetRunHosts, type SnippetRunEvent } from "../lib/snippets";
 import { parseLumaError } from "../lib/hosts";
 
 /*
@@ -16,13 +12,7 @@ import { parseLumaError } from "../lib/hosts";
  * exec tasks streamed over a Channel.
  */
 
-export type HostRunStatus =
-  | "pending"
-  | "running"
-  | "ok"
-  | "failed"
-  | "cancelled"
-  | "unsupported";
+export type HostRunStatus = "pending" | "running" | "ok" | "failed" | "cancelled" | "unsupported";
 
 export type HostRunState = {
   hostId: string;
@@ -150,9 +140,7 @@ type SnippetHostRunState = {
 
 /** Whether every host in the map has reached a terminal state. */
 function allDone(hosts: Record<string, HostRunState>): boolean {
-  return Object.values(hosts).every(
-    (h) => h.status !== "pending" && h.status !== "running",
-  );
+  return Object.values(hosts).every((h) => h.status !== "pending" && h.status !== "running");
 }
 
 export const useSnippetHostRunStore = create<SnippetHostRunState>((set, get) => ({
@@ -217,11 +205,10 @@ export const useSnippetHostRunStore = create<SnippetHostRunState>((set, get) => 
   },
 
   rerunFailed: async (timeoutSecs) => {
-    const failedIds = get()
-      .hostIds.filter((id) => {
-        const status = get().hosts[id]?.status;
-        return status === "failed" || status === "cancelled" || status === "unsupported";
-      });
+    const failedIds = get().hostIds.filter((id) => {
+      const status = get().hosts[id]?.status;
+      return status === "failed" || status === "cancelled" || status === "unsupported";
+    });
     if (failedIds.length === 0) return;
     await get().start(failedIds, timeoutSecs);
   },

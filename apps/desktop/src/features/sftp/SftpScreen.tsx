@@ -2,12 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import { Copy, Download, RefreshCw, Upload } from "lucide-react";
 import { useHosts } from "../../hooks/useHosts";
-import {
-  localListKey,
-  sftpListKey,
-  useLocalList,
-  useSftpList,
-} from "../../hooks/useSftp";
+import { localListKey, sftpListKey, useLocalList, useSftpList } from "../../hooks/useSftp";
 import {
   OTHER_SIDE,
   selectRunningForSession,
@@ -16,11 +11,7 @@ import {
   type PaneSide,
   type TransferEndpoint,
 } from "../../stores/sftpStore";
-import {
-  inferSeparator,
-  type DirectoryListing,
-  type SftpEntry,
-} from "../../lib/sftp";
+import { inferSeparator, type DirectoryListing, type SftpEntry } from "../../lib/sftp";
 import { parseLumaError } from "../../lib/hosts";
 import { describeSshError } from "../hosts/sshErrors";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
@@ -77,22 +68,17 @@ export function SftpScreen() {
   const transfer = useSftpStore((s) => s.transfer);
   const connecting = useSftpStore((s) => s.connecting);
 
-  const [pendingOverwrite, setPendingOverwrite] =
-    useState<PendingOverwrite | null>(null);
-  const [pendingDisconnect, setPendingDisconnect] =
-    useState<PendingDisconnect | null>(null);
+  const [pendingOverwrite, setPendingOverwrite] = useState<PendingOverwrite | null>(null);
+  const [pendingDisconnect, setPendingDisconnect] = useState<PendingDisconnect | null>(null);
 
   // SFTP opens on this computer so the browser is useful before connecting.
   useEffect(() => {
     initPanes({ localAvailable: true });
   }, [initPanes]);
 
-  const leftSessionId =
-    panes.left.kind === "remote" ? panes.left.sessionId : null;
-  const rightSessionId =
-    panes.right.kind === "remote" ? panes.right.sessionId : null;
-  const hasLocalPane =
-    panes.left.kind === "local" || panes.right.kind === "local";
+  const leftSessionId = panes.left.kind === "remote" ? panes.left.sessionId : null;
+  const rightSessionId = panes.right.kind === "remote" ? panes.right.sessionId : null;
+  const hasLocalPane = panes.left.kind === "local" || panes.right.kind === "local";
 
   const localListing = useLocalList(localPath, hasLocalPane);
   const leftRemote = useSftpList(
@@ -128,9 +114,7 @@ export function SftpScreen() {
 
   // A remote listing failure after connect signals a dead / broken session.
   const leftError = leftRemote.isError ? parseLumaError(leftRemote.error) : null;
-  const rightError = rightRemote.isError
-    ? parseLumaError(rightRemote.error)
-    : null;
+  const rightError = rightRemote.isError ? parseLumaError(rightRemote.error) : null;
   useEffect(() => {
     if (!leftSessionId || !leftError) return;
     if (sessions[leftSessionId]?.status !== "error") {
@@ -176,11 +160,7 @@ export function SftpScreen() {
    * destination listing cache for name collisions (overwrites happen without
    * backend prompting), and confirms before starting.
    */
-  const requestTransfer = (
-    sourceSide: PaneSide,
-    entries: SftpEntry[],
-    targetDir: string,
-  ) => {
+  const requestTransfer = (sourceSide: PaneSide, entries: SftpEntry[], targetDir: string) => {
     const source = panes[sourceSide];
     const dest = panes[OTHER_SIDE[sourceSide]];
     // Files and directories are both transferable (the backend recurses dirs).
@@ -188,19 +168,14 @@ export function SftpScreen() {
     if (items.length === 0) return;
     if (source.kind === "none" || dest.kind === "none") return;
 
-    const destDir =
-      targetDir === "__counterpart__" ? pathFor(dest) : targetDir;
+    const destDir = targetDir === "__counterpart__" ? pathFor(dest) : targetDir;
     if (!destDir) return;
 
     const destKey =
-      dest.kind === "remote"
-        ? sftpListKey(dest.sessionId, destDir)
-        : localListKey(destDir);
+      dest.kind === "remote" ? sftpListKey(dest.sessionId, destDir) : localListKey(destDir);
     const destListing = queryClient.getQueryData<DirectoryListing>(destKey);
     const existing = new Set((destListing?.entries ?? []).map((e) => e.name));
-    const collisions = items
-      .filter((f) => existing.has(f.name))
-      .map((f) => f.name);
+    const collisions = items.filter((f) => existing.has(f.name)).map((f) => f.name);
 
     const run = () =>
       transfer({
@@ -208,8 +183,7 @@ export function SftpScreen() {
         dest: dest as TransferEndpoint,
         files: items,
         destDir,
-        destSeparator:
-          dest.kind === "remote" ? "/" : inferSeparator(destDir),
+        destSeparator: dest.kind === "remote" ? "/" : inferSeparator(destDir),
       });
 
     if (collisions.length > 0) {
@@ -226,10 +200,7 @@ export function SftpScreen() {
     // file panes — and every row in them — on each event.
     const running =
       endpoint.kind === "remote"
-        ? selectRunningForSession(
-            useSftpStore.getState().transfers,
-            endpoint.sessionId,
-          )
+        ? selectRunningForSession(useSftpStore.getState().transfers, endpoint.sessionId)
         : 0;
     if (running > 0) {
       setPendingDisconnect({ side, running });
@@ -249,23 +220,19 @@ export function SftpScreen() {
           <div className="border-b border-border px-3 py-2.5 text-xs font-semibold uppercase tracking-wider text-muted">
             {side === "left" ? "Left pane" : "Right pane"}
           </div>
-          <HostPicker
-            side={side}
-            variant="pane"
-            allowLocal
-            localDisabled={otherIsLocal}
-          />
+          <HostPicker side={side} variant="pane" allowLocal localDisabled={otherIsLocal} />
         </div>
       );
     }
 
-    const session =
-      endpoint.kind === "remote" ? sessions[endpoint.sessionId] : null;
+    const session = endpoint.kind === "remote" ? sessions[endpoint.sessionId] : null;
     const path = pathFor(endpoint);
     const action = transferAction(endpoint, other);
     const sessionError =
       endpoint.kind === "remote" && session?.status === "error"
-        ? (side === "left" ? leftError : rightError)
+        ? side === "left"
+          ? leftError
+          : rightError
         : null;
 
     return (
@@ -277,10 +244,7 @@ export function SftpScreen() {
             </span>
             <button
               type="button"
-              onClick={() =>
-                endpoint.kind === "remote" &&
-                void reconnect(endpoint.sessionId)
-              }
+              onClick={() => endpoint.kind === "remote" && void reconnect(endpoint.sessionId)}
               className="flex items-center gap-1.5 rounded-md border border-danger/50 px-2.5 py-1 font-medium text-danger hover:bg-danger/15"
             >
               <RefreshCw size={12} /> Reconnect
@@ -344,9 +308,9 @@ export function SftpScreen() {
         message={
           <div className="space-y-2">
             <p>
-              {pendingOverwrite?.collisions.length} of {pendingOverwrite?.total}{" "}
-              item{pendingOverwrite?.total === 1 ? "" : "s"} already exist at the
-              destination and will be overwritten:
+              {pendingOverwrite?.collisions.length} of {pendingOverwrite?.total} item
+              {pendingOverwrite?.total === 1 ? "" : "s"} already exist at the destination and will
+              be overwritten:
             </p>
             <ul className="max-h-32 overflow-y-auto rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground/90">
               {pendingOverwrite?.collisions.map((name) => (
@@ -355,9 +319,7 @@ export function SftpScreen() {
                 </li>
               ))}
             </ul>
-            <p className="text-xs text-muted">
-              This replaces every listed file (apply to all).
-            </p>
+            <p className="text-xs text-muted">This replaces every listed file (apply to all).</p>
           </div>
         }
       />
@@ -375,8 +337,8 @@ export function SftpScreen() {
         message={
           <>
             {pendingDisconnect?.running} transfer
-            {pendingDisconnect?.running === 1 ? "" : "s"} still running will be
-            cancelled. Disconnect anyway?
+            {pendingDisconnect?.running === 1 ? "" : "s"} still running will be cancelled.
+            Disconnect anyway?
           </>
         }
       />

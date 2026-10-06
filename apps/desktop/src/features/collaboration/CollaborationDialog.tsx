@@ -43,8 +43,9 @@ export function CollaborationDialog({
 }) {
   const runtimes = useCollabStore((s) => s.runtimes);
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
-  const runtime = runtimes.find((candidate) => candidate.ownerSessionId === activeSessionId)
-    ?? runtimes.find((candidate) => candidate.mode === "viewing");
+  const runtime =
+    runtimes.find((candidate) => candidate.ownerSessionId === activeSessionId) ??
+    runtimes.find((candidate) => candidate.mode === "viewing");
   const auth = useCollabStore((s) => s.auth);
   const hydrate = useCollabStore((s) => s.hydrate);
   const openSettings = useUiStore((s) => s.openSettings);
@@ -258,8 +259,8 @@ function JoinFlow({ onJoined }: { onJoined: () => void }) {
       <section className="space-y-2">
         <p className="text-sm font-medium">1. Send your invite to the host</p>
         <p className="text-xs text-muted">
-          Generate an invite token and send it to the terminal's owner through a
-          channel you trust. It contains your device's public keys — never a secret.
+          Generate an invite token and send it to the terminal's owner through a channel you trust.
+          It contains your device's public keys — never a secret.
         </p>
         {invite ? (
           <CopyableToken label="Your invite token" value={invite} />
@@ -277,9 +278,7 @@ function JoinFlow({ onJoined }: { onJoined: () => void }) {
 
       <section className="space-y-2 border-t border-border pt-4">
         <p className="text-sm font-medium">2. Join once the host adds you</p>
-        <p className="text-xs text-muted">
-          Paste the room reference the host gave you, then join.
-        </p>
+        <p className="text-xs text-muted">Paste the room reference the host gave you, then join.</p>
         <div className="flex gap-2">
           <input
             value={roomId}
@@ -308,7 +307,11 @@ function JoinFlow({ onJoined }: { onJoined: () => void }) {
   );
 }
 
-function HostingPanel({ runtime }: { runtime: ReturnType<typeof useCollabStore.getState>["runtime"] }) {
+function HostingPanel({
+  runtime,
+}: {
+  runtime: ReturnType<typeof useCollabStore.getState>["runtime"];
+}) {
   const [token, setToken] = useState("");
   const [role, setRole] = useState<InvitedRoomRole>("viewer");
   const [addBusy, setAddBusy] = useState(false);
@@ -366,14 +369,16 @@ function HostingPanel({ runtime }: { runtime: ReturnType<typeof useCollabStore.g
       </div>
 
       {runtime.roomId && (
-        <CopyableToken label="Room reference (share with people you invite)" value={runtime.roomId} />
+        <CopyableToken
+          label="Room reference (share with people you invite)"
+          value={runtime.roomId}
+        />
       )}
 
       <section className="space-y-2 border-t border-border pt-4">
         <p className="text-sm font-medium">Create join link</p>
         <p className="text-xs text-muted">
-          Generate a link that lets someone join directly, without exchanging an
-          invite token first.
+          Generate a link that lets someone join directly, without exchanging an invite token first.
         </p>
         <div className="flex items-center gap-2">
           <label className="text-xs text-muted" htmlFor="collab-link-role">
@@ -402,9 +407,8 @@ function HostingPanel({ runtime }: { runtime: ReturnType<typeof useCollabStore.g
             <CopyableToken label="Join link" value={link.url} />
             <p className="flex items-start gap-1.5 text-xs text-amber-400">
               <ShieldAlert size={13} className="mt-px shrink-0" />
-              Anyone with this link can{" "}
-              {link.role === "controller" ? "control" : "view"} this session — share
-              only with people you trust.
+              Anyone with this link can {link.role === "controller" ? "control" : "view"} this
+              session — share only with people you trust.
             </p>
           </div>
         )}
@@ -496,8 +500,8 @@ function ViewingPanel({ onLeft }: { onLeft: () => void }) {
         <ConnectionStatusBadge status={runtime.status} />
       </div>
       <p className="text-xs text-muted">
-        You joined as {runtime.role === "controller" ? "a controller" : "a viewer"}. The
-        shared terminal is shown in the workspace.
+        You joined as {runtime.role === "controller" ? "a controller" : "a viewer"}. The shared
+        terminal is shown in the workspace.
       </p>
       <ParticipantList />
       <button
@@ -512,11 +516,15 @@ function ViewingPanel({ onLeft }: { onLeft: () => void }) {
   );
 }
 
-function ParticipantList({ runtime: selectedRuntime }: { runtime?: ReturnType<typeof useCollabStore.getState>["runtime"] }) {
+function ParticipantList({
+  runtime: selectedRuntime,
+}: {
+  runtime?: ReturnType<typeof useCollabStore.getState>["runtime"];
+}) {
   const defaultRuntime = useCollabStore((s) => s.runtime);
   const runtime = selectedRuntime ?? defaultRuntime;
   const controlHolder = runtime.sharedTerminalId
-    ? runtime.control[runtime.sharedTerminalId] ?? null
+    ? (runtime.control[runtime.sharedTerminalId] ?? null)
     : null;
 
   if (runtime.participants.length === 0) {
@@ -597,9 +605,7 @@ function CopyableToken({ label, value }: { label: string; value: string }) {
         <button
           type="button"
           aria-label={`Copy ${label}`}
-          onClick={() =>
-            void navigator.clipboard.writeText(value).then(() => setCopied(true))
-          }
+          onClick={() => void navigator.clipboard.writeText(value).then(() => setCopied(true))}
           className="flex shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 text-sm text-muted hover:text-foreground"
         >
           {copied ? <Check size={14} className="text-accent" /> : <Copy size={14} />}

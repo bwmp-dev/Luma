@@ -61,8 +61,7 @@ export function settleMs(view: ShowcaseView): number {
   return view === "terminal" || view === "connections" ? 1900 : 650;
 }
 
-const frame = () =>
-  new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 /** Wait for the mobile shell to mount. Navigation itself is driven through
  * mobileNavStore rather than by clicking the tab bar, because on iOS the bar can
@@ -292,18 +291,14 @@ export async function applyScenario(
        * whichever appears, and connect only if it is the picker. Waiting also
        * steps over the push transition, during which the outgoing screen is
        * still mounted and would match first. */
-      const settled = await waitForText(
-        "docker-compose.yml",
-        "Connect to a saved host",
-      );
+      const settled = await waitForText("docker-compose.yml", "Connect to a saved host");
       if (settled !== "docker-compose.yml") {
         // Match the row by host name rather than by "Connect" — every row
         // carries that word, and the listing is this host's home directory.
         await clickButtonByText(STATS_HOST.name, "contains");
         await waitForText("docker-compose.yml");
       }
-    }
-    else if (view === "delete-account") {
+    } else if (view === "delete-account") {
       // The account screen with the delete confirmation open: the surface App
       // Review looks for, and the one that can only be checked on a device.
       nav.navigate("profile", "settings-account");
@@ -313,8 +308,7 @@ export async function applyScenario(
        * that instead on the replay pass and actually run the deletion. Opening
        * an already-open dialog is a no-op, so this stays the end state. */
       await clickButtonByText("Delete account…");
-    }
-    else if (view === "agent-inbox") {
+    } else if (view === "agent-inbox") {
       await seedAgentInbox();
       nav.navigate("connections", "agent-inbox");
     }

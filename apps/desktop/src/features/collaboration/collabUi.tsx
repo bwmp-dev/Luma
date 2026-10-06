@@ -31,10 +31,7 @@ export function ConnectionStatusBadge({
   const meta = STATUS_META[status];
   const Icon = meta.icon;
   return (
-    <span
-      role="status"
-      className={cn("flex items-center gap-1.5 text-xs", meta.tone, className)}
-    >
+    <span role="status" className={cn("flex items-center gap-1.5 text-xs", meta.tone, className)}>
       <Icon size={13} className={cn("shrink-0", meta.spin && "animate-spin")} />
       {meta.label}
     </span>

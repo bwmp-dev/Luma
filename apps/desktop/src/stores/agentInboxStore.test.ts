@@ -1,10 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  HISTORY_LIMIT,
-  ITEM_LIMIT,
-  itemKey,
-  useAgentInboxStore,
-} from "./agentInboxStore";
+import { HISTORY_LIMIT, ITEM_LIMIT, itemKey, useAgentInboxStore } from "./agentInboxStore";
 import type { AgentEventPayload } from "../lib/agentInbox";
 
 function event(overrides: Partial<AgentEventPayload> = {}): AgentEventPayload {
@@ -47,7 +42,9 @@ describe("agentInboxStore", () => {
 
     const { items } = useAgentInboxStore.getState();
     expect(items.map((item) => item.terminalSessionId)).toEqual(["t2", "t1"]);
-    expect(items.some((item) => item.agentSessionId === "screen" && item.terminalSessionId === "t1")).toBe(false);
+    expect(
+      items.some((item) => item.agentSessionId === "screen" && item.terminalSessionId === "t1"),
+    ).toBe(false);
   });
 
   it("stops tracking hook sessions once they close", () => {
@@ -69,9 +66,7 @@ describe("agentInboxStore", () => {
     expect(items).toHaveLength(ITEM_LIMIT);
     // The finished item was evicted; the one still waiting on the user was not.
     expect(items.some((item) => item.agentSessionId === "finished")).toBe(false);
-    expect(items.some((item) => item.agentSessionId === "needs-answer")).toBe(
-      true,
-    );
+    expect(items.some((item) => item.agentSessionId === "needs-answer")).toBe(true);
   });
 
   it("upserts an item keyed by terminal + agent session and replaces its state", () => {
@@ -85,10 +80,7 @@ describe("agentInboxStore", () => {
     expect(items[0].state).toBe("tool-started");
     expect(items[0].title).toBe("Reading file");
     // But the history retains both events (newest first).
-    expect(items[0].history.map((h) => h.event)).toEqual([
-      "tool-started",
-      "session-started",
-    ]);
+    expect(items[0].history.map((h) => h.event)).toEqual(["tool-started", "session-started"]);
   });
 
   it("keeps distinct items for different agent sessions on the same terminal", () => {
@@ -203,9 +195,7 @@ describe("agentInboxStore", () => {
 
     const before = Date.now();
     record({ agentSessionId: "a2", event: "tool-started" });
-    const item = useAgentInboxStore.getState().items.find(
-      (i) => i.agentSessionId === "a2",
-    )!;
+    const item = useAgentInboxStore.getState().items.find((i) => i.agentSessionId === "a2")!;
     expect(item.ts).toBeGreaterThanOrEqual(before);
   });
 });

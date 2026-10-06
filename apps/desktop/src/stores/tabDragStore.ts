@@ -58,18 +58,47 @@ export const useTabDragStore = create<TabDragState>((set) => ({
   x: 0,
   y: 0,
   begin: (sourceTabId, sourceTitle, x, y) =>
-    set({ sourceTabId, sourcePaneId: null, sourceTitle, targetTabId: null, targetPaneId: null, zone: null, torn: false, external: false, x, y }),
+    set({
+      sourceTabId,
+      sourcePaneId: null,
+      sourceTitle,
+      targetTabId: null,
+      targetPaneId: null,
+      zone: null,
+      torn: false,
+      external: false,
+      x,
+      y,
+    }),
   beginPane: (sourceTabId, sourcePaneId, sourceTitle, x, y) =>
-    set({ sourceTabId, sourcePaneId, sourceTitle, targetTabId: null, targetPaneId: null, zone: null, torn: false, external: false, x, y }),
+    set({
+      sourceTabId,
+      sourcePaneId,
+      sourceTitle,
+      targetTabId: null,
+      targetPaneId: null,
+      zone: null,
+      torn: false,
+      external: false,
+      x,
+      y,
+    }),
   beginExternal: (sourceTabId, sourceTitle) =>
-    set({ sourceTabId, sourcePaneId: null, sourceTitle, targetTabId: null, targetPaneId: null, zone: null, torn: false, external: true }),
+    set({
+      sourceTabId,
+      sourcePaneId: null,
+      sourceTitle,
+      targetTabId: null,
+      targetPaneId: null,
+      zone: null,
+      torn: false,
+      external: true,
+    }),
   move: (x, y, targetTabId, zone, targetPaneId) =>
     set((state) => {
-      const nextTargetTabId =
-        targetTabId === undefined ? state.targetTabId : targetTabId;
+      const nextTargetTabId = targetTabId === undefined ? state.targetTabId : targetTabId;
       const nextZone = zone === undefined ? state.zone : zone;
-      const nextTargetPaneId =
-        targetPaneId === undefined ? state.targetPaneId : targetPaneId;
+      const nextTargetPaneId = targetPaneId === undefined ? state.targetPaneId : targetPaneId;
       const nextX = state.external ? state.x : x;
       const nextY = state.external ? state.y : y;
       if (
@@ -91,5 +120,14 @@ export const useTabDragStore = create<TabDragState>((set) => ({
     }),
   setTorn: (torn) => set({ torn }),
   clear: () =>
-    set({ sourceTabId: null, sourcePaneId: null, sourceTitle: "", targetTabId: null, targetPaneId: null, zone: null, torn: false, external: false }),
+    set({
+      sourceTabId: null,
+      sourcePaneId: null,
+      sourceTitle: "",
+      targetTabId: null,
+      targetPaneId: null,
+      zone: null,
+      torn: false,
+      external: false,
+    }),
 }));

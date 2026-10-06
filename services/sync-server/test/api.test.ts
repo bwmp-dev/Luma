@@ -34,29 +34,17 @@ class FakeBucket {
     } as unknown as R2ObjectBody;
   }
 
-  async put(
-    key: string,
-    value: unknown,
-    options?: R2PutOptions,
-  ): Promise<R2Object | null> {
+  async put(key: string, value: unknown, options?: R2PutOptions): Promise<R2Object | null> {
     const current = this.objects.get(key);
     const onlyIf = options?.onlyIf as R2Conditional | undefined;
-    if (
-      onlyIf?.etagMatches !== undefined &&
-      current?.etag !== onlyIf.etagMatches
-    ) {
+    if (onlyIf?.etagMatches !== undefined && current?.etag !== onlyIf.etagMatches) {
       return null;
     }
-    if (
-      onlyIf?.etagDoesNotMatch === "*" &&
-      current !== undefined
-    ) {
+    if (onlyIf?.etagDoesNotMatch === "*" && current !== undefined) {
       return null;
     }
 
-    const bytes = new Uint8Array(
-      await new Response(value as BodyInit).arrayBuffer(),
-    );
+    const bytes = new Uint8Array(await new Response(value as BodyInit).arrayBuffer());
     const etag = `etag-${++this.etagSequence}`;
     const uploaded = new Date();
     this.objects.set(key, {
@@ -114,9 +102,7 @@ const NUMBERED_PARAMETER = /\?\d/;
  */
 function bindValues(query: string, values: unknown[]): unknown[] {
   if (values.length === 0 || !NUMBERED_PARAMETER.test(query)) return values;
-  return [
-    Object.fromEntries(values.map((value, index) => [index + 1, value])),
-  ];
+  return [Object.fromEntries(values.map((value, index) => [index + 1, value]))];
 }
 
 /**
@@ -158,9 +144,7 @@ class TestDatabase {
   }
 
   query<T>(sql: string, ...values: unknown[]): T[] {
-    return this.db
-      .prepare(sql)
-      .all(...(bindValues(sql, values) as never[])) as T[];
+    return this.db.prepare(sql).all(...(bindValues(sql, values) as never[])) as T[];
   }
 }
 
@@ -209,9 +193,7 @@ function createTestServer(quota = 1_024) {
           ...(body
             ? {
                 "content-type": "application/vnd.luma.sync",
-                "content-length": new TextEncoder()
-                  .encode(body)
-                  .byteLength.toString(),
+                "content-length": new TextEncoder().encode(body).byteLength.toString(),
               }
             : {}),
           ...headers,
@@ -221,12 +203,7 @@ function createTestServer(quota = 1_024) {
       context,
     );
 
-  const callJson = (
-    subject: string,
-    method: string,
-    path: string,
-    body?: unknown,
-  ) =>
+  const callJson = (subject: string, method: string, path: string, body?: unknown) =>
     handler.fetch(
       new Request(`https://sync.example${path}`, {
         method,
@@ -279,12 +256,7 @@ async function invite(
   vaultId: string,
   role: "writer" | "reader",
 ): Promise<string> {
-  const response = await server.callJson(
-    owner,
-    "POST",
-    `/v1/vaults/${vaultId}/invites`,
-    { role },
-  );
+  const response = await server.callJson(owner, "POST", `/v1/vaults/${vaultId}/invites`, { role });
   expect(response.status).toBe(201);
   return ((await response.json()) as { secret: string }).secret;
 }
@@ -305,16 +277,8 @@ describe("sync API", () => {
     );
     expect(created.status).toBe(204);
 
-    const alice = await server.handler.fetch(
-      request("alice", "GET"),
-      server.env,
-      server.context,
-    );
-    const bob = await server.handler.fetch(
-      request("bob", "GET"),
-      server.env,
-      server.context,
-    );
+    const alice = await server.handler.fetch(request("alice", "GET"), server.env, server.context);
+    const bob = await server.handler.fetch(request("bob", "GET"), server.env, server.context);
     expect(await alice.text()).toBe("alice-secret");
     expect(bob.status).toBe(404);
 
@@ -347,15 +311,9 @@ describe("sync API", () => {
     expect(second.status).toBe(204);
     expect(stale.status).toBe(412);
 
-    const current = await server.handler.fetch(
-      request("alice", "GET"),
-      server.env,
-      server.context,
-    );
+    const current = await server.handler.fetch(request("alice", "GET"), server.env, server.context);
     expect(await current.text()).toBe("second");
-    expect(
-      [...server.bucket.objects.keys()].some((key) => key.includes("/revisions/")),
-    ).toBe(true);
+    expect([...server.bucket.objects.keys()].some((key) => key.includes("/revisions/"))).toBe(true);
   });
 
   it("requires explicit creation preconditions and enforces account quota", async () => {
@@ -380,13 +338,9 @@ describe("vault sync", () => {
     const server = createTestServer();
     const vaultId = await createVault(server, "alice");
 
-    const stored = await server.call(
-      "alice",
-      "PUT",
-      `/v1/vaults/${vaultId}/sync`,
-      "infra-secret",
-      { "if-none-match": "*" },
-    );
+    const stored = await server.call("alice", "PUT", `/v1/vaults/${vaultId}/sync`, "infra-secret", {
+      "if-none-match": "*",
+    });
     expect(stored.status).toBe(204);
 
     const personal = await server.call("alice", "GET", "/v1/sync");
@@ -422,13 +376,9 @@ describe("vault sync", () => {
   it("lets a reader download but not upload", async () => {
     const server = createTestServer();
     const vaultId = await createVault(server, "alice");
-    await server.call(
-      "alice",
-      "PUT",
-      `/v1/vaults/${vaultId}/sync`,
-      "shared",
-      { "if-none-match": "*" },
-    );
+    await server.call("alice", "PUT", `/v1/vaults/${vaultId}/sync`, "shared", {
+      "if-none-match": "*",
+    });
 
     const secret = await invite(server, "alice", vaultId, "reader");
     await server.callJson("bob", "POST", "/v1/vaults/join", { secret });
@@ -437,13 +387,9 @@ describe("vault sync", () => {
     expect(read.status).toBe(200);
     expect(await read.text()).toBe("shared");
 
-    const write = await server.call(
-      "bob",
-      "PUT",
-      `/v1/vaults/${vaultId}/sync`,
-      "tampered",
-      { "if-match": '"etag-1"' },
-    );
+    const write = await server.call("bob", "PUT", `/v1/vaults/${vaultId}/sync`, "tampered", {
+      "if-match": '"etag-1"',
+    });
     expect(write.status).toBe(403);
 
     const unchanged = await server.call("alice", "GET", `/v1/vaults/${vaultId}/sync`);
@@ -456,29 +402,14 @@ describe("vault sync", () => {
     const secret = await invite(server, "alice", vaultId, "writer");
     await server.callJson("bob", "POST", "/v1/vaults/join", { secret });
 
-    const bobInvite = await server.callJson(
-      "bob",
-      "POST",
-      `/v1/vaults/${vaultId}/invites`,
-      { role: "reader" },
-    );
-    const bobEpoch = await server.callJson(
-      "bob",
-      "POST",
-      `/v1/vaults/${vaultId}/key-epoch`,
-    );
-    const bobRemove = await server.callJson(
-      "bob",
-      "DELETE",
-      `/v1/vaults/${vaultId}/members/alice`,
-    );
+    const bobInvite = await server.callJson("bob", "POST", `/v1/vaults/${vaultId}/invites`, {
+      role: "reader",
+    });
+    const bobEpoch = await server.callJson("bob", "POST", `/v1/vaults/${vaultId}/key-epoch`);
+    const bobRemove = await server.callJson("bob", "DELETE", `/v1/vaults/${vaultId}/members/alice`);
     expect([bobInvite.status, bobEpoch.status, bobRemove.status]).toEqual([403, 403, 403]);
 
-    const ownerEpoch = await server.callJson(
-      "alice",
-      "POST",
-      `/v1/vaults/${vaultId}/key-epoch`,
-    );
+    const ownerEpoch = await server.callJson("alice", "POST", `/v1/vaults/${vaultId}/key-epoch`);
     expect(await ownerEpoch.json()).toEqual({ keyEpoch: 2 });
 
     const removeOwner = await server.callJson(
@@ -499,10 +430,7 @@ describe("vault sync", () => {
     });
     expect(unknown.status).toBe(404);
 
-    server.database.query(
-      "UPDATE vault_invites SET expires_at = 1 WHERE vault_id = ?1",
-      vaultId,
-    );
+    server.database.query("UPDATE vault_invites SET expires_at = 1 WHERE vault_id = ?1", vaultId);
     const expired = await server.callJson("bob", "POST", "/v1/vaults/join", { secret });
     expect(expired.status).toBe(404);
   });
@@ -538,9 +466,7 @@ describe("vault sync", () => {
     });
 
     const sealed = await server.callJson("alice", "POST", `/v1/vaults/${vaultId}/keys`, {
-      keys: [
-        { subject: "bob", deviceId: "bob-laptop", envelope: { ciphertext: "sealed" } },
-      ],
+      keys: [{ subject: "bob", deviceId: "bob-laptop", envelope: { ciphertext: "sealed" } }],
     });
     expect(await sealed.json()).toEqual({ written: 1, keyEpoch: 1 });
 
@@ -562,12 +488,9 @@ describe("vault sync", () => {
     );
     expect(outsider.status).toBe(404);
 
-    const toNonMember = await server.callJson(
-      "alice",
-      "POST",
-      `/v1/vaults/${vaultId}/keys`,
-      { keys: [{ subject: "mallory", deviceId: "m1", envelope: { ciphertext: "x" } }] },
-    );
+    const toNonMember = await server.callJson("alice", "POST", `/v1/vaults/${vaultId}/keys`, {
+      keys: [{ subject: "mallory", deviceId: "m1", envelope: { ciphertext: "x" } }],
+    });
     expect(toNonMember.status).toBe(409);
   });
 
@@ -613,18 +536,14 @@ describe("vault sync", () => {
       keys: [{ subject: "bob", deviceId: "bob-laptop", envelope: { ciphertext: "s" } }],
     });
 
-    const removed = await server.callJson(
-      "alice",
-      "DELETE",
-      `/v1/vaults/${vaultId}/members/bob`,
-    );
+    const removed = await server.callJson("alice", "DELETE", `/v1/vaults/${vaultId}/members/bob`);
     expect(removed.status).toBe(204);
 
     const afterward = await server.call("bob", "GET", `/v1/vaults/${vaultId}/sync`);
     expect(afterward.status).toBe(404);
-    expect(
-      server.database.query("SELECT 1 FROM vault_member_keys WHERE subject = 'bob'"),
-    ).toEqual([]);
+    expect(server.database.query("SELECT 1 FROM vault_member_keys WHERE subject = 'bob'")).toEqual(
+      [],
+    );
   });
 
   it("charges a vault blob to the owner's quota, not the writer's", async () => {
@@ -633,13 +552,9 @@ describe("vault sync", () => {
     const secret = await invite(server, "alice", vaultId, "writer");
     await server.callJson("bob", "POST", "/v1/vaults/join", { secret });
 
-    const stored = await server.call(
-      "bob",
-      "PUT",
-      `/v1/vaults/${vaultId}/sync`,
-      "0123456789",
-      { "if-none-match": "*" },
-    );
+    const stored = await server.call("bob", "PUT", `/v1/vaults/${vaultId}/sync`, "0123456789", {
+      "if-none-match": "*",
+    });
     expect(stored.status).toBe(204);
 
     const [vault] = server.database.query<{ used_bytes: number }>(
@@ -669,14 +584,12 @@ describe("vault sync", () => {
     const [stored] = [...server.bucket.objects.keys()];
     const etag = server.bucket.objects.get(stored)!.etag;
     await server.call("alice", "PUT", "/v1/sync", "second", { "if-match": etag });
-    expect([...server.bucket.objects.keys()].some((key) => key.includes("/revisions/")))
-      .toBe(true);
+    expect([...server.bucket.objects.keys()].some((key) => key.includes("/revisions/"))).toBe(true);
 
     const deleted = await deleteAccount(server, "alice");
     expect(deleted.status).toBe(200);
     expect([...server.bucket.objects.keys()]).toEqual([]);
-    expect(server.database.query("SELECT 1 FROM accounts WHERE subject = 'alice'"))
-      .toEqual([]);
+    expect(server.database.query("SELECT 1 FROM accounts WHERE subject = 'alice'")).toEqual([]);
   });
 
   it("erases vaults the account owns, blobs and rows alike", async () => {
@@ -685,8 +598,7 @@ describe("vault sync", () => {
     await server.call("alice", "PUT", `/v1/vaults/${vaultId}/sync`, "vault data", {
       "if-none-match": "*",
     });
-    expect([...server.bucket.objects.keys()].some((key) => key.startsWith("vaults/")))
-      .toBe(true);
+    expect([...server.bucket.objects.keys()].some((key) => key.startsWith("vaults/"))).toBe(true);
 
     const report = await (await deleteAccount(server, "alice")).json();
     expect(report).toMatchObject({ vaultsDeleted: 1 });
@@ -725,9 +637,7 @@ describe("vault sync", () => {
 
     const owner = await server.call("alice", "GET", `/v1/vaults/${vaultId}/sync`);
     expect(owner.status).toBe(200);
-    expect(
-      server.database.query("SELECT 1 FROM vault_members WHERE subject = 'bob'"),
-    ).toEqual([]);
+    expect(server.database.query("SELECT 1 FROM vault_members WHERE subject = 'bob'")).toEqual([]);
   });
 
   it("removes the account's devices and sealed keys everywhere", async () => {
@@ -745,13 +655,11 @@ describe("vault sync", () => {
 
     const report = await (await deleteAccount(server, "bob")).json();
     expect(report).toMatchObject({ devicesRemoved: 1 });
-    expect(
-      server.database.query("SELECT 1 FROM vault_devices WHERE subject = 'bob'"),
-    ).toEqual([]);
+    expect(server.database.query("SELECT 1 FROM vault_devices WHERE subject = 'bob'")).toEqual([]);
     // The key lived in Alice's vault, but it was sealed to Bob's device.
-    expect(
-      server.database.query("SELECT 1 FROM vault_member_keys WHERE subject = 'bob'"),
-    ).toEqual([]);
+    expect(server.database.query("SELECT 1 FROM vault_member_keys WHERE subject = 'bob'")).toEqual(
+      [],
+    );
   });
 
   it("is idempotent, so a retry after a partial failure is safe", async () => {

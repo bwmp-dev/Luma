@@ -20,10 +20,8 @@ function clamp(value: number, extent: number): number {
 }
 
 export function TerminalGesturePad({ pad }: { pad: PadState }) {
-  const viewportWidth =
-    window.visualViewport?.width ?? window.innerWidth ?? PAD_SIZE;
-  const viewportHeight =
-    window.visualViewport?.height ?? window.innerHeight ?? PAD_SIZE;
+  const viewportWidth = window.visualViewport?.width ?? window.innerWidth ?? PAD_SIZE;
+  const viewportHeight = window.visualViewport?.height ?? window.innerHeight ?? PAD_SIZE;
 
   return (
     <div

@@ -89,11 +89,7 @@ export function DockerDialog({
         open={open}
         onOpenChange={onOpenChange}
         title={
-          logs
-            ? `Logs — ${logs.container}`
-            : inspect
-              ? `Inspect — ${inspect.container}`
-              : "Docker"
+          logs ? `Logs — ${logs.container}` : inspect ? `Inspect — ${inspect.container}` : "Docker"
         }
         description={
           drilldown
@@ -155,11 +151,7 @@ export function DockerDialog({
                 {actionError}
               </p>
             )}
-            {statsError && (
-              <p className="text-xs text-muted">
-                Stats unavailable: {statsError}
-              </p>
-            )}
+            {statsError && <p className="text-xs text-muted">Stats unavailable: {statsError}</p>}
             {loading ? (
               <div className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border text-center">
                 <Loader2 size={16} className="animate-spin text-muted" />
@@ -168,18 +160,14 @@ export function DockerDialog({
             ) : error ? (
               <div className="rounded-lg border border-border bg-background p-3">
                 <p className="text-xs text-danger">{error}</p>
-                <p className="mt-1 text-xs text-muted">
-                  Refresh once the host is reachable again.
-                </p>
+                <p className="mt-1 text-xs text-muted">Refresh once the host is reachable again.</p>
               </div>
             ) : list?.available === false ? (
               <div className="rounded-lg border border-dashed border-border p-4 text-center">
                 <p className="text-sm text-foreground">
                   {list.unavailableReason ?? "Docker unavailable"}
                 </p>
-                <p className="mt-1 text-xs text-muted">
-                  {unavailableHint(list.unavailableReason)}
-                </p>
+                <p className="mt-1 text-xs text-muted">{unavailableHint(list.unavailableReason)}</p>
               </div>
             ) : (list?.projects.length ?? 0) === 0 ? (
               <p className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted">
@@ -220,10 +208,8 @@ export function DockerDialog({
         message={
           <>
             {pending ? ACTION_LABEL[pending.action] : ""}{" "}
-            <span className="font-medium text-foreground">
-              {pending?.container.name}
-            </span>{" "}
-            on <span className="font-medium text-foreground">{hostName}</span>?
+            <span className="font-medium text-foreground">{pending?.container.name}</span> on{" "}
+            <span className="font-medium text-foreground">{hostName}</span>?
           </>
         }
       />
@@ -257,9 +243,7 @@ function ContainerRow({
               {stateLabel(container.state)}
             </span>
             {container.service && (
-              <span className="shrink-0 truncate text-[10px] text-muted">
-                {container.service}
-              </span>
+              <span className="shrink-0 truncate text-[10px] text-muted">{container.service}</span>
             )}
           </div>
           <p className="mt-0.5 truncate text-xs text-muted">
@@ -267,9 +251,7 @@ function ContainerRow({
             {container.status ? ` · ${container.status}` : ""}
           </p>
           {container.ports && (
-            <p className="mt-0.5 truncate font-mono text-[11px] text-muted">
-              {container.ports}
-            </p>
+            <p className="mt-0.5 truncate font-mono text-[11px] text-muted">{container.ports}</p>
           )}
           {stat && (
             <p className="mt-1 text-[11px] text-muted">
@@ -367,9 +349,7 @@ function LogsView() {
               key={size}
               type="button"
               aria-pressed={logs.tail === size}
-              onClick={() =>
-                void useDockerStore.getState().openLogs(logs.container, size)
-              }
+              onClick={() => void useDockerStore.getState().openLogs(logs.container, size)}
               className={cn(
                 "px-2.5 py-1.5 text-xs text-muted",
                 logs.tail === size && "bg-accent/15 text-accent",
@@ -382,8 +362,7 @@ function LogsView() {
       </div>
       {logs.truncated && (
         <p className="text-xs text-muted">
-          The tail was larger than the transfer limit; the oldest lines were
-          dropped.
+          The tail was larger than the transfer limit; the oldest lines were dropped.
         </p>
       )}
       {logs.loading ? (
@@ -435,13 +414,9 @@ function InspectView() {
           <Field label="State" value={data.state} />
           {data.startedAt && <Field label="Started" value={data.startedAt} />}
           {data.command && <Field label="Command" value={data.command} />}
-          {data.restartPolicy && (
-            <Field label="Restart policy" value={data.restartPolicy} />
-          )}
+          {data.restartPolicy && <Field label="Restart policy" value={data.restartPolicy} />}
           <Field label="Restarts" value={String(data.restartCount)} />
-          {data.networks.length > 0 && (
-            <Field label="Networks" value={data.networks.join(", ")} />
-          )}
+          {data.networks.length > 0 && <Field label="Networks" value={data.networks.join(", ")} />}
         </dl>
       </Section>
 
@@ -467,8 +442,8 @@ function InspectView() {
             </ul>
             {data.env.some((variable) => variable.redacted) && (
               <p className="mt-2 text-[11px] text-muted">
-                Values that look like credentials are replaced on the host side
-                and never sent to this app.
+                Values that look like credentials are replaced on the host side and never sent to
+                this app.
               </p>
             )}
           </>
@@ -483,8 +458,7 @@ function InspectView() {
             {data.mounts.map((mount) => (
               <li key={`${mount.source}:${mount.destination}`} className="break-all">
                 <span className="text-muted">{mount.kind}</span> {mount.source} →{" "}
-                {mount.destination}{" "}
-                <span className="text-muted">{mount.rw ? "rw" : "ro"}</span>
+                {mount.destination} <span className="text-muted">{mount.rw ? "rw" : "ro"}</span>
               </li>
             ))}
           </ul>
@@ -509,21 +483,11 @@ function InspectView() {
   );
 }
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
-        {title}
-      </h3>
-      <div className="rounded-lg border border-border bg-background p-3">
-        {children}
-      </div>
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">{title}</h3>
+      <div className="rounded-lg border border-border bg-background p-3">{children}</div>
     </section>
   );
 }

@@ -124,9 +124,7 @@ export function SettingsScreen() {
                   min={200}
                   max={100000}
                   step={100}
-                  onChange={(value) =>
-                    setSetting.mutate({ key: SETTING_KEYS.scrollback, value })
-                  }
+                  onChange={(value) => setSetting.mutate({ key: SETTING_KEYS.scrollback, value })}
                 />
               </Field>
               <Field
@@ -192,9 +190,8 @@ export function SettingsScreen() {
               </Field>
               {voiceAutoSend && voiceDictation && speechSupport.available && (
                 <p className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-2.5 text-xs text-amber-400">
-                  Auto-send puts transcribed text at your prompt without you
-                  reading it first. It still never presses Enter, so nothing runs
-                  until you do.
+                  Auto-send puts transcribed text at your prompt without you reading it first. It
+                  still never presses Enter, so nothing runs until you do.
                 </p>
               )}
             </Subsection>
@@ -260,13 +257,10 @@ export function SettingsScreen() {
             </Subsection>
             {analytics.installId && (
               <Subsection title="This install's id">
-                <p className="break-all font-mono text-xs text-muted">
-                  {analytics.installId}
-                </p>
+                <p className="break-all font-mono text-xs text-muted">{analytics.installId}</p>
                 <p className="mt-2 text-sm text-muted">
-                  Quote this if you ask us to delete the analytics records for
-                  this install. Turning the setting off deletes the id here and
-                  starts a new one if you turn it back on.
+                  Quote this if you ask us to delete the analytics records for this install. Turning
+                  the setting off deletes the id here and starts a new one if you turn it back on.
                 </p>
               </Subsection>
             )}
@@ -281,18 +275,8 @@ export function SettingsScreen() {
               Luma 0.1.0 — a lightweight terminal &amp; SSH client. MIT licensed.
             </p>
             <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">
-              <LinkRow
-                icon={Globe}
-                label="Website"
-                detail="luma.bwmp.dev"
-                href={LINKS.website}
-              />
-              <LinkRow
-                icon={Code}
-                label="GitHub"
-                detail="Browse the source"
-                href={LINKS.github}
-              />
+              <LinkRow icon={Globe} label="Website" detail="luma.bwmp.dev" href={LINKS.website} />
+              <LinkRow icon={Code} label="GitHub" detail="Browse the source" href={LINKS.github} />
               <LinkRow
                 icon={MessageSquarePlus}
                 label="Issues & feature requests"
@@ -328,9 +312,7 @@ export function SettingsScreen() {
               aria-current={active === id ? "page" : undefined}
               className={cn(
                 "flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors",
-                active === id
-                  ? "bg-raised text-accent"
-                  : "text-muted hover:text-foreground",
+                active === id ? "bg-raised text-accent" : "text-muted hover:text-foreground",
               )}
             >
               <Icon size={15} className="shrink-0" />

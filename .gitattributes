@@ -11,3 +11,14 @@ scripts/luma-hook text eol=lf
 # compared byte for byte, so a CRLF checkout on Windows would rewrite the
 # very thing under test.
 apps/desktop/src-tauri/tests/fixtures/ppk/* text eol=lf
+# Oxfmt always writes LF (it has no "auto" mode), so formatted sources must check
+# out as LF on Windows too or `pnpm format:check` flags every file.
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.json text eol=lf
+*.jsonc text eol=lf
+*.css text eol=lf
+*.html text eol=lf

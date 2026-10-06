@@ -55,9 +55,7 @@ describe("keymapStore round-trip", () => {
     expect(useKeymapStore.getState().keymap["workspace.newTab"]).toBe("Ctrl+Alt+N");
     expect(saved).not.toBeNull();
     expect(saved!.key).toBe("keybindings.map");
-    expect((saved!.value as Record<string, string>)["workspace.newTab"]).toBe(
-      "Ctrl+Alt+N",
-    );
+    expect((saved!.value as Record<string, string>)["workspace.newTab"]).toBe("Ctrl+Alt+N");
   });
 
   it("resets a single action and all actions to defaults", async () => {

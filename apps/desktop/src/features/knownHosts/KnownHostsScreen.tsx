@@ -12,10 +12,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import {
-  useInvalidateKnownHosts,
-  useKnownHosts,
-} from "../../hooks/useKnownHosts";
+import { useInvalidateKnownHosts, useKnownHosts } from "../../hooks/useKnownHosts";
 import {
   hostsDisplay,
   isHashedHosts,
@@ -34,8 +31,7 @@ import { cn } from "../../lib/utils";
  * always refetched (never patched) after a remove.
  */
 export function KnownHostsScreen() {
-  const { data: entries = [], isLoading, isError, error, refetch, isFetching } =
-    useKnownHosts();
+  const { data: entries = [], isLoading, isError, error, refetch, isFetching } = useKnownHosts();
   const invalidate = useInvalidateKnownHosts();
   const [query, setQuery] = useState("");
   const [pending, setPending] = useState<KnownHostsEntry | null>(null);
@@ -70,8 +66,8 @@ export function KnownHostsScreen() {
           <div className="min-w-0 flex-1">
             <h1 className="text-2xl font-semibold tracking-tight">Known hosts</h1>
             <p className="mt-1 text-sm text-muted">
-              Server host keys Luma has trusted. Removing an entry makes Luma
-              re-prompt to verify that host the next time you connect.
+              Server host keys Luma has trusted. Removing an entry makes Luma re-prompt to verify
+              that host the next time you connect.
             </p>
           </div>
           <button
@@ -79,10 +75,7 @@ export function KnownHostsScreen() {
             onClick={() => void refetch()}
             className="flex shrink-0 items-center gap-1.5 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-muted hover:border-accent hover:text-accent"
           >
-            <RefreshCw
-              size={14}
-              className={isFetching ? "animate-spin" : undefined}
-            />
+            <RefreshCw size={14} className={isFetching ? "animate-spin" : undefined} />
             Refresh
           </button>
         </div>
@@ -126,8 +119,7 @@ export function KnownHostsScreen() {
             </Message>
           ) : entries.length === 0 ? (
             <Message>
-              No known hosts recorded yet. Hosts you trust when connecting appear
-              here.
+              No known hosts recorded yet. Hosts you trust when connecting appear here.
             </Message>
           ) : filtered.length === 0 ? (
             <Message>No entries match “{query}”.</Message>
@@ -170,9 +162,7 @@ export function KnownHostsScreen() {
           <div className="space-y-2">
             <p>
               Remove the trusted{" "}
-              <span className="font-medium text-foreground">
-                {pending ? pending.keyType : ""}
-              </span>{" "}
+              <span className="font-medium text-foreground">{pending ? pending.keyType : ""}</span>{" "}
               key for{" "}
               <span className="font-medium text-foreground">
                 {pending ? hostsDisplay(pending.hosts) : ""}
@@ -180,14 +170,12 @@ export function KnownHostsScreen() {
               ?
             </p>
             <p className="text-xs text-muted">
-              The next time you connect to this host, Luma will ask you to verify
-              and trust its key again. Only do this if you expected the key to
-              change or no longer trust the stored one.
+              The next time you connect to this host, Luma will ask you to verify and trust its key
+              again. Only do this if you expected the key to change or no longer trust the stored
+              one.
             </p>
             {remove.isError && (
-              <p className="text-xs text-danger">
-                {parseLumaError(remove.error).message}
-              </p>
+              <p className="text-xs text-danger">{parseLumaError(remove.error).message}</p>
             )}
           </div>
         }
@@ -196,13 +184,7 @@ export function KnownHostsScreen() {
   );
 }
 
-function KnownHostRow({
-  entry,
-  onRemove,
-}: {
-  entry: KnownHostsEntry;
-  onRemove: () => void;
-}) {
+function KnownHostRow({ entry, onRemove }: { entry: KnownHostsEntry; onRemove: () => void }) {
   const hashed = isHashedHosts(entry.hosts);
   const hosts = hostsDisplay(entry.hosts);
   return (
@@ -256,10 +238,7 @@ function Fingerprint({ value }: { value: string }) {
     });
   return (
     <span className="flex min-w-0 items-center gap-1">
-      <span
-        className="min-w-0 truncate font-mono text-[11px] text-foreground/80"
-        title={value}
-      >
+      <span className="min-w-0 truncate font-mono text-[11px] text-foreground/80" title={value}>
         {value}
       </span>
       <button
@@ -279,9 +258,7 @@ function MarkerBadge({ marker }: { marker: string | null }) {
   const revoked = marker.toLowerCase().includes("revok");
   return (
     <Badge
-      className={
-        revoked ? "bg-danger/15 text-danger" : "bg-accent/15 text-accent"
-      }
+      className={revoked ? "bg-danger/15 text-danger" : "bg-accent/15 text-accent"}
       icon={revoked ? <ShieldX size={11} /> : <ShieldCheck size={11} />}
       label={marker}
       title={`Marker: ${marker}`}
@@ -314,13 +291,7 @@ function Badge({
   );
 }
 
-function Message({
-  children,
-  tone,
-}: {
-  children: React.ReactNode;
-  tone?: "danger";
-}) {
+function Message({ children, tone }: { children: React.ReactNode; tone?: "danger" }) {
   return (
     <div
       className={cn(

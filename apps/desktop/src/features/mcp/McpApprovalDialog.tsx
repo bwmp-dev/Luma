@@ -1,11 +1,7 @@
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Modal } from "../../components/Modal";
-import {
-  MCP_APPROVAL_EVENT,
-  resolveMcpApproval,
-  type McpApprovalRequest,
-} from "../../lib/mcp";
+import { MCP_APPROVAL_EVENT, resolveMcpApproval, type McpApprovalRequest } from "../../lib/mcp";
 
 /**
  * Prompt shown when a grant with "ask before each action" wants to do
@@ -75,9 +71,7 @@ export function McpApprovalDialog() {
           {current.preview}
         </pre>
         <p className="text-xs text-muted">
-          {queue.length > 1
-            ? `${queue.length - 1} more waiting. `
-            : ""}
+          {queue.length > 1 ? `${queue.length - 1} more waiting. ` : ""}
           Unanswered prompts are denied after two minutes.
         </p>
       </div>

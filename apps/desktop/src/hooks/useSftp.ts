@@ -10,8 +10,7 @@ import { localDrives, localList, sftpList, type DirectoryListing } from "../lib/
 
 export const sftpListKey = (sessionId: string, path: string) =>
   ["sftp-list", sessionId, path] as const;
-export const localListKey = (path: string | null) =>
-  ["local-list", path] as const;
+export const localListKey = (path: string | null) => ["local-list", path] as const;
 
 /** Remote directory listing for a connected session. */
 export function useSftpList(sessionId: string | null, path: string | null) {
@@ -56,6 +55,5 @@ export function useInvalidateSftp() {
 /** Invalidate a local listing after a mutation. */
 export function useInvalidateLocal() {
   const queryClient = useQueryClient();
-  return (path: string | null) =>
-    queryClient.invalidateQueries({ queryKey: localListKey(path) });
+  return (path: string | null) => queryClient.invalidateQueries({ queryKey: localListKey(path) });
 }

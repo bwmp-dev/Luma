@@ -11,15 +11,15 @@ export function EmptyState() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-8 bg-[radial-gradient(circle_at_50%_45%,var(--glow),transparent_32%)]">
       <div className="text-center">
-        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-surface shadow-glow"><Command size={28} className="text-accent" /></div>
+        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-surface shadow-glow">
+          <Command size={28} className="text-accent" />
+        </div>
         <h1 className="text-2xl font-semibold tracking-tight">
           <span className="bg-gradient-to-r from-accent to-foreground bg-clip-text text-transparent drop-shadow-[0_0_18px_var(--glow)]">
             Luma
           </span>
         </h1>
-        <p className="mt-2 text-sm text-muted">
-          Where do you want to connect?
-        </p>
+        <p className="mt-2 text-sm text-muted">Where do you want to connect?</p>
       </div>
 
       <div className="flex gap-3">

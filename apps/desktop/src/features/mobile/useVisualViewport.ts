@@ -19,13 +19,8 @@ export function useVisualViewportMetrics(activeSessionId: string | null): {
 } {
   const [metrics, setMetrics] = useState(() => ({
     height:
-      typeof window === "undefined"
-        ? 0
-        : (window.visualViewport?.height ?? window.innerHeight),
-    offsetTop:
-      typeof window === "undefined"
-        ? 0
-        : (window.visualViewport?.offsetTop ?? 0),
+      typeof window === "undefined" ? 0 : (window.visualViewport?.height ?? window.innerHeight),
+    offsetTop: typeof window === "undefined" ? 0 : (window.visualViewport?.offsetTop ?? 0),
   }));
 
   useEffect(() => {

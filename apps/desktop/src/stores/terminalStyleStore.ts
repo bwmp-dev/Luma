@@ -89,9 +89,7 @@ export const useTerminalStyleStore = create<TerminalStyleState>((set, get) => ({
       const schemeId = typeof rawScheme === "string" && rawScheme ? rawScheme : AUTO_SCHEME_ID;
       const rawFamily = settings[SETTING_KEYS.terminalFontFamily];
       const fontFamily = typeof rawFamily === "string" ? rawFamily : "";
-      const fontSize = clampFontSize(
-        Number(settings[SETTING_KEYS.fontSize] ?? defaultFontSize()),
-      );
+      const fontSize = clampFontSize(Number(settings[SETTING_KEYS.fontSize] ?? defaultFontSize()));
       set({ schemeId, customThemes, fontFamily, fontSize, loaded: true });
       terminalManager.applyTerminalStyle({
         scheme: resolveScheme(schemeId, customThemes),

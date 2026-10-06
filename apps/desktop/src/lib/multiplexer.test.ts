@@ -79,18 +79,14 @@ describe("workspace session titles", () => {
   });
 
   it("never doubles the suffix or touches plain titles", () => {
-    expect(withMultiplexerTitle("prod — tmux:main", attach)).toBe(
-      "prod — tmux:main",
-    );
+    expect(withMultiplexerTitle("prod — tmux:main", attach)).toBe("prod — tmux:main");
     expect(withMultiplexerTitle("prod", undefined)).toBe("prod");
   });
 
   it("strips the suffix back off for derived panes", () => {
     expect(withoutMultiplexerTitle("prod — tmux:main", attach)).toBe("prod");
     expect(withoutMultiplexerTitle("prod", attach)).toBe("prod");
-    expect(withoutMultiplexerTitle("prod — tmux:main", undefined)).toBe(
-      "prod — tmux:main",
-    );
+    expect(withoutMultiplexerTitle("prod — tmux:main", undefined)).toBe("prod — tmux:main");
   });
 
   it("labels each multiplexer", () => {

@@ -1,10 +1,5 @@
 import { create } from "zustand";
-import {
-  listTunnels,
-  startTunnel,
-  stopTunnel,
-  type PortForward,
-} from "../lib/portForwards";
+import { listTunnels, startTunnel, stopTunnel, type PortForward } from "../lib/portForwards";
 import { parseLumaError } from "../lib/hosts";
 
 /*
@@ -60,8 +55,7 @@ export const useTunnelStore = create<TunnelState>((set) => ({
               [tunnelId]: {
                 ...entry,
                 status,
-                errorMessage:
-                  exit.errorMessage ?? exit.errorCategory ?? undefined,
+                errorMessage: exit.errorMessage ?? exit.errorCategory ?? undefined,
               },
             },
           };
@@ -126,6 +120,5 @@ function omit<T extends Record<string, unknown>>(record: T, key: string): T {
 
 /** Count of tunnels currently in the running state. */
 export function selectRunningCount(state: TunnelState): number {
-  return Object.values(state.tunnels).filter((t) => t.status === "running")
-    .length;
+  return Object.values(state.tunnels).filter((t) => t.status === "running").length;
 }

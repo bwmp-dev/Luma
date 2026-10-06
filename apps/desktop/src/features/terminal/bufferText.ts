@@ -80,10 +80,7 @@ export function indexOfCell(line: LogicalLine, cell: Cell): number {
 }
 
 /** Half-open `[start, end)` range of the URL covering `index`, or null. */
-export function urlRangeAt(
-  line: LogicalLine,
-  index: number,
-): [number, number] | null {
+export function urlRangeAt(line: LogicalLine, index: number): [number, number] | null {
   for (const match of line.text.matchAll(URL_PATTERN)) {
     const start = match.index ?? 0;
     const end = start + match[0].length;
@@ -100,10 +97,7 @@ export function urlRangeAt(
  * not split, because on touch this is the fallback for grabbing a path or an
  * unrecognised URL in one go.
  */
-export function wordRangeAt(
-  line: LogicalLine,
-  index: number,
-): [number, number] | null {
+export function wordRangeAt(line: LogicalLine, index: number): [number, number] | null {
   const char = line.text[index];
   if (char === undefined || /\s/.test(char)) return null;
   let start = index;

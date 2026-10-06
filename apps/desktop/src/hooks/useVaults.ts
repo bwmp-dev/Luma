@@ -35,10 +35,7 @@ export function useVaultLabel(vaultId: string): string | undefined {
 
 export function useInvalidateVaults() {
   const queryClient = useQueryClient();
-  return useCallback(
-    () => queryClient.invalidateQueries({ queryKey: VAULTS_KEY }),
-    [queryClient],
-  );
+  return useCallback(() => queryClient.invalidateQueries({ queryKey: VAULTS_KEY }), [queryClient]);
 }
 
 export function useCreateVault() {
@@ -78,8 +75,7 @@ export function useJoinManagedVault() {
 export function useUpdateVault() {
   const invalidate = useInvalidateVaults();
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: VaultInput }) =>
-      updateVault(id, input),
+    mutationFn: ({ id, input }: { id: string; input: VaultInput }) => updateVault(id, input),
     onSuccess: () => invalidate(),
   });
 }

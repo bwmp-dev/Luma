@@ -61,11 +61,7 @@ describe("terminalManager mobile SSH I/O routing", () => {
     });
 
     const startIndex = createdTerminals.length;
-    await terminalManager.createSession(
-      "m-ssh",
-      { kind: "ssh", hostId: "host-1" },
-      callbacks(),
-    );
+    await terminalManager.createSession("m-ssh", { kind: "ssh", hostId: "host-1" }, callbacks());
     const term = createdTerminals[startIndex];
 
     term.emitData("x");
@@ -83,16 +79,13 @@ describe("terminalManager mobile SSH I/O routing", () => {
       if (cmd === "ssh_spawn") return { sessionId: "ssh-backend-2", title: "host" };
       if (cmd === "ssh_write") return null;
       if (cmd === "ssh_disconnect") return null;
-      if (cmd.startsWith("pty_")) throw new Error(`pty command used on mobile: ${cmd} ${JSON.stringify(args)}`);
+      if (cmd.startsWith("pty_"))
+        throw new Error(`pty command used on mobile: ${cmd} ${JSON.stringify(args)}`);
       throw new Error(`unexpected ${cmd}`);
     });
 
     const startIndex = createdTerminals.length;
-    await terminalManager.createSession(
-      "m-ssh-2",
-      { kind: "ssh", hostId: "host-2" },
-      callbacks(),
-    );
+    await terminalManager.createSession("m-ssh-2", { kind: "ssh", hostId: "host-2" }, callbacks());
     createdTerminals[startIndex].emitData("ls\r");
     await tick();
     terminalManager.dispose("m-ssh-2");
@@ -112,11 +105,7 @@ describe("terminalManager mobile SSH I/O routing", () => {
     });
 
     const startIndex = createdTerminals.length;
-    await terminalManager.createSession(
-      "m-ssh-3",
-      { kind: "ssh", hostId: "host-3" },
-      callbacks(),
-    );
+    await terminalManager.createSession("m-ssh-3", { kind: "ssh", hostId: "host-3" }, callbacks());
     const term = createdTerminals[startIndex];
 
     let consumed = false;

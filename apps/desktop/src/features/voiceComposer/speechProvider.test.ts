@@ -156,9 +156,7 @@ describe("startDictation", () => {
       start() {
         // The engine refuses an on-device-only request.
         if (this.processLocally) {
-          queueMicrotask(() =>
-            this.onerror?.({ error: "language-not-supported" }),
-          );
+          queueMicrotask(() => this.onerror?.({ error: "language-not-supported" }));
         }
       }
       stop() {

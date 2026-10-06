@@ -52,7 +52,5 @@ export function positiveInteger(value: string, name: string): number {
  * subject itself — an account identifier we promise to erase — does not linger.
  */
 export async function deleteAccountRow(env: Env, subject: string): Promise<void> {
-  await env.DB.prepare(`DELETE FROM accounts WHERE subject = ?1`)
-    .bind(subject)
-    .run();
+  await env.DB.prepare(`DELETE FROM accounts WHERE subject = ?1`).bind(subject).run();
 }

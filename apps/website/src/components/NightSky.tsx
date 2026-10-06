@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef } from "react";
 
 const ACCENT: readonly [number, number, number] = [240, 204, 251];
 const WHITE: readonly [number, number, number] = [255, 255, 255];
@@ -48,10 +48,10 @@ export function NightSky() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 
     let width = 0;
     let height = 0;
@@ -139,9 +139,7 @@ export function NightSky() {
     };
 
     const drawStar = (s: Star, twinkle: boolean) => {
-      const a = clamp01(
-        s.baseAlpha + (twinkle ? Math.sin(s.phase) * s.amp : 0),
-      );
+      const a = clamp01(s.baseAlpha + (twinkle ? Math.sin(s.phase) * s.amp : 0));
       if (a <= 0) return;
       const [r, g, b] = s.color;
       if (s.glow) {
@@ -167,7 +165,7 @@ export function NightSky() {
       if (env <= 0 || s.trail.length < 2) return;
       const [r, g, b] = s.color;
       const n = s.trail.length;
-      ctx.lineCap = 'round';
+      ctx.lineCap = "round";
       for (let i = 1; i < n; i += 1) {
         const p0 = s.trail[i - 1];
         const p1 = s.trail[i];
@@ -182,14 +180,7 @@ export function NightSky() {
       }
       const head = s.trail[n - 1];
       const halo = 9;
-      const grad = ctx.createRadialGradient(
-        head.x,
-        head.y,
-        0,
-        head.x,
-        head.y,
-        halo,
-      );
+      const grad = ctx.createRadialGradient(head.x, head.y, 0, head.x, head.y, halo);
       grad.addColorStop(0, `rgba(255,255,255,${env})`);
       grad.addColorStop(0.4, `rgba(${r},${g},${b},${env * 0.55})`);
       grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
@@ -227,7 +218,7 @@ export function NightSky() {
         nextSpawn = rand(1.6, 5.5);
       }
       if (shooting.length > 0) {
-        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalCompositeOperation = "lighter";
         for (const s of shooting) {
           s.age += dt;
           s.vx += s.ax * dt;
@@ -247,7 +238,7 @@ export function NightSky() {
           }
           drawShooting(s);
         }
-        ctx.globalCompositeOperation = 'source-over';
+        ctx.globalCompositeOperation = "source-over";
         if (shooting.some((s) => s.dead)) {
           shooting = shooting.filter((s) => !s.dead);
         }
@@ -315,13 +306,13 @@ export function NightSky() {
     intersectionObserver.observe(canvas);
 
     const onVisibility = () => syncRunning();
-    document.addEventListener('visibilitychange', onVisibility);
+    document.addEventListener("visibilitychange", onVisibility);
 
     const onMotionChange = () => {
       reduced = motionQuery.matches;
       syncRunning();
     };
-    motionQuery.addEventListener('change', onMotionChange);
+    motionQuery.addEventListener("change", onMotionChange);
 
     fit();
     syncRunning();
@@ -330,23 +321,23 @@ export function NightSky() {
       stopLoop();
       resizeObserver.disconnect();
       intersectionObserver.disconnect();
-      document.removeEventListener('visibilitychange', onVisibility);
-      motionQuery.removeEventListener('change', onMotionChange);
+      document.removeEventListener("visibilitychange", onVisibility);
+      motionQuery.removeEventListener("change", onMotionChange);
       window.clearTimeout(resizeTimer);
     };
   }, []);
 
   return (
-    <div className='night-sky' aria-hidden='true'>
-      <div className='nebula nebula-a' />
-      <div className='nebula nebula-b' />
-      <div className='nebula nebula-c' />
-      <canvas ref={canvasRef} className='night-sky-canvas' />
+    <div className="night-sky" aria-hidden="true">
+      <div className="nebula nebula-a" />
+      <div className="nebula nebula-b" />
+      <div className="nebula nebula-c" />
+      <canvas ref={canvasRef} className="night-sky-canvas" />
 
       <div
-        className='pointer-events-none absolute inset-x-0 bottom-0 h-1/3'
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3"
         style={{
-          background: 'linear-gradient(180deg, transparent, rgba(6,4,16,0.6))',
+          background: "linear-gradient(180deg, transparent, rgba(6,4,16,0.6))",
         }}
       />
     </div>

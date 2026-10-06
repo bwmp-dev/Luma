@@ -41,12 +41,7 @@ export type PlatformFeatures = {
   dragAndDrop: boolean;
 };
 
-export type PlatformOs =
-  | "windows"
-  | "macos"
-  | "linux"
-  | "android"
-  | "ios";
+export type PlatformOs = "windows" | "macos" | "linux" | "android" | "ios";
 
 export type PlatformCapabilities = {
   os: PlatformOs;

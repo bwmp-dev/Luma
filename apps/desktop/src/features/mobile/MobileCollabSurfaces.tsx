@@ -24,10 +24,7 @@ export function MobileCollabSurfaces() {
 
   return (
     <>
-      <CollaborationDialog
-        open={collabOpen}
-        onOpenChange={(open) => !open && closeCollab()}
-      />
+      <CollaborationDialog open={collabOpen} onOpenChange={(open) => !open && closeCollab()} />
       {viewing && (
         <div className="fixed inset-0 z-40 bg-background pt-safe">
           <CollaborationViewer />

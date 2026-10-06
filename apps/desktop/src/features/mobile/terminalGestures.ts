@@ -201,11 +201,7 @@ export function createTerminalGestures(options: GestureOptions): GestureRecogniz
       }
       if (phase !== "pad" || !origin) return false;
       emitSteps(point);
-      const next = directionOf(
-        point.x - origin.x,
-        point.y - origin.y,
-        DIRECTION_DEADZONE_PX,
-      );
+      const next = directionOf(point.x - origin.x, point.y - origin.y, DIRECTION_DEADZONE_PX);
       if (next !== direction) {
         direction = next;
         options.onPad({ x: origin.x, y: origin.y, direction });
@@ -232,8 +228,7 @@ export function createTerminalGestures(options: GestureOptions): GestureRecogniz
       }
       if (!options.doubleTapTab) return false;
 
-      const isTap =
-        point.t - start.t <= TAP_MAX_MS && distance(point, start) <= MOVE_SLOP_PX;
+      const isTap = point.t - start.t <= TAP_MAX_MS && distance(point, start) <= MOVE_SLOP_PX;
       if (!isTap) {
         lastTap = null;
         return false;

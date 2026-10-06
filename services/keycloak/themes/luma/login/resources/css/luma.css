@@ -32,11 +32,14 @@
   --luma-radius: 6px;
 
   /* Typography — degrades gracefully to system fonts (no network font loads) */
-  --pf-v5-global--FontFamily--text: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --pf-v5-global--FontFamily--heading: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --pf-v5-global--FontFamily--text:
+    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --pf-v5-global--FontFamily--heading:
+    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --pf-v5-global--FontFamily--text--vf: var(--pf-v5-global--FontFamily--text);
   --pf-v5-global--FontFamily--heading--vf: var(--pf-v5-global--FontFamily--heading);
-  --pf-v5-global--FontFamily--monospace: "Cascadia Code", "JetBrains Mono", "SF Mono", Consolas, monospace;
+  --pf-v5-global--FontFamily--monospace:
+    "Cascadia Code", "JetBrains Mono", "SF Mono", Consolas, monospace;
   --pf-v5-global--FontFamily--monospace--vf: var(--pf-v5-global--FontFamily--monospace);
 
   /* Core semantic surfaces & text */

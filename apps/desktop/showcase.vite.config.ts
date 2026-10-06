@@ -4,16 +4,13 @@ import { createRequire } from "node:module";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
-const mock = (path: string) =>
-  fileURLToPath(new URL(path, import.meta.url));
+const mock = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
 /* mocks/core.ts needs the genuine @tauri-apps/api/core so it can forward
  * plugin commands to the real native plugins when the showcase is loaded by
  * the iOS app. Importing it by package name would hit the mock alias below, so
  * it is resolved to an absolute file path under a name of its own. */
-const realTauriCore = createRequire(import.meta.url).resolve(
-  "@tauri-apps/api/core",
-);
+const realTauriCore = createRequire(import.meta.url).resolve("@tauri-apps/api/core");
 
 /*
  * Scenario channel.
@@ -125,9 +122,7 @@ function scenarioChannel(): Plugin {
         if (req.method === "POST") {
           readBody(req, (body) => {
             try {
-              readySeq = Number(
-                (JSON.parse(body) as { seq?: unknown }).seq ?? -1,
-              );
+              readySeq = Number((JSON.parse(body) as { seq?: unknown }).seq ?? -1);
               res.statusCode = 204;
             } catch {
               res.statusCode = 400;

@@ -17,6 +17,5 @@ export function useKnownHosts() {
  * list must be refetched — never patched in place. */
 export function useInvalidateKnownHosts() {
   const queryClient = useQueryClient();
-  return () =>
-    queryClient.invalidateQueries({ queryKey: KNOWN_HOSTS_KEY });
+  return () => queryClient.invalidateQueries({ queryKey: KNOWN_HOSTS_KEY });
 }

@@ -52,9 +52,7 @@ export function MobileTabBar({ sessionCount }: { sessionCount: number }) {
                 onClick={() => selectTab(item.tab)}
                 className={cn(
                   "flex min-h-14 min-w-[92px] flex-col items-center justify-center gap-0.5 rounded-full px-4 text-[11px] transition-colors",
-                  isActive
-                    ? "bg-raised/80 text-foreground"
-                    : "text-muted active:text-foreground",
+                  isActive ? "bg-raised/80 text-foreground" : "text-muted active:text-foreground",
                 )}
               >
                 <span className="relative">

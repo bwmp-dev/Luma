@@ -84,11 +84,7 @@ type SyncState = {
   /** Submit resolutions for every displayed conflict of one vault at once. */
   resolve: (vaultId: string, resolutions: ConflictResolution[]) => Promise<void>;
   /** Load a vault's passphrase (optionally remembering it) then retry its sync. */
-  submitPassphrase: (
-    vaultId: string,
-    passphrase: string,
-    remember: boolean,
-  ) => Promise<void>;
+  submitPassphrase: (vaultId: string, passphrase: string, remember: boolean) => Promise<void>;
   /** Apply one scheduler event (see `startAutoSyncListener`). */
   applyAutoSyncEvent: (event: AutoSyncEvent) => void;
   /** Title-bar entry point: surface whichever vault needs attention, else sync all. */
@@ -145,11 +141,7 @@ export function selectAttentionVaultId(state: SyncState): string | null {
 
 type SetState = (updater: (state: SyncState) => Partial<SyncState>) => void;
 
-function patchVault(
-  set: SetState,
-  vaultId: string,
-  patch: Partial<VaultSyncState>,
-) {
+function patchVault(set: SetState, vaultId: string, patch: Partial<VaultSyncState>) {
   set((state) => ({
     byVault: {
       ...state.byVault,
@@ -225,9 +217,7 @@ function handleError(
     return;
   }
   const friendly =
-    category === "sync-conflict"
-      ? "Remote changed during sync — try again."
-      : message;
+    category === "sync-conflict" ? "Remote changed during sync — try again." : message;
   patchVault(set, vaultId, {
     status: "error",
     errorCategory: category,
@@ -274,9 +264,7 @@ export const useSyncStore = create<SyncState>((set, get) => ({
       await syncSetPassphrase(vaultId, passphrase, remember);
       void queryClient.invalidateQueries({ queryKey: SYNC_CONFIG_KEY });
       patchVault(set, vaultId, { needsPassphrase: false, busy: false });
-      set((state) =>
-        state.activeVaultId === vaultId ? { passphraseDialogOpen: false } : {},
-      );
+      set((state) => (state.activeVaultId === vaultId ? { passphraseDialogOpen: false } : {}));
       // Retry the sync once now that a passphrase is loaded.
       await get().syncNow(vaultId);
     } catch (error) {
@@ -328,14 +316,12 @@ export const useSyncStore = create<SyncState>((set, get) => ({
     for (const vaultId of vaultIds) void state.syncNow(vaultId);
   },
 
-  openConflicts: (vaultId) =>
-    set(() => ({ activeVaultId: vaultId, conflictDialogOpen: true })),
+  openConflicts: (vaultId) => set(() => ({ activeVaultId: vaultId, conflictDialogOpen: true })),
   closeConflicts: () => set(() => ({ conflictDialogOpen: false })),
   openPassphrasePrompt: (vaultId) =>
     set(() => ({ activeVaultId: vaultId, passphraseDialogOpen: true })),
   closePassphrasePrompt: () => set(() => ({ passphraseDialogOpen: false })),
-  clearError: (vaultId) =>
-    patchVault(set, vaultId, { errorCategory: null, errorMessage: null }),
+  clearError: (vaultId) => patchVault(set, vaultId, { errorCategory: null, errorMessage: null }),
 
   reset: (vaultId) =>
     set((state) => {
@@ -367,13 +353,10 @@ export function startAutoSyncListener(): () => void {
   let unlisten: (() => void) | undefined;
   let cancelled = false;
   void (async () => {
-    const un = await getCurrentWindow().listen<AutoSyncEvent>(
-      AUTO_SYNC_EVENT,
-      (event) => {
-        if (!event.payload?.vaultId) return;
-        useSyncStore.getState().applyAutoSyncEvent(event.payload);
-      },
-    );
+    const un = await getCurrentWindow().listen<AutoSyncEvent>(AUTO_SYNC_EVENT, (event) => {
+      if (!event.payload?.vaultId) return;
+      useSyncStore.getState().applyAutoSyncEvent(event.payload);
+    });
     if (cancelled) un();
     else unlisten = un;
   })();

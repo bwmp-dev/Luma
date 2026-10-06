@@ -9,11 +9,7 @@ import {
   type KeyReference,
 } from "../../lib/hosts";
 import { useInvalidateHosts } from "../../hooks/useHosts";
-import {
-  emptyGenerateKeyDraft,
-  validateGenerateKey,
-  type GenerateKeyDraft,
-} from "./keygen";
+import { emptyGenerateKeyDraft, validateGenerateKey, type GenerateKeyDraft } from "./keygen";
 
 const KEY_TYPES: { value: GeneratedKeyType; label: string; hint: string }[] = [
   { value: "ed25519", label: "Ed25519", hint: "Recommended" },
@@ -68,8 +64,7 @@ export function GenerateKeyDialog({
   const validation = validateGenerateKey(draft);
   const backendError = generate.isError ? parseLumaError(generate.error).message : null;
   // Only surface a validation message once the user has started typing a name.
-  const validationError =
-    !validation.ok && draft.name.length > 0 ? validation.error : null;
+  const validationError = !validation.ok && draft.name.length > 0 ? validation.error : null;
 
   const submit = () => {
     if (!validation.ok) return;
@@ -145,9 +140,7 @@ export function GenerateKeyDialog({
                       : "rounded-lg border border-border bg-background px-3 py-2 text-left hover:border-accent/50"
                   }
                 >
-                  <span className="block text-sm font-medium text-foreground">
-                    {type.label}
-                  </span>
+                  <span className="block text-sm font-medium text-foreground">{type.label}</span>
                   <span className="block text-[11px] text-muted">{type.hint}</span>
                 </button>
               ))}
@@ -170,9 +163,7 @@ export function GenerateKeyDialog({
               <input
                 type="password"
                 value={draft.confirmPassphrase}
-                onChange={(e) =>
-                  setDraft({ ...draft, confirmPassphrase: e.target.value })
-                }
+                onChange={(e) => setDraft({ ...draft, confirmPassphrase: e.target.value })}
                 aria-label="Confirm passphrase"
                 className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
               />
@@ -192,7 +183,10 @@ export function GenerateKeyDialog({
 
           {validationError && <p className="text-xs text-danger">{validationError}</p>}
           {backendError && (
-            <p role="alert" className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
+            <p
+              role="alert"
+              className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger"
+            >
               {backendError}
             </p>
           )}
@@ -216,8 +210,7 @@ function GeneratedKeyResult({ keyRef }: { keyRef: KeyReference }) {
       <div className="flex items-center gap-2 rounded-lg border border-accent/40 bg-accent/10 px-3 py-2 text-sm text-foreground">
         <KeyRound size={15} className="shrink-0 text-accent" />
         <span className="min-w-0 truncate">
-          <span className="font-medium">{keyRef.name}</span> generated and stored in
-          your keystore.
+          <span className="font-medium">{keyRef.name}</span> generated and stored in your keystore.
         </span>
       </div>
       {keyRef.fingerprint && (

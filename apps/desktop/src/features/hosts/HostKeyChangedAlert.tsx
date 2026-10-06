@@ -26,8 +26,7 @@ export function HostKeyChangedAlert({
   /** Open the known-hosts manager so the user can remove the stale entry. */
   onOpenKnownHosts?: () => void;
 }) {
-  const hasComparison =
-    (scannedKeys?.length ?? 0) > 0 || (knownKeys?.length ?? 0) > 0;
+  const hasComparison = (scannedKeys?.length ?? 0) > 0 || (knownKeys?.length ?? 0) > 0;
   return (
     <div
       role="alertdialog"
@@ -45,31 +44,19 @@ export function HostKeyChangedAlert({
         <p className="mt-3 text-sm text-muted">{message}</p>
         {hasComparison && (
           <div className="mt-3 space-y-3 rounded-lg border border-border bg-background p-3">
-            <FingerprintList
-              label="Previously trusted"
-              keys={knownKeys}
-              tone="muted"
-            />
-            <FingerprintList
-              label="Presented now"
-              keys={scannedKeys}
-              tone="danger"
-            />
+            <FingerprintList label="Previously trusted" keys={knownKeys} tone="muted" />
+            <FingerprintList label="Presented now" keys={scannedKeys} tone="danger" />
           </div>
         )}
         <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-muted">
           <li>
-            If you expected this (the server was rebuilt or its key rotated),
-            verify the new fingerprint through a trusted channel.
+            If you expected this (the server was rebuilt or its key rotated), verify the new
+            fingerprint through a trusted channel.
           </li>
           <li>
-            Then remove the stale entry from your <code>known_hosts</code> file
-            before reconnecting.
+            Then remove the stale entry from your <code>known_hosts</code> file before reconnecting.
           </li>
-          <li>
-            If you did not expect this, do not connect — the connection may be
-            intercepted.
-          </li>
+          <li>If you did not expect this, do not connect — the connection may be intercepted.</li>
         </ul>
         <div className="mt-5 flex flex-wrap justify-end gap-2">
           {onOpenKnownHosts && (

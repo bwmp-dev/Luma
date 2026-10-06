@@ -113,10 +113,7 @@ export function extractVariables(command: string): string[] {
 }
 
 /** Replace every {{name}} occurrence with the provided value (missing → ""). */
-export function substituteVariables(
-  command: string,
-  values: Record<string, string>,
-): string {
+export function substituteVariables(command: string, values: Record<string, string>): string {
   return command.replace(
     /\{\{\s*([A-Za-z0-9_-]+)\s*\}\}/g,
     (_, name: string) => values[name] ?? "",

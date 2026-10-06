@@ -1,27 +1,12 @@
 import { useEffect, useState } from "react";
-import {
-  ArrowLeft,
-  Loader2,
-  Pencil,
-  Plus,
-  Play,
-  Square,
-  Trash2,
-} from "lucide-react";
+import { ArrowLeft, Loader2, Pencil, Plus, Play, Square, Trash2 } from "lucide-react";
 import { Modal } from "../../components/Modal";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { SelectField, TextField } from "../hosts/fields";
-import {
-  usePortForwards,
-  usePortForwardMutations,
-} from "../../hooks/usePortForwards";
+import { usePortForwards, usePortForwardMutations } from "../../hooks/usePortForwards";
 import { useTunnelStore } from "../../stores/tunnelStore";
 import { parseLumaError, type Host } from "../../lib/hosts";
-import type {
-  PortForward,
-  PortForwardInput,
-  PortForwardType,
-} from "../../lib/portForwards";
+import type { PortForward, PortForwardInput, PortForwardType } from "../../lib/portForwards";
 import { cn } from "../../lib/utils";
 
 /*
@@ -61,8 +46,7 @@ export function PortForwardsDialog({
 
   if (!host) return null;
 
-  const tunnelFor = (pfId: string) =>
-    Object.values(tunnels).find((t) => t.portForwardId === pfId);
+  const tunnelFor = (pfId: string) => Object.values(tunnels).find((t) => t.portForwardId === pfId);
 
   const save = async (input: PortForwardInput) => {
     if (editing) await update.mutateAsync({ id: editing.id, input });
@@ -86,9 +70,7 @@ export function PortForwardsDialog({
             : `Port forwarding — ${host.name}`
         }
         description={
-          mode === "list"
-            ? "Local, remote, and dynamic (SOCKS) tunnels for this host."
-            : undefined
+          mode === "list" ? "Local, remote, and dynamic (SOCKS) tunnels for this host." : undefined
         }
         size="lg"
         footer={
@@ -131,10 +113,7 @@ export function PortForwardsDialog({
               const running = tunnel?.status === "running";
               const isPending = pending[forward.id];
               return (
-                <div
-                  key={forward.id}
-                  className="rounded-lg border border-border bg-background p-3"
-                >
+                <div key={forward.id} className="rounded-lg border border-border bg-background p-3">
                   <div className="flex items-start gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
@@ -158,9 +137,7 @@ export function PortForwardsDialog({
                         </p>
                       )}
                       {startErrors[forward.id] && (
-                        <p className="mt-1 text-xs text-danger">
-                          {startErrors[forward.id]}
-                        </p>
+                        <p className="mt-1 text-xs text-danger">{startErrors[forward.id]}</p>
                       )}
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
@@ -225,13 +202,11 @@ export function PortForwardsDialog({
         confirmLabel="Delete"
         busy={remove.isPending}
         onConfirm={() =>
-          deleting &&
-          remove.mutate(deleting.id, { onSuccess: () => setDeleting(null) })
+          deleting && remove.mutate(deleting.id, { onSuccess: () => setDeleting(null) })
         }
         message={
           <>
-            Delete{" "}
-            <span className="font-medium text-foreground">{deleting?.name}</span>?
+            Delete <span className="font-medium text-foreground">{deleting?.name}</span>?
           </>
         }
       />
@@ -281,15 +256,11 @@ function PortForwardForm({
 }) {
   const [name, setName] = useState(forward?.name ?? "");
   const [type, setType] = useState<PortForwardType>(forward?.type ?? "local");
-  const [bindAddress, setBindAddress] = useState(
-    forward?.bindAddress ?? "127.0.0.1",
-  );
+  const [bindAddress, setBindAddress] = useState(forward?.bindAddress ?? "127.0.0.1");
   const [localPort, setLocalPort] = useState(
     forward?.localPort != null ? String(forward.localPort) : "",
   );
-  const [destinationHost, setDestinationHost] = useState(
-    forward?.destinationHost ?? "",
-  );
+  const [destinationHost, setDestinationHost] = useState(forward?.destinationHost ?? "");
   const [destinationPort, setDestinationPort] = useState(
     forward?.destinationPort != null ? String(forward.destinationPort) : "",
   );

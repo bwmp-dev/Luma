@@ -54,12 +54,7 @@ function bind(options: { arrowPad?: boolean; doubleTapTab?: boolean } = {}) {
 }
 
 /** Dispatch on the child, the way a real touch on the terminal would. */
-function dispatch(
-  type: string,
-  points: Point[],
-  timeStamp: number,
-  changed?: Point[],
-): Event {
+function dispatch(type: string, points: Point[], timeStamp: number, changed?: Point[]): Event {
   const event = touchEvent(type, points, timeStamp, changed);
   child.dispatchEvent(event);
   return event;

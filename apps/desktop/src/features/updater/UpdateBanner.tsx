@@ -55,9 +55,7 @@ export function UpdateBanner() {
 
           <div aria-live="polite">
             {installed ? (
-              <p className="mt-0.5 text-xs text-muted">
-                Update installed — restarting Luma…
-              </p>
+              <p className="mt-0.5 text-xs text-muted">Update installed — restarting Luma…</p>
             ) : restartFailed ? (
               <p className="mt-0.5 text-xs text-muted">
                 Update installed — please restart Luma to finish updating.
@@ -68,8 +66,7 @@ export function UpdateBanner() {
               </p>
             ) : downloading ? (
               <p className="mt-1 text-xs text-muted">
-                Downloading…{" "}
-                {formatBytes(downloadedBytes)}
+                Downloading… {formatBytes(downloadedBytes)}
                 {totalBytes ? ` of ${formatBytes(totalBytes)}` : ""}
                 {pct != null ? ` (${pct}%)` : ""}
               </p>

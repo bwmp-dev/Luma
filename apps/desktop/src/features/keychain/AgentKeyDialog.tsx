@@ -72,12 +72,10 @@ export function AgentKeyDialog({
               <ShieldCheck size={18} />
             </span>
             <div className="min-w-0 flex-1">
-              <Dialog.Title className="text-sm font-semibold">
-                Import from SSH agent
-              </Dialog.Title>
+              <Dialog.Title className="text-sm font-semibold">Import from SSH agent</Dialog.Title>
               <p className="mt-0.5 text-xs text-muted">
-                Luma stores only the public key. Your agent or security key signs
-                requests and controls touch or biometric confirmation.
+                Luma stores only the public key. Your agent or security key signs requests and
+                controls touch or biometric confirmation.
               </p>
             </div>
             <Dialog.Close className="rounded p-1 text-muted hover:bg-raised hover:text-foreground">
@@ -87,9 +85,7 @@ export function AgentKeyDialog({
 
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             <div className="mb-3 flex items-center justify-between gap-3 rounded-lg bg-raised px-3 py-2 text-[11px] text-muted">
-              <span>
-                Agent keys are device-bound and stay in the Personal vault.
-              </span>
+              <span>Agent keys are device-bound and stay in the Personal vault.</span>
               <button
                 type="button"
                 onClick={refresh}
@@ -102,7 +98,10 @@ export function AgentKeyDialog({
             </div>
 
             {error && (
-              <div role="alert" className="mb-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
+              <div
+                role="alert"
+                className="mb-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger"
+              >
                 {error}
               </div>
             )}
@@ -121,7 +120,10 @@ export function AgentKeyDialog({
             ) : (
               <div className="space-y-2">
                 {keys.map((key) => (
-                  <div key={key.fingerprint} className="flex items-center gap-3 rounded-lg bg-raised px-3 py-3">
+                  <div
+                    key={key.fingerprint}
+                    className="flex items-center gap-3 rounded-lg bg-raised px-3 py-3"
+                  >
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent">
                       {key.hardwareBacked ? <ShieldCheck size={17} /> : <KeyRound size={17} />}
                     </span>
@@ -158,4 +160,3 @@ export function AgentKeyDialog({
     </Dialog.Root>
   );
 }
-

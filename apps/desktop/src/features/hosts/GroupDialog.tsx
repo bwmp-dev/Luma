@@ -12,13 +12,7 @@ import {
   type TransportType,
 } from "../../lib/hosts";
 import { useInvalidateHosts } from "../../hooks/useHosts";
-import {
-  EnvironmentEditor,
-  SelectField,
-  TabColorField,
-  TextField,
-  type EnvRow,
-} from "./fields";
+import { EnvironmentEditor, SelectField, TabColorField, TextField, type EnvRow } from "./fields";
 
 /* Group defaults. Every field is optional and empty by default: an empty field
  * means the group supplies no default, so hosts fall through to the parent
@@ -199,9 +193,13 @@ export function GroupDialog({
           className="w-full rounded-md border border-border bg-background px-2.5 py-2 text-sm outline-none focus:border-accent"
         >
           <option value="">None (top level)</option>
-          {groups.filter((candidate) => candidate.id !== group?.id).map((candidate) => (
-            <option key={candidate.id} value={candidate.id}>{candidate.name}</option>
-          ))}
+          {groups
+            .filter((candidate) => candidate.id !== group?.id)
+            .map((candidate) => (
+              <option key={candidate.id} value={candidate.id}>
+                {candidate.name}
+              </option>
+            ))}
         </select>
       </label>
 
@@ -209,9 +207,8 @@ export function GroupDialog({
         <div>
           <h3 className="text-sm font-medium">Defaults for hosts in this group</h3>
           <p className="mt-0.5 text-xs text-muted">
-            Every field is optional. A host that leaves the same field empty uses
-            the value here; anything the host sets itself always wins. Nested
-            groups fall through to their parent.
+            Every field is optional. A host that leaves the same field empty uses the value here;
+            anything the host sets itself always wins. Nested groups fall through to their parent.
           </p>
         </div>
 

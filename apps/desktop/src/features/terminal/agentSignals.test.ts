@@ -1,12 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createdTerminals, Terminal } from "../../test/xtermMock";
 import { setInvoke } from "../../test/tauriMock";
-import {
-  createAgentSignalTracker,
-  parseOsc9,
-  parseOsc777,
-  parseOsc99,
-} from "./agentSignals";
+import { createAgentSignalTracker, parseOsc9, parseOsc777, parseOsc99 } from "./agentSignals";
 import { useAgentInboxStore } from "../../stores/agentInboxStore";
 import { terminalManager } from "./terminalManager";
 
@@ -172,9 +167,7 @@ describe("agent signal tracker", () => {
   });
 
   it("stays silent on a screen it does not recognise", () => {
-    const tracker = trackerFor(
-      terminalShowing(["$ ls -la", "total 4", "drwxr-xr-x  2 user user"]),
-    );
+    const tracker = trackerFor(terminalShowing(["$ ls -la", "total 4", "drwxr-xr-x  2 user user"]));
     scanAfterOutput(tracker);
     expect(items()).toHaveLength(0);
   });

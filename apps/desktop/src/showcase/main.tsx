@@ -1,7 +1,11 @@
 import ReactDOM from "react-dom/client";
 import { App } from "../app/App";
 import { terminalManager } from "../features/terminal/terminalManager";
-import { useCapabilityStore, DESKTOP_CAPABILITIES, type PlatformCapabilities } from "../stores/capabilityStore";
+import {
+  useCapabilityStore,
+  DESKTOP_CAPABILITIES,
+  type PlatformCapabilities,
+} from "../stores/capabilityStore";
 import { setInvokeHandler } from "./mocks/core";
 import { createInvokeHandler } from "./invokeHandlers";
 import {
@@ -32,8 +36,7 @@ function isShowcasePlatform(value: string): value is ShowcasePlatform {
 function readParams(): { view: ShowcaseView; theme: "dark" | "light"; platform: ShowcasePlatform } {
   const params = new URLSearchParams(window.location.search);
   const defaults =
-    (window as unknown as { __SHOWCASE_DEFAULTS__?: ShowcaseDefaults })
-      .__SHOWCASE_DEFAULTS__ ?? {};
+    (window as unknown as { __SHOWCASE_DEFAULTS__?: ShowcaseDefaults }).__SHOWCASE_DEFAULTS__ ?? {};
   const rawView = params.get("view") ?? defaults.view ?? "terminal";
   const rawTheme = params.get("theme") ?? defaults.theme ?? "dark";
   const rawPlatform = params.get("platform") ?? defaults.platform ?? "desktop";
@@ -89,10 +92,7 @@ function applyTheme(theme: "dark" | "light"): void {
   terminalManager.configure({ theme });
 }
 
-async function watchScenarioChannel(
-  platform: ShowcasePlatform,
-  initialSeq: number,
-): Promise<void> {
+async function watchScenarioChannel(platform: ShowcasePlatform, initialSeq: number): Promise<void> {
   let lastSeq = initialSeq;
   for (;;) {
     await new Promise<void>((resolve) => window.setTimeout(resolve, POLL_MS));
@@ -122,9 +122,7 @@ async function watchScenarioChannel(
         body: `scenario ${view} failed: ${String(error)}`,
       }).catch(() => {});
     }
-    await new Promise<void>((resolve) =>
-      window.setTimeout(resolve, settleMs(view)),
-    );
+    await new Promise<void>((resolve) => window.setTimeout(resolve, settleMs(view)));
     markReady();
     // Tells the capture script this scene is on screen, so it can shoot without
     // guessing at a sleep.
@@ -140,9 +138,9 @@ async function boot(): Promise<void> {
 
   document.documentElement.dataset.platform = platform;
   applyTheme(theme);
-  useCapabilityStore.getState().setCapabilities(
-    platform === "desktop" ? DESKTOP_CAPABILITIES : mobileCapabilities(platform),
-  );
+  useCapabilityStore
+    .getState()
+    .setCapabilities(platform === "desktop" ? DESKTOP_CAPABILITIES : mobileCapabilities(platform));
 
   setInvokeHandler(createInvokeHandler(theme as ThemeMode, platform));
 

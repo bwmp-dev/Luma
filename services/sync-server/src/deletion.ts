@@ -27,10 +27,7 @@ const IDS_PER_STATEMENT = 90;
  *
  * Idempotent: a second call finds nothing and reports zeroes.
  */
-export async function purgeAccountData(
-  env: Env,
-  account: Account,
-): Promise<AccountDeletionReport> {
+export async function purgeAccountData(env: Env, account: Account): Promise<AccountDeletionReport> {
   const owned = await ownedVaults(env, account.subject);
 
   // The blob prefix is built here rather than via `vaultTarget`, which also
@@ -64,11 +61,7 @@ export async function purgeAccountData(
   // sealed to their devices. Those vaults themselves are untouched.
   await run(env, `DELETE FROM vault_member_keys WHERE subject = ?1`, [account.subject]);
   await run(env, `DELETE FROM vault_members WHERE subject = ?1`, [account.subject]);
-  await run(
-    env,
-    `DELETE FROM vault_invites WHERE created_by_subject = ?1`,
-    [account.subject],
-  );
+  await run(env, `DELETE FROM vault_invites WHERE created_by_subject = ?1`, [account.subject]);
   await run(env, `DELETE FROM vaults WHERE owner_subject = ?1`, [account.subject]);
   await run(env, `DELETE FROM vault_devices WHERE subject = ?1`, [account.subject]);
   await deleteAccountRow(env, account.subject);

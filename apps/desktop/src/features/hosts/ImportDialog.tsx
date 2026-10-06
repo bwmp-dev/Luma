@@ -129,8 +129,7 @@ export function ImportDialog({
   const sources = useMemo(
     () =>
       SOURCES.filter(
-        (s) =>
-          (s.id !== "ssh-config" || sshConfigImport) && (s.id !== "putty" || puttyImport),
+        (s) => (s.id !== "ssh-config" || sshConfigImport) && (s.id !== "putty" || puttyImport),
       ),
     [sshConfigImport, puttyImport],
   );
@@ -172,7 +171,8 @@ export function ImportDialog({
     }
   }, [open, defaultSource]);
 
-  const usesFilePicker = source === "tabby" || source === "electerm" || (source === "putty" && puttyMode === "file");
+  const usesFilePicker =
+    source === "tabby" || source === "electerm" || (source === "putty" && puttyMode === "file");
   const previewReady = usesFilePicker ? filePath !== null : true;
   // "putty-live" reads this machine's sessions and takes no path.
   const backendSource: ImportSource | null =
@@ -220,10 +220,7 @@ export function ImportDialog({
   });
 
   const candidates = useMemo(() => preview.data ?? [], [preview.data]);
-  const importable = useMemo(
-    () => candidates.filter((c) => !c.alreadyExists),
-    [candidates],
-  );
+  const importable = useMemo(() => candidates.filter((c) => !c.alreadyExists), [candidates]);
 
   // Pre-select everything importable the first time a preview arrives. Landing
   // on a fully unchecked list means the Import button is disabled, so clicking
@@ -235,15 +232,18 @@ export function ImportDialog({
     autoSelected.current = previewIdentity;
     setSelected(new Set(importable.map((candidate) => candidate.name)));
   }, [preview.isSuccess, previewIdentity, importable]);
-  const allSelected =
-    importable.length > 0 && selected.size === importable.length;
+  const allSelected = importable.length > 0 && selected.size === importable.length;
   const hasGroups = candidates.some((c) => c.group);
 
   /** Distinct locked .ppk files among the selected hosts. */
   const lockedKeys = useMemo(() => {
     const paths = new Set<string>();
     for (const candidate of candidates) {
-      if (selected.has(candidate.name) && candidate.keyStatus === "ppk-encrypted" && candidate.keyFile) {
+      if (
+        selected.has(candidate.name) &&
+        candidate.keyStatus === "ppk-encrypted" &&
+        candidate.keyFile
+      ) {
         paths.add(candidate.keyFile);
       }
     }
@@ -292,9 +292,7 @@ export function ImportDialog({
     });
 
   const toggleAll = () =>
-    setSelected(
-      allSelected ? new Set() : new Set(importable.map((c) => c.name)),
-    );
+    setSelected(allSelected ? new Set() : new Set(importable.map((c) => c.name)));
 
   const runImport = useMutation({
     mutationFn: async (names: string[]): Promise<NormalizedResult> => {
@@ -388,11 +386,7 @@ export function ImportDialog({
               disabled={selected.size === 0 || preview.isFetching || busy}
               className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground disabled:opacity-50"
             >
-              {busy ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <DownloadCloud size={14} />
-              )}
+              {busy ? <Loader2 size={14} className="animate-spin" /> : <DownloadCloud size={14} />}
               {askingPassphrases || lockedKeys.length === 0
                 ? `Import ${selected.size > 0 ? `(${selected.size})` : ""}`
                 : "Continue"}
@@ -406,8 +400,7 @@ export function ImportDialog({
           <div className="flex items-center gap-2 rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-sm">
             <CheckCircle2 size={16} className="shrink-0 text-accent" />
             <span>
-              Imported {result.importedCount}{" "}
-              {result.importedCount === 1 ? "host" : "hosts"}
+              Imported {result.importedCount} {result.importedCount === 1 ? "host" : "hosts"}
               {result.importedKeys.length > 0 &&
                 ` and ${result.importedKeys.length} ${result.importedKeys.length === 1 ? "key" : "keys"}`}
               {result.skippedExisting.length > 0 &&
@@ -423,16 +416,14 @@ export function ImportDialog({
             </p>
           )}
           {result.skippedExisting.length > 0 && (
-            <p className="text-xs text-muted">
-              Skipped: {result.skippedExisting.join(", ")}
-            </p>
+            <p className="text-xs text-muted">Skipped: {result.skippedExisting.join(", ")}</p>
           )}
           {result.unlinkedKeys.length > 0 && (
             <div className="space-y-1 rounded-md border border-danger/40 bg-danger/10 px-3 py-2">
               <p className="text-xs font-medium">
                 {result.unlinkedKeys.length}{" "}
-                {result.unlinkedKeys.length === 1 ? "host was" : "hosts were"} imported
-                without a key:
+                {result.unlinkedKeys.length === 1 ? "host was" : "hosts were"} imported without a
+                key:
               </p>
               <ul className="space-y-0.5 text-xs text-muted">
                 {result.unlinkedKeys.map((entry) => (
@@ -455,8 +446,8 @@ export function ImportDialog({
             {lockedKeys.length === 1
               ? "One selected host uses a passphrase-protected PuTTY key."
               : `${lockedKeys.length} selected hosts use passphrase-protected PuTTY keys.`}{" "}
-            Enter the passphrase to convert and store the key. Leave it blank to
-            import the host without its key.
+            Enter the passphrase to convert and store the key. Leave it blank to import the host
+            without its key.
           </p>
           <ul className="space-y-3">
             {lockedKeys.map((path) => (
@@ -511,11 +502,7 @@ export function ImportDialog({
 
           {/* PuTTY: detect installed sessions, or read an export --------- */}
           {source === "putty" && (
-            <div
-              role="radiogroup"
-              aria-label="PuTTY session source"
-              className="flex gap-2"
-            >
+            <div role="radiogroup" aria-label="PuTTY session source" className="flex gap-2">
               {(
                 [
                   { id: "detect", label: "Detect installed sessions" },
@@ -561,9 +548,7 @@ export function ImportDialog({
                 </div>
               )}
               {pickError && (
-                <p className="text-xs text-danger">
-                  Could not open file picker: {pickError}
-                </p>
+                <p className="text-xs text-danger">Could not open file picker: {pickError}</p>
               )}
             </div>
           )}
@@ -619,9 +604,7 @@ export function ImportDialog({
                 </p>
                 <button
                   type="button"
-                  onClick={() =>
-                    changePuttyMode(puttyMode === "detect" ? "file" : "detect")
-                  }
+                  onClick={() => changePuttyMode(puttyMode === "detect" ? "file" : "detect")}
                   className="text-xs font-medium text-accent hover:underline"
                 >
                   {puttyMode === "detect"
@@ -649,16 +632,13 @@ export function ImportDialog({
                   />
                   Select all importable
                 </label>
-                <span className="text-xs text-muted">
-                  {candidates.length} found
-                </span>
+                <span className="text-xs text-muted">{candidates.length} found</span>
               </div>
               <ul className="divide-y divide-border rounded-md border border-border">
                 {candidates.map((c) => {
                   const disabled = c.alreadyExists;
                   const keyLabel = c.keyStatus ? KEY_STATUS_LABELS[c.keyStatus] : null;
-                  const keyMissing =
-                    c.keyStatus === "missing" || c.keyStatus === "unreadable";
+                  const keyMissing = c.keyStatus === "missing" || c.keyStatus === "unreadable";
                   return (
                     <li key={c.name}>
                       <label
@@ -694,9 +674,7 @@ export function ImportDialog({
                           <span
                             className={cn(
                               "shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium",
-                              keyMissing
-                                ? "bg-danger/15 text-danger"
-                                : "bg-raised text-muted",
+                              keyMissing ? "bg-danger/15 text-danger" : "bg-raised text-muted",
                             )}
                           >
                             {keyLabel}
@@ -736,11 +714,7 @@ export function ImportDialog({
   );
 }
 
-function ImportErrorBanner({
-  error,
-}: {
-  error: { category: string; message: string };
-}) {
+function ImportErrorBanner({ error }: { error: { category: string; message: string } }) {
   return (
     <div
       role="alert"

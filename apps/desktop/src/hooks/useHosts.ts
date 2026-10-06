@@ -53,7 +53,13 @@ export function useKeyReferences(vaultId?: string) {
     staleTime: 30_000,
   });
 }
-export function useIdentities(vaultId?: string) { return useQuery({ queryKey: scoped(IDENTITIES_KEY, vaultId), queryFn: () => listIdentities(vaultId), staleTime: 30_000 }); }
+export function useIdentities(vaultId?: string) {
+  return useQuery({
+    queryKey: scoped(IDENTITIES_KEY, vaultId),
+    queryFn: () => listIdentities(vaultId),
+    staleTime: 30_000,
+  });
+}
 
 /** Invalidate every host-related query. Host mutations can touch groups
  * (unparenting), key references (clearing keyId), and recents. */

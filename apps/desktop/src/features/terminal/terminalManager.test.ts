@@ -2,11 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { setInvoke } from "../../test/tauriMock";
 import type { SshControlEvent } from "../../lib/ssh";
 import { createdTerminals, type Terminal } from "../../test/xtermMock";
-import {
-  terminalManager,
-  isSpawnAbandoned,
-  type SessionExit,
-} from "./terminalManager";
+import { terminalManager, isSpawnAbandoned, type SessionExit } from "./terminalManager";
 
 /** No-op callback bundle satisfying the manager's SessionCallbacks. */
 function callbacks(
@@ -38,8 +34,7 @@ describe("terminalManager spawn races", () => {
     setInvoke((cmd, args) => {
       if (cmd === "pty_spawn") {
         return new Promise((resolve) => {
-          resolveSpawn = () =>
-            resolve({ sessionId: "late-backend", shellName: "bash" });
+          resolveSpawn = () => resolve({ sessionId: "late-backend", shellName: "bash" });
         });
       }
       if (cmd === "pty_kill") {
@@ -75,8 +70,7 @@ describe("terminalManager spawn races", () => {
         if (!firstStarted) {
           firstStarted = true;
           return new Promise((resolve) => {
-            resolveFirst = () =>
-              resolve({ sessionId: "backend-old", shellName: "bash" });
+            resolveFirst = () => resolve({ sessionId: "backend-old", shellName: "bash" });
           });
         }
         return { sessionId: "backend-new", shellName: "bash" };
@@ -119,9 +113,7 @@ describe("terminalManager spawn races", () => {
       if (cmd === "pty_spawn") {
         started += 1;
         if (started === 2) {
-          (args.onExit as { onmessage: (code: number | null) => void }).onmessage(
-            0,
-          );
+          (args.onExit as { onmessage: (code: number | null) => void }).onmessage(0);
         }
         return { sessionId: `backend-${started}`, shellName: "bash" };
       }
@@ -161,11 +153,7 @@ describe("terminalManager input flow", () => {
       throw new Error(`unexpected ${cmd}`);
     });
 
-    await terminalManager.createSession(
-      "input-1",
-      { kind: "local", ref: undefined },
-      callbacks(),
-    );
+    await terminalManager.createSession("input-1", { kind: "local", ref: undefined }, callbacks());
 
     terminalManager.sendInput("input-1", "a");
     terminalManager.sendInput("input-1", "b");
@@ -191,9 +179,7 @@ describe("terminalManager SSH connection control", () => {
       secret?: boolean;
     }> = [];
     let controlChannel: { onmessage: (event: SshControlEvent) => void } | undefined;
-    let dataChannel:
-      | { onmessage: (message: string | number[] | ArrayBuffer) => void }
-      | undefined;
+    let dataChannel: { onmessage: (message: string | number[] | ArrayBuffer) => void } | undefined;
     setInvoke((cmd, args) => {
       if (cmd === "ssh_spawn") {
         dataChannel = args.onData as typeof dataChannel;
@@ -208,7 +194,10 @@ describe("terminalManager SSH connection control", () => {
     await terminalManager.createSession(
       "prompt-1",
       { kind: "ssh", hostId: "host-1" },
-      callbacks(() => {}, (prompt) => prompts.push(prompt)),
+      callbacks(
+        () => {},
+        (prompt) => prompts.push(prompt),
+      ),
     );
 
     controlChannel?.onmessage({
@@ -238,9 +227,7 @@ describe("terminalManager SSH connection control", () => {
 
   it("passes output through untouched and reveals the session once authenticated", async () => {
     let controlChannel: { onmessage: (event: SshControlEvent) => void } | undefined;
-    let dataChannel:
-      | { onmessage: (message: string | number[] | ArrayBuffer) => void }
-      | undefined;
+    let dataChannel: { onmessage: (message: string | number[] | ArrayBuffer) => void } | undefined;
     const sent: string[] = [];
     setInvoke((cmd, args) => {
       if (cmd === "ssh_spawn") {
@@ -621,8 +608,7 @@ describe("terminalManager fit overflow", () => {
     terminalManager.attach(id, host);
 
     const screen = term.element?.querySelector(".xterm-screen") as HTMLElement;
-    screen.getBoundingClientRect = () =>
-      ({ height: renderedHeight }) as DOMRect;
+    screen.getBoundingClientRect = () => ({ height: renderedHeight }) as DOMRect;
     return term;
   }
 
@@ -704,17 +690,10 @@ describe("terminalManager buffer snapshot", () => {
   it("emits SGR escapes so a replayed buffer keeps its colors", async () => {
     const term = await createLocal("buf-color");
     // "ab" red-on-default, "cd" plain.
-    term.setLine(0, "abcd", [
-      { fgPalette: 1 },
-      { fgPalette: 1 },
-      undefined,
-      undefined,
-    ]);
+    term.setLine(0, "abcd", [{ fgPalette: 1 }, { fgPalette: 1 }, undefined, undefined]);
 
     // Leaving a styled run resets so attributes never leak into the next one.
-    expect(terminalManager.getBufferText("buf-color")).toBe(
-      "\x1b[38;5;1mab\x1b[0mcd",
-    );
+    expect(terminalManager.getBufferText("buf-color")).toBe("\x1b[38;5;1mab\x1b[0mcd");
 
     terminalManager.dispose("buf-color");
   });

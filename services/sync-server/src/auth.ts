@@ -3,10 +3,7 @@ import type { AuthenticatedUser, Env } from "./types";
 
 const jwksSets = new Map<string, ReturnType<typeof createRemoteJWKSet>>();
 
-export async function authenticate(
-  request: Request,
-  env: Env,
-): Promise<AuthenticatedUser> {
+export async function authenticate(request: Request, env: Env): Promise<AuthenticatedUser> {
   const authorization = request.headers.get("authorization");
   if (!authorization?.startsWith("Bearer ")) {
     throw new HttpError(401, "missing bearer token");

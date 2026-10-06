@@ -71,9 +71,7 @@ describe("parseCustomThemes", () => {
   });
 
   it("defaults kind to dark when absent/invalid", () => {
-    const parsed = parseCustomThemes([
-      { id: "x", name: "X", theme: { background: "#000" } },
-    ]);
+    const parsed = parseCustomThemes([{ id: "x", name: "X", theme: { background: "#000" } }]);
     expect(parsed[0].kind).toBe("dark");
   });
 });

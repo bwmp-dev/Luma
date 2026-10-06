@@ -115,16 +115,12 @@ type AgentSignature = {
 export const AGENT_SIGNATURES: readonly AgentSignature[] = [
   {
     agent: "claude-code",
-    present: [
-      /\? for shortcuts|esc to interrupt|Welcome to Claude Code|tell Claude what to do/i,
-    ],
+    present: [/\? for shortcuts|esc to interrupt|Welcome to Claude Code|tell Claude what to do/i],
     busy: [/esc to interrupt/i],
     // The option list is drawn inside a box, so the numbered choices carry a
     // border character before them.
     approval: [/\bDo you want to\b/i, /^[\s│┃║|]*(?:❯\s*)?1\.\s+Yes\b/m],
-    limit: [
-      /context left until auto-compact|approaching (?:your )?(?:usage|rate) limit/i,
-    ],
+    limit: [/context left until auto-compact|approaching (?:your )?(?:usage|rate) limit/i],
   },
 ];
 
@@ -147,10 +143,7 @@ function viewportText(term: Terminal): string {
 }
 
 /** The screen line asking for approval, stripped of box drawing. */
-function approvalQuestion(
-  text: string,
-  signature: AgentSignature,
-): string | undefined {
+function approvalQuestion(text: string, signature: AgentSignature): string | undefined {
   const question = signature.approval[0];
   const line = text.split("\n").find((candidate) => question.test(candidate));
   const cleaned = line
@@ -191,9 +184,7 @@ export type AgentSignalTracker = {
   dispose(): void;
 };
 
-export function createAgentSignalTracker(
-  target: AgentSignalTarget,
-): AgentSignalTracker {
+export function createAgentSignalTracker(target: AgentSignalTarget): AgentSignalTracker {
   let timer: number | null = null;
   let lastScanAt = 0;
   let lastInputAt = 0;
@@ -230,9 +221,7 @@ export function createAgentSignalTracker(
     lastScanAt = Date.now();
 
     const text = viewportText(target.term);
-    const signature = AGENT_SIGNATURES.find((candidate) =>
-      matchesAll(text, candidate.present),
-    );
+    const signature = AGENT_SIGNATURES.find((candidate) => matchesAll(text, candidate.present));
     if (!signature) return;
     agent = signature.agent;
 
@@ -273,8 +262,7 @@ export function createAgentSignalTracker(
       if (timer !== null) window.clearTimeout(timer);
       // Waiting for silence alone would never catch a working agent: it redraws
       // its spinner continuously and only stops once it is already finished.
-      const delay =
-        Date.now() - lastScanAt >= MAX_SCAN_INTERVAL_MS ? 0 : QUIET_MS;
+      const delay = Date.now() - lastScanAt >= MAX_SCAN_INTERVAL_MS ? 0 : QUIET_MS;
       timer = window.setTimeout(scan, delay);
     },
 
@@ -295,11 +283,7 @@ export function createAgentSignalTracker(
 
     onNotification(ident: number, data: string): void {
       const parsed =
-        ident === 9
-          ? parseOsc9(data)
-          : ident === 777
-            ? parseOsc777(data)
-            : parseOsc99(data);
+        ident === 9 ? parseOsc9(data) : ident === 777 ? parseOsc777(data) : parseOsc99(data);
       if (!parsed) return;
       emit(NOTIFY_AGENT_SESSION, "notification", {
         title: parsed.title ?? parsed.body,

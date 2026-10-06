@@ -95,10 +95,7 @@ describe("buildLiveActivityPayload", () => {
 
   it("summarises mixed states across several sessions", () => {
     const payload = buildLiveActivityPayload(
-      [
-        session(),
-        session({ id: "s2", status: "error", errorCategory: "auth-failed" }),
-      ],
+      [session(), session({ id: "s2", status: "error", errorCategory: "auth-failed" })],
       [],
       null,
     );
@@ -155,20 +152,12 @@ describe("buildLiveActivityPayload", () => {
   });
 
   it("skips transfers that are no longer running", () => {
-    const payload = buildLiveActivityPayload(
-      [session()],
-      [transfer({ state: "completed" })],
-      "s1",
-    );
+    const payload = buildLiveActivityPayload([session()], [transfer({ state: "completed" })], "s1");
     expect(payload?.transfer).toBeUndefined();
   });
 
   it("titles the card with the file when a transfer runs with no session", () => {
-    const payload = buildLiveActivityPayload(
-      [],
-      [transfer({ kind: "down", rate: 0 })],
-      null,
-    );
+    const payload = buildLiveActivityPayload([], [transfer({ kind: "down", rate: 0 })], null);
     expect(payload).toMatchObject({
       primary: "backup.tar.gz",
       headline: "Downloading",

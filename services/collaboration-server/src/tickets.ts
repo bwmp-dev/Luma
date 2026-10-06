@@ -29,7 +29,9 @@ export class TicketStore {
       connectionId: crypto.randomUUID(),
       instanceIssuedBy: this.config.instanceId,
     };
-    await this.redis.set(this.key(ticket), JSON.stringify(value), { EX: this.config.ticketTtlSeconds });
+    await this.redis.set(this.key(ticket), JSON.stringify(value), {
+      EX: this.config.ticketTtlSeconds,
+    });
     return { ticket, expiresIn: this.config.ticketTtlSeconds };
   }
 

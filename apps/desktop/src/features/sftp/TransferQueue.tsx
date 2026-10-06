@@ -13,11 +13,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import {
-  useSftpStore,
-  type TransferKind,
-  type TransferRecord,
-} from "../../stores/sftpStore";
+import { useSftpStore, type TransferKind, type TransferRecord } from "../../stores/sftpStore";
 import { formatBytes, formatRate, type TransferState } from "../../lib/sftp";
 import { cn } from "../../lib/utils";
 
@@ -121,8 +117,7 @@ function TransferRow({
       : 0;
   // Transfers writing to a host leave a .luma-part behind when interrupted.
   const remotePartialLeftBehind =
-    record.destSessionId !== null &&
-    (record.state === "failed" || record.state === "cancelled");
+    record.destSessionId !== null && (record.state === "failed" || record.state === "cancelled");
   // Counted from the exact totals, not the retained list — a job over a tree
   // with thousands of unreadable files keeps only the first MAX_ENTRY_OUTCOMES.
   const failedEntries = record.failedOutcomes;
@@ -147,10 +142,7 @@ function TransferRow({
                 <KindIcon kind={record.kind} size={11} />
               </span>
             ) : null}
-            <span
-              className="truncate font-medium text-foreground"
-              title={record.name}
-            >
+            <span className="truncate font-medium text-foreground" title={record.name}>
               {record.name || "…"}
             </span>
             {record.isDirectory && (
@@ -221,9 +213,7 @@ function TransferRow({
               </span>
             )}
             {remotePartialLeftBehind && !record.isDirectory && (
-              <span className="text-muted/80">
-                a partial file may remain on the remote
-              </span>
+              <span className="text-muted/80">a partial file may remain on the remote</span>
             )}
           </div>
 
@@ -235,11 +225,7 @@ function TransferRow({
               className="mt-1 flex items-center gap-1 text-[10px] text-muted hover:text-foreground"
             >
               {expanded ? <ChevronDown size={11} /> : <ChevronRight size={11} />}
-              {failedEntries > 0 && (
-                <span className="text-danger">
-                  {failedEntries} failed
-                </span>
-              )}
+              {failedEntries > 0 && <span className="text-danger">{failedEntries} failed</span>}
               {failedEntries > 0 && skippedEntries > 0 && <span>·</span>}
               {skippedEntries > 0 && (
                 <span className="text-amber-400">{skippedEntries} skipped</span>
@@ -282,10 +268,7 @@ function TransferRow({
       {hasEntries && expanded && (
         <ul className="mt-1.5 space-y-1 border-l border-border pl-3">
           {record.entries.map((entry, index) => (
-            <li
-              key={`${entry.path}-${index}`}
-              className="flex items-start gap-1.5 text-[10px]"
-            >
+            <li key={`${entry.path}-${index}`} className="flex items-start gap-1.5 text-[10px]">
               <span className="mt-0.5 shrink-0">
                 {entry.state === "skipped" ? (
                   <Link2 size={11} className="text-amber-400" />
@@ -294,16 +277,11 @@ function TransferRow({
                 )}
               </span>
               <div className="min-w-0 flex-1">
-                <span
-                  className="block truncate font-mono text-foreground/90"
-                  title={entry.path}
-                >
+                <span className="block truncate font-mono text-foreground/90" title={entry.path}>
                   {entry.path || "(unknown)"}
                 </span>
                 <span
-                  className={cn(
-                    entry.state === "skipped" ? "text-amber-400/80" : "text-danger",
-                  )}
+                  className={cn(entry.state === "skipped" ? "text-amber-400/80" : "text-danger")}
                 >
                   {entry.state === "skipped"
                     ? (entry.errorMessage ?? "skipped (symlink)")
@@ -313,9 +291,7 @@ function TransferRow({
             </li>
           ))}
           {omitted > 0 && (
-            <li className="text-[10px] text-muted">
-              …and {omitted.toLocaleString()} more
-            </li>
+            <li className="text-[10px] text-muted">…and {omitted.toLocaleString()} more</li>
           )}
         </ul>
       )}

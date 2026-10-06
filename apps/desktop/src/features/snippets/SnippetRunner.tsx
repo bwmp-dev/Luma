@@ -25,11 +25,7 @@ export function SnippetRunner() {
 
   const onSubmit = () => submit(values);
   const label =
-    pending.mode === "run"
-      ? "Run"
-      : pending.mode === "hosts"
-        ? "Run on hosts"
-        : "Insert";
+    pending.mode === "run" ? "Run" : pending.mode === "hosts" ? "Run on hosts" : "Insert";
 
   return (
     <Modal

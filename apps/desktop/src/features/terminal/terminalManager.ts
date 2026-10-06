@@ -29,13 +29,7 @@ import {
   type Chord,
 } from "../../lib/keymap";
 
-import {
-  killPty,
-  resizePty,
-  spawnPty,
-  writePty,
-  type ShellRef,
-} from "../../lib/terminal";
+import { killPty, resizePty, spawnPty, writePty, type ShellRef } from "../../lib/terminal";
 import {
   spawnMosh,
   spawnSsh,
@@ -46,17 +40,9 @@ import {
   type SshExitPayload,
   type SshRemoteOsId,
 } from "../../lib/ssh";
-import {
-  killSerial,
-  spawnSerial,
-  writeSerial,
-  type SerialConfig,
-} from "../../lib/serial";
+import { killSerial, spawnSerial, writeSerial, type SerialConfig } from "../../lib/serial";
 import type { MultiplexerAttach } from "../../lib/multiplexer";
-import {
-  createAgentSignalTracker,
-  type AgentSignalTracker,
-} from "./agentSignals";
+import { createAgentSignalTracker, type AgentSignalTracker } from "./agentSignals";
 
 /** What a managed session should launch. Local shells resolve a ShellRef;
  * SSH and Mosh sessions send only a hostId (the backend owns the connection
@@ -82,11 +68,7 @@ function usesEmbeddedSshIo(descriptor: SpawnDescriptor): boolean {
 }
 
 /** Write keyboard input to the backend command for this session type. */
-function writeBackend(
-  descriptor: SpawnDescriptor,
-  backendId: string,
-  data: string,
-): Promise<void> {
+function writeBackend(descriptor: SpawnDescriptor, backendId: string, data: string): Promise<void> {
   if (descriptor.kind === "serial") return writeSerial(backendId, data);
   if (usesEmbeddedSshIo(descriptor)) return sshWrite(backendId, data);
   return writePty(backendId, data);
@@ -107,10 +89,7 @@ function resizeBackend(
 
 /** Kill a backend session, routing serial sessions to the serial command and
  * embedded-SSH-on-mobile to ssh_disconnect. */
-function killBackend(
-  descriptor: SpawnDescriptor,
-  backendId: string,
-): Promise<void> {
+function killBackend(descriptor: SpawnDescriptor, backendId: string): Promise<void> {
   if (descriptor.kind === "serial") return killSerial(backendId);
   if (usesEmbeddedSshIo(descriptor)) return sshDisconnect(backendId);
   return killPty(backendId);
@@ -508,11 +487,7 @@ function notifyPreviews(): void {
  * the real session's size. The element is taken out of flow so a grid many times
  * the card's height cannot affect the card's layout.
  */
-function applyPreviewScale(
-  session: ManagedSession,
-  scale: number,
-  offsetY: number,
-): void {
+function applyPreviewScale(session: ManagedSession, scale: number, offsetY: number): void {
   const element = session.term.element;
   const lease = session.preview;
   if (!element || !lease) return;
@@ -566,9 +541,7 @@ function lastContentRow(term: Terminal): number {
  * been opened into the DOM. Measured off `.xterm-screen`, which xterm sizes from
  * its own exact cell metrics — so this is cols×rows in real pixels. Includes any
  * preview scale, since it is measured through the transform. */
-function renderedGridSize(
-  session: ManagedSession,
-): { width: number; height: number } | null {
+function renderedGridSize(session: ManagedSession): { width: number; height: number } | null {
   const screen = session.term.element?.querySelector<HTMLElement>(".xterm-screen");
   if (!screen) return null;
   const rect = screen.getBoundingClientRect();
@@ -822,7 +795,13 @@ function handleOsc133(session: ManagedSession, data: string): void {
       const marker = term.registerMarker(0);
       if (!marker) return;
       pruneMarks(session);
-      session.marks.push({ prompt: marker, output: null, end: null, exitCode: null, decoration: null });
+      session.marks.push({
+        prompt: marker,
+        output: null,
+        end: null,
+        exitCode: null,
+        decoration: null,
+      });
       capMarks(session);
       break;
     }
@@ -836,7 +815,13 @@ function handleOsc133(session: ManagedSession, data: string): void {
         current.output = marker;
       } else {
         pruneMarks(session);
-        session.marks.push({ prompt: marker, output: marker, end: null, exitCode: null, decoration: null });
+        session.marks.push({
+          prompt: marker,
+          output: marker,
+          end: null,
+          exitCode: null,
+          decoration: null,
+        });
         capMarks(session);
       }
       break;
@@ -1026,8 +1011,7 @@ async function spawnBackend(sessionId: string): Promise<ManagedSpawnResult> {
     // output settles. No bytes are handed to it.
     session.agentSignals?.onOutput();
     if (session.outputTap) {
-      const bytes =
-        typeof data === "string" ? new TextEncoder().encode(data) : data;
+      const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
       session.outputTap(bytes);
     }
     const subscribers = outputSubscribers.get(session.id);
@@ -1647,8 +1631,7 @@ export const terminalManager = {
     const row = Math.floor(((clientY - rect.top) / rect.height) * term.rows);
     return {
       x: Math.min(Math.max(column, 0), term.cols - 1),
-      y:
-        Math.min(Math.max(row, 0), term.rows - 1) + term.buffer.active.viewportY,
+      y: Math.min(Math.max(row, 0), term.rows - 1) + term.buffer.active.viewportY,
     };
   },
 
@@ -1660,11 +1643,7 @@ export const terminalManager = {
     const reversed = to.y < from.y || (to.y === from.y && to.x < from.x);
     const start = reversed ? to : from;
     const end = reversed ? from : to;
-    term.select(
-      start.x,
-      start.y,
-      (end.y - start.y) * term.cols + (end.x - start.x) + 1,
-    );
+    term.select(start.x, start.y, (end.y - start.y) * term.cols + (end.x - start.x) + 1);
   },
 
   /**
@@ -1994,7 +1973,7 @@ export const terminalManager = {
         onSshAuthenticated: () => {},
         onSshPrompt: () => {},
         onSshProgress: () => {},
-          onRemoteOs: () => {},
+        onRemoteOs: () => {},
       },
       broadcastPeers: null,
       pendingInput: [],

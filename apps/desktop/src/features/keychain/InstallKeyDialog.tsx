@@ -1,12 +1,5 @@
 import { useMemo, useState } from "react";
-import {
-  CheckCircle2,
-  Loader2,
-  Server,
-  ShieldAlert,
-  ShieldCheck,
-  XCircle,
-} from "lucide-react";
+import { CheckCircle2, Loader2, Server, ShieldAlert, ShieldCheck, XCircle } from "lucide-react";
 import { Modal } from "../../components/Modal";
 import { useHosts, useRecentHosts } from "../../hooks/useHosts";
 import { useBrowsingVaultId } from "../../stores/vaultStore";
@@ -183,12 +176,8 @@ export function InstallKeyDialog({
           <div className="mt-3 space-y-2 rounded-lg border border-border bg-background p-3">
             {phase.scannedKeys.map((key) => (
               <div key={`${key.keyType}:${key.fingerprint}`}>
-                <div className="text-[10px] uppercase tracking-wide text-muted">
-                  {key.keyType}
-                </div>
-                <div className="break-all font-mono text-xs text-accent">
-                  {key.fingerprint}
-                </div>
+                <div className="text-[10px] uppercase tracking-wide text-muted">{key.keyType}</div>
+                <div className="break-all font-mono text-xs text-accent">{key.fingerprint}</div>
               </div>
             ))}
             {phase.scannedKeys.length === 0 && (
@@ -219,9 +208,7 @@ export function InstallKeyDialog({
         <Centered>
           <CheckCircle2 size={30} className="text-green-500" />
           <p className="mt-3 text-sm font-medium">
-            {phase.status === "already-present"
-              ? "Key already present"
-              : "Key installed"}
+            {phase.status === "already-present" ? "Key already present" : "Key installed"}
           </p>
           <p className="mt-1 text-xs text-muted">
             {phase.status === "already-present"
@@ -273,8 +260,6 @@ export function InstallKeyDialog({
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-40 flex-col items-center justify-center text-center">
-      {children}
-    </div>
+    <div className="flex min-h-40 flex-col items-center justify-center text-center">{children}</div>
   );
 }

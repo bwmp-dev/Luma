@@ -37,10 +37,7 @@ function pulse(): void {
  * Attach the gesture listeners to `host`.
  * @returns a teardown that removes them and closes any open pad.
  */
-export function bindTerminalGestures(
-  host: HTMLElement,
-  options: BindOptions,
-): () => void {
+export function bindTerminalGestures(host: HTMLElement, options: BindOptions): () => void {
   const gestures = createTerminalGestures({
     arrowPad: options.arrowPad,
     doubleTapTab: options.doubleTapTab,

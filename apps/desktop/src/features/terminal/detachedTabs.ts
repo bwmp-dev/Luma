@@ -137,20 +137,21 @@ export async function detachTab(
     minWidth: 420,
     minHeight: 260,
     decorations: false,
-    ...(spawnLogical
-      ? { x: spawnLogical.x, y: spawnLogical.y }
-      : { center: true }),
+    ...(spawnLogical ? { x: spawnLogical.x, y: spawnLogical.y } : { center: true }),
     // During a live tear-off the main window still holds pointer capture and
     // moves this window itself; stealing focus mid-gesture would break that
     // capture. The caller focuses the window when the pointer is released.
     focus: !continueDrag,
   });
 
-  const unlistenInput = await listen<{ sessionId: string; data: string }>("detached-terminal-input", (event) => {
-    if (sessionIds.includes(event.payload.sessionId)) {
-      terminalManager.injectInput(event.payload.sessionId, event.payload.data);
-    }
-  });
+  const unlistenInput = await listen<{ sessionId: string; data: string }>(
+    "detached-terminal-input",
+    (event) => {
+      if (sessionIds.includes(event.payload.sessionId)) {
+        terminalManager.injectInput(event.payload.sessionId, event.payload.data);
+      }
+    },
+  );
   const unlistenResize = await listen<{ sessionId: string; cols: number; rows: number }>(
     "detached-terminal-resize",
     (event) => {
@@ -188,9 +189,19 @@ export async function detachTab(
       }),
     );
   });
-  const entry: DetachedEntry = { tabId, sessionIds, label, unlistenInput, unlistenReady, unlistenResize, unsubscribeOutput: [] };
+  const entry: DetachedEntry = {
+    tabId,
+    sessionIds,
+    label,
+    unlistenInput,
+    unlistenReady,
+    unlistenResize,
+    unsubscribeOutput: [],
+  };
   detached.set(tabId, entry);
-  const nextTab = state.tabs.find((candidate) => candidate.id !== tabId && !detached.has(candidate.id));
+  const nextTab = state.tabs.find(
+    (candidate) => candidate.id !== tabId && !detached.has(candidate.id),
+  );
   if (state.activeTabId === tabId && nextTab) state.setActiveTab(nextTab.id);
   for (const sessionId of sessionIds) terminalManager.detach(sessionId);
   changed();

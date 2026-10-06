@@ -2,20 +2,10 @@ import { createHash, randomBytes } from "node:crypto";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import type {
-  DevicePublicKey,
-  RoomKeyEnvelope,
-} from "@luma/collaboration-encryption";
+import type { DevicePublicKey, RoomKeyEnvelope } from "@luma/collaboration-encryption";
 import type { RoomRole } from "@luma/collaboration-protocol";
 import { HttpError } from "./auth.js";
-import {
-  accounts,
-  devices,
-  roomInvites,
-  roomMemberKeys,
-  roomMembers,
-  rooms,
-} from "./schema.js";
+import { accounts, devices, roomInvites, roomMemberKeys, roomMembers, rooms } from "./schema.js";
 import * as schema from "./schema.js";
 
 export interface RoomMembership {
@@ -59,9 +49,7 @@ export interface RedeemedInvite {
   keyEpoch: number;
 }
 
-type Transaction = Parameters<
-  Parameters<NodePgDatabase<typeof schema>["transaction"]>[0]
->[0];
+type Transaction = Parameters<Parameters<NodePgDatabase<typeof schema>["transaction"]>[0]>[0];
 
 export class Database {
   readonly pool: Pool;
@@ -173,10 +161,7 @@ export class Database {
       )
       .innerJoin(
         devices,
-        and(
-          eq(devices.id, roomMemberKeys.deviceId),
-          eq(devices.subject, roomMembers.subject),
-        ),
+        and(eq(devices.id, roomMemberKeys.deviceId), eq(devices.subject, roomMembers.subject)),
       )
       .where(
         and(
@@ -200,7 +185,11 @@ export class Database {
   ): Promise<{ roomId: string; memberId: string; keyEpoch: number }> {
     return await this.orm.transaction(async (tx) => {
       await tx.insert(accounts).values({ subject }).onConflictDoNothing();
-      await requireAllActiveDevices(tx, subject, deviceKeys.map((entry) => entry.deviceId));
+      await requireAllActiveDevices(
+        tx,
+        subject,
+        deviceKeys.map((entry) => entry.deviceId),
+      );
 
       const [createdRoom] = await tx
         .insert(rooms)
@@ -215,13 +204,7 @@ export class Database {
         .returning({ id: roomMembers.id });
       if (!member) throw new Error("member insert returned no id");
 
-      await insertDeviceEnvelopes(
-        tx,
-        roomId,
-        member.id,
-        createdRoom.keyEpoch,
-        deviceKeys,
-      );
+      await insertDeviceEnvelopes(tx, roomId, member.id, createdRoom.keyEpoch, deviceKeys);
       return { roomId, memberId: member.id, keyEpoch: createdRoom.keyEpoch };
     });
   }
@@ -270,13 +253,7 @@ export class Database {
         .returning({ id: roomMembers.id });
       if (!member) throw new Error("member upsert returned no id");
 
-      await insertDeviceEnvelopes(
-        tx,
-        roomId,
-        member.id,
-        owner.keyEpoch,
-        deviceKeys,
-      );
+      await insertDeviceEnvelopes(tx, roomId, member.id, owner.keyEpoch, deviceKeys);
       return { memberId: member.id, keyEpoch: owner.keyEpoch };
     });
   }
@@ -384,13 +361,9 @@ export class Database {
         .returning({ id: roomMembers.id });
       if (!member) throw new Error("member upsert returned no id");
 
-      await insertDeviceEnvelopes(
-        tx,
-        roomId,
-        member.id,
-        invite.keyEpoch,
-        [{ deviceId, envelope: keyEnvelope }],
-      );
+      await insertDeviceEnvelopes(tx, roomId, member.id, invite.keyEpoch, [
+        { deviceId, envelope: keyEnvelope },
+      ]);
       return { memberId: member.id, role: invite.role, keyEpoch: invite.keyEpoch };
     });
   }
@@ -499,9 +472,7 @@ export class Database {
           ),
         )
         .orderBy(asc(devices.id));
-      const recipientByDevice = new Map(
-        recipients.map((row) => [row.deviceId, row.memberId]),
-      );
+      const recipientByDevice = new Map(recipients.map((row) => [row.deviceId, row.memberId]));
       if (
         recipientByDevice.size !== deviceKeys.length ||
         deviceKeys.some((entry) => !recipientByDevice.has(entry.deviceId))
@@ -531,13 +502,7 @@ async function authorizeDevice(
   const [device] = await database
     .select({ id: devices.id })
     .from(devices)
-    .where(
-      and(
-        eq(devices.id, deviceId),
-        eq(devices.subject, subject),
-        isNull(devices.revokedAt),
-      ),
-    )
+    .where(and(eq(devices.id, deviceId), eq(devices.subject, subject), isNull(devices.revokedAt)))
     .limit(1);
   if (!device) throw new HttpError(403, "device is not registered");
 }
@@ -583,11 +548,7 @@ async function insertDeviceEnvelopes(
         keyEnvelope: entry.envelope,
       })
       .onConflictDoUpdate({
-        target: [
-          roomMemberKeys.roomId,
-          roomMemberKeys.deviceId,
-          roomMemberKeys.keyEpoch,
-        ],
+        target: [roomMemberKeys.roomId, roomMemberKeys.deviceId, roomMemberKeys.keyEpoch],
         set: {
           memberId,
           keyEnvelope: entry.envelope,

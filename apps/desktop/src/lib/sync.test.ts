@@ -44,10 +44,7 @@ describe("automatic sync schedules", () => {
   });
 
   it("changes only the push side", () => {
-    const next = withPushSchedule(
-      { ...BASE, pullIntervalMinutes: 30, pullOnFocus: false },
-      "off",
-    );
+    const next = withPushSchedule({ ...BASE, pullIntervalMinutes: 30, pullOnFocus: false }, "off");
     expect(next.pullIntervalMinutes).toBe(30);
     expect(next.pullOnFocus).toBe(false);
     expect(next.pullOnStart).toBe(true);

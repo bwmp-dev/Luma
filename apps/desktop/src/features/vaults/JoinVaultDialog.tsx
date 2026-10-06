@@ -261,27 +261,27 @@ export function JoinVaultDialog({
             <TextInput value={cloudUrl} onChange={setCloudUrl} mono />
           </Field>
         ) : (
-        <div>
-          <span className="mb-1.5 block text-sm font-medium">Provider</span>
-          <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface p-1">
-            {providerOptions.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setProvider(option.value)}
-                aria-pressed={provider === option.value}
-                className={cn(
-                  "flex-1 rounded-md px-3 py-1.5 text-sm transition-colors",
-                  provider === option.value
-                    ? "bg-raised text-accent shadow-glow"
-                    : "text-muted hover:text-foreground",
-                )}
-              >
-                {option.label}
-              </button>
-            ))}
+          <div>
+            <span className="mb-1.5 block text-sm font-medium">Provider</span>
+            <div className="flex flex-wrap gap-1 rounded-lg border border-border bg-surface p-1">
+              {providerOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setProvider(option.value)}
+                  aria-pressed={provider === option.value}
+                  className={cn(
+                    "flex-1 rounded-md px-3 py-1.5 text-sm transition-colors",
+                    provider === option.value
+                      ? "bg-raised text-accent shadow-glow"
+                      : "text-muted hover:text-foreground",
+                  )}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
         )}
 
         {!managed && provider === "local-folder" && (
@@ -307,7 +307,12 @@ export function JoinVaultDialog({
         {!managed && provider === "webdav" && (
           <>
             <Field label="URL" hint="HTTPS required.">
-              <TextInput value={url} onChange={setUrl} placeholder="https://dav.example.com/luma" mono />
+              <TextInput
+                value={url}
+                onChange={setUrl}
+                placeholder="https://dav.example.com/luma"
+                mono
+              />
             </Field>
             <Field label="Username" hint="Your own WebDAV account.">
               <TextInput value={username} onChange={setUsername} />
@@ -353,16 +358,16 @@ export function JoinVaultDialog({
 
         {managed && (
           <p className="text-xs text-muted">
-            The vault stays locked until a member&apos;s app is next open to release
-            its key to this device. Luma retries on every sync.
+            The vault stays locked until a member&apos;s app is next open to release its key to this
+            device. Luma retries on every sync.
           </p>
         )}
 
         <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
           <ShieldAlert size={14} className="mt-0.5 shrink-0" />
-          Joining puts this vault&apos;s hosts, and any private keys and passwords it
-          shares, on this device — and lets you change them for everyone else. Only
-          join vaults from people you know and trust.
+          Joining puts this vault&apos;s hosts, and any private keys and passwords it shares, on
+          this device — and lets you change them for everyone else. Only join vaults from people you
+          know and trust.
         </div>
 
         {error && (

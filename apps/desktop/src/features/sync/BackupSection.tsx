@@ -168,9 +168,8 @@ export function BackupSection({ vaultId }: { vaultId: string }) {
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted">
-        Create a portable, encrypted backup of your hosts, keys, profiles,
-        snippets, and settings — or restore one on another device. Backups are
-        encrypted before they touch disk.
+        Create a portable, encrypted backup of your hosts, keys, profiles, snippets, and settings —
+        or restore one on another device. Backups are encrypted before they touch disk.
       </p>
 
       <div className="flex flex-wrap gap-2">
@@ -227,9 +226,7 @@ export function BackupSection({ vaultId }: { vaultId: string }) {
       >
         {exportPhase.kind === "done" && (
           <div className="space-y-2">
-            <p className="break-all font-mono text-xs text-muted">
-              {exportPhase.result.path}
-            </p>
+            <p className="break-all font-mono text-xs text-muted">{exportPhase.result.path}</p>
             <CountsList counts={exportPhase.result.objectCounts} />
           </div>
         )}
@@ -349,10 +346,8 @@ export function BackupSection({ vaultId }: { vaultId: string }) {
               <div className="flex items-start gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
                 <AlertTriangle size={13} className="mt-0.5 shrink-0" /> Keystore locked —{" "}
                 {importPhase.result.privateKeysSkippedLocked} private key
-                {importPhase.result.privateKeysSkippedLocked === 1
-                  ? " was"
-                  : "s were"}{" "}
-                not imported. Unlock the keystore and import again.
+                {importPhase.result.privateKeysSkippedLocked === 1 ? " was" : "s were"} not
+                imported. Unlock the keystore and import again.
               </div>
             )}
           </div>

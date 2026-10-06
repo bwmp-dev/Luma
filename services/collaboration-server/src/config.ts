@@ -45,10 +45,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     r2SecretAccessKey: required(env, "R2_SECRET_ACCESS_KEY"),
     roomHistoryLimit: positiveInteger(env.ROOM_HISTORY_LIMIT ?? "10000", "ROOM_HISTORY_LIMIT"),
     maxEventBytes: positiveInteger(env.MAX_EVENT_BYTES ?? "262144", "MAX_EVENT_BYTES"),
-    maxSnapshotBytes: positiveInteger(
-      env.MAX_SNAPSHOT_BYTES ?? "67108864",
-      "MAX_SNAPSHOT_BYTES",
-    ),
+    maxSnapshotBytes: positiveInteger(env.MAX_SNAPSHOT_BYTES ?? "67108864", "MAX_SNAPSHOT_BYTES"),
     ticketTtlSeconds: positiveInteger(env.TICKET_TTL_SECONDS ?? "30", "TICKET_TTL_SECONDS"),
     presenceTtlSeconds: positiveInteger(env.PRESENCE_TTL_SECONDS ?? "45", "PRESENCE_TTL_SECONDS"),
     controlLeaseTtlSeconds: positiveInteger(

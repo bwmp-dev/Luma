@@ -10,8 +10,7 @@ const MESSAGES: Record<string, string> = {
     "The host key changed since you last connected. This can mean the server was reinstalled — or that the connection is being intercepted. Verify the server before reconnecting.",
   "host-key-rejected":
     "The host key was rejected, so the server could not be verified. Confirm the fingerprint out-of-band before trusting it.",
-  "auth-failed":
-    "Authentication failed. Check the username, key reference, or password.",
+  "auth-failed": "Authentication failed. Check the username, key reference, or password.",
   "connection-lost":
     "The connection to the server was lost. This is usually a network drop or the remote closing the session.",
   "dns-failed":

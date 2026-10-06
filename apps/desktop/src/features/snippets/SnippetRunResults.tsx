@@ -88,8 +88,8 @@ function HostResultRow({ host, name }: { host: HostRunState; name: string }) {
         <div className="space-y-2 border-t border-border bg-background/40 px-3 py-2">
           {host.status === "unsupported" && (
             <p className="text-xs text-amber-400">
-              Non-interactive snippet execution is unavailable for this host —
-              run it in a terminal instead.
+              Non-interactive snippet execution is unavailable for this host — run it in a terminal
+              instead.
             </p>
           )}
           {host.status === "failed" && (
@@ -98,9 +98,7 @@ function HostResultRow({ host, name }: { host: HostRunState; name: string }) {
             </p>
           )}
           {host.status === "cancelled" && (
-            <p className="text-xs text-muted">
-              {host.errorMessage ?? "Cancelled."}
-            </p>
+            <p className="text-xs text-muted">{host.errorMessage ?? "Cancelled."}</p>
           )}
           {host.stdout && (
             <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md bg-background px-2.5 py-2 font-mono text-[11px] text-foreground/90">
@@ -112,12 +110,11 @@ function HostResultRow({ host, name }: { host: HostRunState; name: string }) {
               {host.stderr}
             </pre>
           )}
-          {!hasOutput &&
-            (host.status === "ok" || host.status === "running") && (
-              <p className="text-xs text-muted/70">
-                {host.status === "running" ? "Waiting for output…" : "No output."}
-              </p>
-            )}
+          {!hasOutput && (host.status === "ok" || host.status === "running") && (
+            <p className="text-xs text-muted/70">
+              {host.status === "running" ? "Waiting for output…" : "No output."}
+            </p>
+          )}
         </div>
       )}
     </li>

@@ -60,8 +60,8 @@ export function ProfilesSection() {
     <div className="space-y-3">
       {(profiles ?? []).length === 0 && !adding && (
         <p className="text-sm text-muted">
-          No custom profiles. Profiles let you launch a shell with specific
-          arguments, working directory, or environment.
+          No custom profiles. Profiles let you launch a shell with specific arguments, working
+          directory, or environment.
         </p>
       )}
 

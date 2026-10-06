@@ -25,9 +25,7 @@ export function summarizeFleetHealth(snapshot: ServerStatsSnapshot): FleetHealth
   const coreCount = snapshot.cpu?.cores.length ?? 0;
   const oneMinuteLoad = snapshot.cpu?.loadAverage?.[0];
   const loadPercent =
-    oneMinuteLoad !== undefined && coreCount > 0
-      ? (oneMinuteLoad / coreCount) * 100
-      : null;
+    oneMinuteLoad !== undefined && coreCount > 0 ? (oneMinuteLoad / coreCount) * 100 : null;
 
   const memory = snapshot.memory;
   const available = memory?.availableKb ?? memory?.freeKb;
@@ -39,9 +37,7 @@ export function summarizeFleetHealth(snapshot: ServerStatsSnapshot): FleetHealth
   const diskPercent =
     snapshot.disks?.reduce<number | null>(
       (highest, disk) =>
-        disk.usedPercent === null
-          ? highest
-          : Math.max(highest ?? 0, disk.usedPercent),
+        disk.usedPercent === null ? highest : Math.max(highest ?? 0, disk.usedPercent),
       null,
     ) ?? null;
 
@@ -103,4 +99,3 @@ function addThresholdIssue(
     detail: `${Math.round(value)}%`,
   });
 }
-

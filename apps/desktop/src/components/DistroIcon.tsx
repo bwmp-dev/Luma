@@ -85,21 +85,10 @@ const BRANDS: Record<string, BrandGlyph> = {
 };
 
 /** Render an official distro/platform brand glyph when one is known. */
-export function DistroIcon({
-  osId,
-  size = 12,
-  className,
-  label,
-}: DistroIconProps) {
+export function DistroIcon({ osId, size = 12, className, label }: DistroIconProps) {
   const brand = BRANDS[osId];
   if (!brand) {
-    return (
-      <Server
-        size={size}
-        className={className}
-        aria-label={label ?? "server"}
-      />
-    );
+    return <Server size={size} className={className} aria-label={label ?? "server"} />;
   }
 
   // Pure black official marks disappear on Luma's dark surface. Keep their

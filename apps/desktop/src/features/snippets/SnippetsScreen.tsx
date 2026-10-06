@@ -50,7 +50,7 @@ export function SnippetsScreen() {
   const allHosts = hosts ?? [];
   const hostName = useMemo(() => {
     const map = new Map(allHosts.map((h) => [h.id, h.name]));
-    return (id: string | null) => (id ? map.get(id) ?? "Unknown host" : null);
+    return (id: string | null) => (id ? (map.get(id) ?? "Unknown host") : null);
   }, [allHosts]);
 
   const list = (snippets ?? []).filter((s) => matches(s, query.trim()));
@@ -154,14 +154,12 @@ export function SnippetsScreen() {
         confirmLabel="Delete"
         busy={remove.isPending}
         onConfirm={() =>
-          deleting &&
-          remove.mutate(deleting.id, { onSuccess: () => setDeleting(null) })
+          deleting && remove.mutate(deleting.id, { onSuccess: () => setDeleting(null) })
         }
         message={
           <>
-            Delete{" "}
-            <span className="font-medium text-foreground">{deleting?.name}</span>?
-            This cannot be undone.
+            Delete <span className="font-medium text-foreground">{deleting?.name}</span>? This
+            cannot be undone.
           </>
         }
       />
@@ -198,93 +196,89 @@ function SnippetCard({
   ];
   return (
     <ContextMenu actions={snippetActions} minWidth="min-w-36">
-    <div className="group/card flex flex-col gap-2 rounded-xl bg-raised p-3.5 text-sm transition-all hover:ring-1 hover:ring-accent">
-      <div className="flex items-start gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate font-semibold text-foreground">
-              {snippet.name}
-            </span>
-            {hostName && (
-              <span className="flex shrink-0 items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-[10px] text-accent">
-                <Server size={10} /> {hostName}
-              </span>
+      <div className="group/card flex flex-col gap-2 rounded-xl bg-raised p-3.5 text-sm transition-all hover:ring-1 hover:ring-accent">
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="truncate font-semibold text-foreground">{snippet.name}</span>
+              {hostName && (
+                <span className="flex shrink-0 items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-[10px] text-accent">
+                  <Server size={10} /> {hostName}
+                </span>
+              )}
+            </div>
+            {snippet.description && (
+              <p className="mt-0.5 truncate text-xs text-muted">{snippet.description}</p>
             )}
           </div>
-          {snippet.description && (
-            <p className="mt-0.5 truncate text-xs text-muted">
-              {snippet.description}
-            </p>
-          )}
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <button
+                type="button"
+                aria-label={`${snippet.name} actions`}
+                className="shrink-0 rounded p-0.5 text-muted hover:text-foreground"
+              >
+                <MoreHorizontal size={15} />
+              </button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                align="end"
+                sideOffset={4}
+                className="z-50 min-w-36 rounded-lg border border-border bg-raised p-1 text-sm shadow-glow"
+              >
+                <MenuItem icon={<ServerCog size={14} />} onSelect={onRunHosts}>
+                  Run on hosts…
+                </MenuItem>
+                <MenuItem icon={<Pencil size={14} />} onSelect={onEdit}>
+                  Edit
+                </MenuItem>
+                <MenuItem icon={<Trash2 size={14} />} destructive onSelect={onDelete}>
+                  Delete
+                </MenuItem>
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
         </div>
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger asChild>
-            <button
-              type="button"
-              aria-label={`${snippet.name} actions`}
-              className="shrink-0 rounded p-0.5 text-muted hover:text-foreground"
-            >
-              <MoreHorizontal size={15} />
-            </button>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenu.Content
-              align="end"
-              sideOffset={4}
-              className="z-50 min-w-36 rounded-lg border border-border bg-raised p-1 text-sm shadow-glow"
-            >
-              <MenuItem icon={<ServerCog size={14} />} onSelect={onRunHosts}>
-                Run on hosts…
-              </MenuItem>
-              <MenuItem icon={<Pencil size={14} />} onSelect={onEdit}>
-                Edit
-              </MenuItem>
-              <MenuItem icon={<Trash2 size={14} />} destructive onSelect={onDelete}>
-                Delete
-              </MenuItem>
-            </DropdownMenu.Content>
-          </DropdownMenu.Portal>
-        </DropdownMenu.Root>
-      </div>
 
-      <pre className="max-h-24 whitespace-pre-wrap break-words rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground/90 md:max-h-20 md:overflow-hidden md:whitespace-pre">
-        {snippet.command}
-      </pre>
+        <pre className="max-h-24 whitespace-pre-wrap break-words rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground/90 md:max-h-20 md:overflow-hidden md:whitespace-pre">
+          {snippet.command}
+        </pre>
 
-      {snippet.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {snippet.tags.map((tag) => (
-            <span
-              key={tag}
-              className="rounded-full bg-surface px-2 py-0.5 text-[10px] text-muted"
-            >
-              {tag}
-            </span>
-          ))}
+        {snippet.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {snippet.tags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full bg-surface px-2 py-0.5 text-[10px] text-muted"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-1 flex gap-2">
+          <button
+            type="button"
+            onClick={onInsert}
+            disabled={!canRun}
+            title={canRun ? "Insert into terminal" : "Open a terminal first"}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs text-foreground hover:border-accent hover:text-accent disabled:opacity-40 disabled:hover:border-border disabled:hover:text-foreground"
+          >
+            <ClipboardPaste size={13} /> Insert
+          </button>
+          <button
+            type="button"
+            onClick={onRun}
+            disabled={!canRun}
+            title={canRun ? "Insert and run" : "Open a terminal first"}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-accent px-2.5 py-1.5 text-xs font-medium text-accent-foreground hover:brightness-110 disabled:opacity-40"
+          >
+            <Play size={13} /> Run
+          </button>
         </div>
-      )}
-
-      <div className="mt-1 flex gap-2">
-        <button
-          type="button"
-          onClick={onInsert}
-          disabled={!canRun}
-          title={canRun ? "Insert into terminal" : "Open a terminal first"}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs text-foreground hover:border-accent hover:text-accent disabled:opacity-40 disabled:hover:border-border disabled:hover:text-foreground"
-        >
-          <ClipboardPaste size={13} /> Insert
-        </button>
-        <button
-          type="button"
-          onClick={onRun}
-          disabled={!canRun}
-          title={canRun ? "Insert and run" : "Open a terminal first"}
-          className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-accent px-2.5 py-1.5 text-xs font-medium text-accent-foreground hover:brightness-110 disabled:opacity-40"
-        >
-          <Play size={13} /> Run
-        </button>
       </div>
-    </div>
     </ContextMenu>
   );
 }

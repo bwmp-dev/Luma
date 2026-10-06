@@ -27,10 +27,7 @@ type NativeTabItem = {
 };
 
 function setTabBarHeight(height: number): void {
-  document.documentElement.style.setProperty(
-    "--mobile-tabbar-height",
-    `${height}px`,
-  );
+  document.documentElement.style.setProperty("--mobile-tabbar-height", `${height}px`);
 }
 
 /** Whether the native bar successfully attached for this session. */
@@ -45,9 +42,7 @@ export function isNativeTabBarActive(): boolean {
  * native bar is live (the React capsule must then not render). Safe to call on
  * any platform: a missing command or a non-iOS host resolves false.
  */
-export async function attachNativeTabBar(
-  sessionCount: number,
-): Promise<boolean> {
+export async function attachNativeTabBar(sessionCount: number): Promise<boolean> {
   // Plugin calls deliberately no-op on Android, so a resolved setItems call is
   // not enough to prove a native bar exists there.
   if (useCapabilityStore.getState().capabilities.os !== "ios") {
@@ -97,9 +92,7 @@ function tabIndex(tab: MobileTab): number {
  * selected tab icon reads as a washed-out icon, not as a design choice.
  */
 export function resolvedAccentColor(): string | null {
-  const accent = getComputedStyle(document.documentElement)
-    .getPropertyValue("--accent")
-    .trim();
+  const accent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
   const match = /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.exec(accent);
   if (!match) return null;
   const hex = match[1];
@@ -128,27 +121,17 @@ async function syncTintColor(): Promise<void> {
 // Cosmetic, like the tint: never fail the caller once the bar exists.
 async function syncBadges(sessionCount: number): Promise<void> {
   try {
-    await setBadge(
-      tabIndex("connections"),
-      sessionCount > 0 ? String(sessionCount) : null,
-    );
+    await setBadge(tabIndex("connections"), sessionCount > 0 ? String(sessionCount) : null);
   } catch {
     // Stale badge until the next session-count change retries.
   }
 }
 
 /** Mirror the store's selected tab into the native bar. No-op when inactive. */
-export async function syncNativeTabBar(
-  tab: MobileTab,
-  sessionCount: number,
-): Promise<void> {
+export async function syncNativeTabBar(tab: MobileTab, sessionCount: number): Promise<void> {
   if (!nativeActive) return;
   try {
-    await Promise.all([
-      setActiveTab(tabIndex(tab)),
-      syncBadges(sessionCount),
-      syncTintColor(),
-    ]);
+    await Promise.all([setActiveTab(tabIndex(tab)), syncBadges(sessionCount), syncTintColor()]);
   } catch {
     // A failed mirror leaves the bar showing a stale selection for one frame;
     // not worth tearing the bar down over.

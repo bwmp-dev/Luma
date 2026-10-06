@@ -18,14 +18,7 @@ import { useMobileNavStore } from "../../stores/mobileNavStore";
 import { cn } from "../../lib/utils";
 import { MobileScreen } from "./MobileScreen";
 import { MobileStackNav } from "./MobileStackNav";
-import {
-  ChoiceRow,
-  GroupTitle,
-  InputRow,
-  NavRow,
-  RowGroup,
-  SwitchRow,
-} from "./MobileFormControls";
+import { ChoiceRow, GroupTitle, InputRow, NavRow, RowGroup, SwitchRow } from "./MobileFormControls";
 
 /*
  * Full-screen host editor for the mobile shell, replacing the desktop
@@ -70,15 +63,7 @@ type FormState = {
 };
 
 /** Sub-screens pushed over the form. */
-type SubRoute =
-  | "group"
-  | "tags"
-  | "identity"
-  | "auth"
-  | "key"
-  | "proxy"
-  | "startup"
-  | "color";
+type SubRoute = "group" | "tags" | "identity" | "auth" | "key" | "proxy" | "startup" | "color";
 
 const TAB_COLOR_PRESETS = [
   "#4cc9f0",
@@ -206,8 +191,7 @@ function toInput(state: FormState): HostInput {
     username: usesIdentity ? null : state.username.trim() || null,
     groupId: state.groupId || null,
     authenticationType: usesIdentity ? "interactive" : state.authenticationType,
-    keyId:
-      !usesIdentity && state.authenticationType === "key" ? state.keyId || null : null,
+    keyId: !usesIdentity && state.authenticationType === "key" ? state.keyId || null : null,
     identityId: state.identityId || null,
     proxyJumpHostId: state.proxyJumpHostId || null,
     startupCommand: state.startupCommand.trim() || null,
@@ -300,8 +284,7 @@ export function MobileHostEditor({
   const hasErrors = Object.keys(errors).length > 0;
 
   const save = useMutation({
-    mutationFn: (input: HostInput) =>
-      host ? updateHost(host.id, input) : createHost(input),
+    mutationFn: (input: HostInput) => (host ? updateHost(host.id, input) : createHost(input)),
     onSuccess: () => {
       invalidate();
       onOpenChange(false);
@@ -433,8 +416,7 @@ export function MobileHostEditor({
             <NavRow
               label="Authentication"
               value={
-                AUTH_OPTIONS.find((option) => option.value === state.authenticationType)
-                  ?.label
+                AUTH_OPTIONS.find((option) => option.value === state.authenticationType)?.label
               }
               onSelect={() => push("auth")}
             />
@@ -470,10 +452,7 @@ export function MobileHostEditor({
             placeholder="None"
             onSelect={() => push("color")}
           />
-          <EnvironmentRows
-            rows={state.env}
-            onChange={(env) => patch({ env })}
-          />
+          <EnvironmentRows rows={state.env} onChange={(env) => patch({ env })} />
         </RowGroup>
 
         {backendError && (
@@ -576,9 +555,7 @@ export function MobileHostEditor({
           <PickerScreen title="SSH Key" onBack={pop}>
             <RowGroup>
               {keyReferences.length === 0 && (
-                <p className="px-4 py-5 text-sm text-muted">
-                  No keys in this vault yet.
-                </p>
+                <p className="px-4 py-5 text-sm text-muted">No keys in this vault yet.</p>
               )}
               {keyReferences.map((candidate) => (
                 <ChoiceRow
@@ -605,9 +582,7 @@ export function MobileHostEditor({
             </button>
             {/* The keychain is a screen in the shell, not a layer over this
                 sheet, so getting there means leaving the form behind. */}
-            <p className="mt-2 px-4 text-xs text-muted">
-              Closes this host without saving it.
-            </p>
+            <p className="mt-2 px-4 text-xs text-muted">Closes this host without saving it.</p>
           </PickerScreen>
         );
 
@@ -662,10 +637,7 @@ export function MobileHostEditor({
       case "color":
         return (
           <PickerScreen title="Tab Color" onBack={pop}>
-            <TabColorPicker
-              value={state.tabColor}
-              onChange={(tabColor) => patch({ tabColor })}
-            />
+            <TabColorPicker value={state.tabColor} onChange={(tabColor) => patch({ tabColor })} />
           </PickerScreen>
         );
     }
@@ -738,13 +710,7 @@ function PickerScreen({
 
 /** Tag chips plus a single add field — tags are free text, so a picker of
  * existing values would hide the ability to invent one. */
-function TagsEditor({
-  tags,
-  onChange,
-}: {
-  tags: string[];
-  onChange: (tags: string[]) => void;
-}) {
+function TagsEditor({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
   const [draft, setDraft] = useState("");
 
   const add = () => {
@@ -810,13 +776,7 @@ function TagsEditor({
   );
 }
 
-function TabColorPicker({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-}) {
+function TabColorPicker({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
     <RowGroup footer="Tints this host's terminal tab so it is recognisable at a glance.">
       <div className="flex flex-wrap items-center gap-3 px-4 py-4">

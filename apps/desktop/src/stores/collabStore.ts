@@ -1,9 +1,5 @@
 import { create } from "zustand";
-import {
-  collabAuthStatus,
-  parseCollaborationError,
-  type CollabAuthStatus,
-} from "../lib/collab";
+import { collabAuthStatus, parseCollaborationError, type CollabAuthStatus } from "../lib/collab";
 import {
   getCollabState,
   getCollabStates,
@@ -44,9 +40,10 @@ export const useCollabStore = create<CollabStoreState>((set, get) => ({
   wire: () => {
     if (get().wired) return;
     setCollabObserver((runtimes) => {
-      const runtime = runtimes.find((candidate) => candidate.mode === "viewing")
-        ?? runtimes[0]
-        ?? getCollabState();
+      const runtime =
+        runtimes.find((candidate) => candidate.mode === "viewing") ??
+        runtimes[0] ??
+        getCollabState();
       set({ runtime, runtimes });
     });
     set({ wired: true, runtime: getCollabState(), runtimes: getCollabStates() });

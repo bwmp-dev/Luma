@@ -9,10 +9,7 @@ import {
 } from "../../lib/agentInbox";
 import { relativeTime } from "../../lib/relativeTime";
 import { cn } from "../../lib/utils";
-import {
-  type AgentInboxItem,
-  useAgentInboxStore,
-} from "../../stores/agentInboxStore";
+import { type AgentInboxItem, useAgentInboxStore } from "../../stores/agentInboxStore";
 import { useSessionStore } from "../../stores/sessionStore";
 import { useUiStore } from "../../stores/uiStore";
 import { terminalManager } from "../terminal/terminalManager";
@@ -87,10 +84,7 @@ export function AgentInbox() {
     setOpen(false);
   };
 
-  const label =
-    unreadCount > 0
-      ? `Agent inbox, ${unreadCount} unread`
-      : "Agent inbox";
+  const label = unreadCount > 0 ? `Agent inbox, ${unreadCount} unread` : "Agent inbox";
 
   return (
     <DropdownMenu.Root open={open} onOpenChange={setOpen}>
@@ -214,9 +208,7 @@ function InboxRow({
             item.unread && "ring-2 ring-accent/40",
           )}
         />
-        <span className="truncate font-medium text-foreground">
-          {agentDisplayName(item.agent)}
-        </span>
+        <span className="truncate font-medium text-foreground">{agentDisplayName(item.agent)}</span>
         <span className={cn("ml-auto shrink-0 text-[11px]", TONE_TEXT[tone])}>
           {agentStateLabel(item.state)}
         </span>
@@ -224,9 +216,7 @@ function InboxRow({
 
       {(item.title || item.detail) && (
         <div className="pl-4 text-xs text-muted">
-          {item.title && (
-            <p className="truncate text-foreground/90">{item.title}</p>
-          )}
+          {item.title && <p className="truncate text-foreground/90">{item.title}</p>}
           {item.detail && <p className="line-clamp-2">{item.detail}</p>}
         </div>
       )}

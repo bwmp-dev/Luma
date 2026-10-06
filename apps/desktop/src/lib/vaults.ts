@@ -154,12 +154,7 @@ export function linkIsSensitive(link: VaultJoinLink): boolean {
   return link.inviteSecret !== null;
 }
 
-const JOIN_PROVIDERS: SyncProvider[] = [
-  "local-folder",
-  "webdav",
-  "github-gist",
-  "luma-cloud",
-];
+const JOIN_PROVIDERS: SyncProvider[] = ["local-folder", "webdav", "github-gist", "luma-cloud"];
 
 /** Build a shareable `luma://vault?…` link. Throws when the vault's provider
  * has no location configured yet. */

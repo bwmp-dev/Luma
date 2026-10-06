@@ -133,10 +133,7 @@ export function RepoDialog({
     if (!selection || !sessionId) return;
     // Paste-style insertion of the escaped path plus a trailing space — never
     // executed — exactly mirroring the "Attach file" flow.
-    terminalManager.insertText(
-      sessionId,
-      `${escapeRemotePathArg(selection.path)} `,
-    );
+    terminalManager.insertText(sessionId, `${escapeRemotePathArg(selection.path)} `);
     onOpenChange(false);
   };
 
@@ -149,9 +146,7 @@ export function RepoDialog({
       open={open}
       onOpenChange={onOpenChange}
       title="Repository"
-      description={
-        label ? `Git status of ${label}` : "Git status of this directory"
-      }
+      description={label ? `Git status of ${label}` : "Git status of this directory"}
       size="lg"
       footer={
         <button
@@ -174,17 +169,13 @@ export function RepoDialog({
         ) : error ? (
           <div className="rounded-lg border border-border bg-background p-3">
             <p className="text-xs text-danger">{error}</p>
-            <p className="mt-1 text-xs text-muted">
-              Refresh once the host is reachable again.
-            </p>
+            <p className="mt-1 text-xs text-muted">Refresh once the host is reachable again.</p>
           </div>
         ) : !status ? null : !status.isRepo ? (
           <div className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border text-center">
             <GitBranch size={18} className="text-muted" />
             <p className="text-sm font-medium">Not a git repository</p>
-            <p className="text-xs text-muted">
-              This directory is not inside a git repository.
-            </p>
+            <p className="text-xs text-muted">This directory is not inside a git repository.</p>
           </div>
         ) : (
           <>
@@ -232,13 +223,7 @@ export function RepoDialog({
 }
 
 /** Branch, dirty/clean indicator, ahead/behind counts, and the work-tree root. */
-function RepoHeader({
-  status,
-  dirty,
-}: {
-  status: RepoStatus;
-  dirty: number;
-}) {
+function RepoHeader({ status, dirty }: { status: RepoStatus; dirty: number }) {
   return (
     <div className="rounded-lg border border-border bg-background p-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
@@ -246,8 +231,7 @@ function RepoHeader({
           <GitBranch size={14} className="shrink-0 text-muted" />
           {status.detached ? (
             <span className="text-muted">
-              detached at{" "}
-              <span className="text-foreground">{status.branch ?? "?"}</span>
+              detached at <span className="text-foreground">{status.branch ?? "?"}</span>
             </span>
           ) : (
             (status.branch ?? "(no branch)")
@@ -284,9 +268,7 @@ function RepoHeader({
         )}
       </div>
       {status.root && (
-        <p className="mt-1.5 truncate font-mono text-[11px] text-muted">
-          {status.root}
-        </p>
+        <p className="mt-1.5 truncate font-mono text-[11px] text-muted">{status.root}</p>
       )}
     </div>
   );
@@ -345,8 +327,7 @@ function FileGroup({
       {expanded && (
         <div className="mt-2 space-y-1">
           {entries.map((entry) => {
-            const active =
-              selection?.path === entry.path && selection.staged === staged;
+            const active = selection?.path === entry.path && selection.staged === staged;
             return (
               <button
                 // Two records can name the same path (a rename source and an
@@ -472,9 +453,7 @@ function DiffPane({
         ) : entry.error ? (
           <p className="px-3 py-3 text-xs text-danger">{entry.error}</p>
         ) : !parsed || !entry.diff ? null : parsed.binary ? (
-          <p className="px-3 py-3 text-xs text-muted">
-            Binary file — no text diff.
-          </p>
+          <p className="px-3 py-3 text-xs text-muted">Binary file — no text diff.</p>
         ) : parsed.empty ? (
           <p className="px-3 py-3 text-xs text-muted">No changes to show.</p>
         ) : (
@@ -516,11 +495,7 @@ function DiffFileView({ file, mode }: { file: DiffFile; mode: DiffMode }) {
             </span>
             <CopyHunkButton hunk={hunk} />
           </div>
-          {mode === "unified" ? (
-            <UnifiedHunk hunk={hunk} />
-          ) : (
-            <SideBySideHunk hunk={hunk} />
-          )}
+          {mode === "unified" ? <UnifiedHunk hunk={hunk} /> : <SideBySideHunk hunk={hunk} />}
         </div>
       ))}
     </div>
@@ -575,9 +550,7 @@ function UnifiedHunk({ hunk }: { hunk: DiffHunk }) {
             <span className="w-10 shrink-0 select-none px-1 text-right text-muted">
               {line.newNumber ?? ""}
             </span>
-            <span className="w-4 shrink-0 select-none text-center">
-              {lineMarker(line.kind)}
-            </span>
+            <span className="w-4 shrink-0 select-none text-center">{lineMarker(line.kind)}</span>
             <span className="whitespace-pre">{line.text}</span>
           </div>
           {line.noNewline && <NoNewlineRow />}
@@ -598,13 +571,7 @@ function SideBySideHunk({ hunk }: { hunk: DiffHunk }) {
   );
 }
 
-function SideBySideRowView({
-  left,
-  right,
-}: {
-  left: DiffLine | null;
-  right: DiffLine | null;
-}) {
+function SideBySideRowView({ left, right }: { left: DiffLine | null; right: DiffLine | null }) {
   return (
     <>
       <SideCell line={left} which="old" />
@@ -613,13 +580,7 @@ function SideBySideRowView({
   );
 }
 
-function SideCell({
-  line,
-  which,
-}: {
-  line: DiffLine | null;
-  which: "old" | "new";
-}) {
+function SideCell({ line, which }: { line: DiffLine | null; which: "old" | "new" }) {
   if (!line) {
     return <div className="border-r border-border last:border-r-0 bg-surface/40" />;
   }
@@ -627,12 +588,8 @@ function SideCell({
   return (
     <div className="border-r border-border last:border-r-0">
       <div className={cn("flex whitespace-pre", lineTint(line.kind))}>
-        <span className="w-10 shrink-0 select-none px-1 text-right text-muted">
-          {number ?? ""}
-        </span>
-        <span className="w-4 shrink-0 select-none text-center">
-          {lineMarker(line.kind)}
-        </span>
+        <span className="w-10 shrink-0 select-none px-1 text-right text-muted">{number ?? ""}</span>
+        <span className="w-4 shrink-0 select-none text-center">{lineMarker(line.kind)}</span>
         <span className="whitespace-pre">{line.text}</span>
       </div>
       {line.noNewline && <NoNewlineRow />}

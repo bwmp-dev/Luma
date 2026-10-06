@@ -70,10 +70,7 @@ export function MobileSelectionBar({
         <BarButton label="Copy" disabled={empty} onPress={copy}>
           {copied ? <Check size={15} /> : <ClipboardCopy size={15} />}
         </BarButton>
-        <BarButton
-          label="Select all"
-          onPress={() => terminalManager.selectAll(sessionId, false)}
-        >
+        <BarButton label="Select all" onPress={() => terminalManager.selectAll(sessionId, false)}>
           <TextSelect size={15} />
         </BarButton>
         <BarButton label="Done selecting" onPress={onDone}>

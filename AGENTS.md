@@ -8,6 +8,7 @@ Lightweight cross-platform terminal and SSH client (Tauri 2 + Rust backend, Reac
 pnpm install                                        # install frontend deps
 pnpm tauri dev                                      # run the app
 pnpm build                                          # typecheck + build frontend
+pnpm format                                         # format JS/TS/JSON/CSS (Oxfmt); CI runs format:check
 cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml     # backend tests
 cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
 cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml      # CI enforces fmt + clippy

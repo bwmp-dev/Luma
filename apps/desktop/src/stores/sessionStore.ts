@@ -8,11 +8,7 @@ import type {
 } from "../types";
 import type { ShellRef } from "../lib/terminal";
 import type { SerialConfig } from "../lib/serial";
-import {
-  sshHostKeyStatus,
-  sshHostKeyTrust,
-  type SshHostKeyStatus,
-} from "../lib/ssh";
+import { sshHostKeyStatus, sshHostKeyTrust, type SshHostKeyStatus } from "../lib/ssh";
 import { hostEffectiveConfig, parseLumaError, type TransportType } from "../lib/hosts";
 import {
   withMultiplexerTitle,
@@ -27,10 +23,7 @@ import {
   type SpawnDescriptor,
 } from "../features/terminal/terminalManager";
 import { planReconnect } from "../features/terminal/reconnect";
-import type {
-  SnapshotPaneNode,
-  WorkspaceSnapshot,
-} from "../features/terminal/sessionSnapshot";
+import type { SnapshotPaneNode, WorkspaceSnapshot } from "../features/terminal/sessionSnapshot";
 import {
   collectLeaves,
   findLeaf,
@@ -81,10 +74,7 @@ type SessionState = {
   /** Restart a session's backend. `reconnect` marks an auto-reconnect attempt:
    * it preserves the terminal buffer and keeps the reconnect attempt counter,
    * whereas a manual restart clears the terminal and resets the counter. */
-  restartSession: (
-    id: string,
-    options?: { reconnect?: boolean },
-  ) => Promise<void>;
+  restartSession: (id: string, options?: { reconnect?: boolean }) => Promise<void>;
   /** Trigger the pending SSH reconnect immediately (cancels the backoff timer). */
   retryReconnectNow: (id: string) => void;
   /** Abandon the SSH reconnect run and leave the session in its failed state. */
@@ -111,10 +101,7 @@ type SessionState = {
   /** Split the active pane and spawn the given descriptor (an ad-hoc different
    * connection) instead of duplicating the source pane. SSH descriptors still
    * run the host-key preflight and surface per-pane errors identically. */
-  splitActivePaneWith: (
-    direction: SplitDirection,
-    restore: RestoreDescriptor,
-  ) => Promise<void>;
+  splitActivePaneWith: (direction: SplitDirection, restore: RestoreDescriptor) => Promise<void>;
   /** Graft the source tab's entire pane tree into the target tab as a new split,
    * producing one grouped tab. Session and leaf pane ids are preserved so xterm
    * instances re-attach; the source tab is removed. No-op on unknown/identical
@@ -354,11 +341,7 @@ function sessionStillOpen(get: () => SessionState, id: string): boolean {
 
 /** Patch a session into the blocking `host-key-changed` error state, stashing the
  * scanned-vs-known fingerprints for the comparison view. Never trusts or spawns. */
-function applyHostKeyChanged(
-  set: SetFn,
-  id: string,
-  status: SshHostKeyStatus,
-): void {
+function applyHostKeyChanged(set: SetFn, id: string, status: SshHostKeyStatus): void {
   set((state) => ({
     sessions: patchSession(state.sessions, id, {
       status: "error",
@@ -477,19 +460,14 @@ async function runHostKeyPreflight(
 }
 
 /** Resolve the focused session id for a set of tabs. */
-function computeActiveSession(
-  tabs: WorkspaceTab[],
-  activeTabId: string | null,
-): string | null {
+function computeActiveSession(tabs: WorkspaceTab[], activeTabId: string | null): string | null {
   const tab = tabs.find((t) => t.id === activeTabId);
   if (!tab) return null;
   return findLeaf(tab.root, tab.activePaneId)?.sessionId ?? null;
 }
 
 type SetFn = (
-  partial:
-    | Partial<SessionState>
-    | ((state: SessionState) => Partial<SessionState>),
+  partial: Partial<SessionState> | ((state: SessionState) => Partial<SessionState>),
 ) => void;
 
 /** Register manager callbacks that write session metadata back into the store. */
@@ -500,7 +478,9 @@ function makeCallbacks(set: SetFn, get: () => SessionState, id: string) {
         const session = state.sessions.find((candidate) => candidate.id === id);
         // SSH and serial sessions keep a stable, caller-provided title (host name
         // or serial port); only local shells adopt xterm's OSC title.
-        return session?.type === "local" ? { sessions: patchSession(state.sessions, id, { title }) } : {};
+        return session?.type === "local"
+          ? { sessions: patchSession(state.sessions, id, { title }) }
+          : {};
       }),
     onExit: (exit: SessionExit) => handleSessionExit(set, get, id, exit),
     onSearchRequested: () => useUiStore.getState().setTerminalSearchOpen(true),
@@ -508,7 +488,16 @@ function makeCallbacks(set: SetFn, get: () => SessionState, id: string) {
       // A successful (re)connection ends any reconnect run and resets its
       // counter, so a later drop starts its backoff schedule from the top.
       clearReconnectTimer(id);
-      set((state) => ({ sessions: patchSession(state.sessions, id, { status: "connected", connectionPrompt: undefined, connectionStage: "ready", connectionState: "connected", reconnectAttempt: 0, nextRetryAt: null }) }));
+      set((state) => ({
+        sessions: patchSession(state.sessions, id, {
+          status: "connected",
+          connectionPrompt: undefined,
+          connectionStage: "ready",
+          connectionState: "connected",
+          reconnectAttempt: 0,
+          nextRetryAt: null,
+        }),
+      }));
     },
     // Only interactive credential prompts arrive here now; host-key trust is
     // handled by the store's backend preflight before spawn.
@@ -518,7 +507,12 @@ function makeCallbacks(set: SetFn, get: () => SessionState, id: string) {
       target?: string;
       secret?: boolean;
     }) =>
-      set((state) => ({ sessions: patchSession(state.sessions, id, { connectionPrompt, connectionStage: "authentication" }) })),
+      set((state) => ({
+        sessions: patchSession(state.sessions, id, {
+          connectionPrompt,
+          connectionStage: "authentication",
+        }),
+      })),
     onSshProgress: (connectionStage: NonNullable<TerminalSession["connectionStage"]>) =>
       set((state) => ({ sessions: patchSession(state.sessions, id, { connectionStage }) })),
     onRemoteOs: (osId: string, osPrettyName: string | null) =>
@@ -543,9 +537,7 @@ function applySpawnSuccess(
     const spawnExited = !!current && current.status !== "connecting";
     return {
       sessions: patchSession(state.sessions, id, {
-        ...(descriptorKind !== "ssh" && !spawnExited
-          ? { status: "connected" as const }
-          : {}),
+        ...(descriptorKind !== "ssh" && !spawnExited ? { status: "connected" as const } : {}),
         title,
       }),
     };
@@ -577,10 +569,8 @@ async function launch(
   // A workspace attach rides the SSH startup command, which the Mosh bootstrap
   // has no equivalent for — so an attaching session stays on SSH, and this is
   // also what the automatic Mosh→SSH fallback re-attaches with.
-  const moshFallbackAttach =
-    descriptor.kind === "ssh" ? descriptor.multiplexer : undefined;
-  const agentCommand =
-    descriptor.kind === "ssh" && descriptor.mcpRequestId !== undefined;
+  const moshFallbackAttach = descriptor.kind === "ssh" ? descriptor.multiplexer : undefined;
+  const agentCommand = descriptor.kind === "ssh" && descriptor.mcpRequestId !== undefined;
   // SSH sessions must clear the host-key preflight before any spawn. This
   // covers first-open, split-pane duplication, and workspace restore alike —
   // an unknown host on restore prompts, it is never silently auto-trusted.
@@ -632,21 +622,13 @@ async function launch(
     }
   }
   try {
-    const result = await terminalManager.createSession(
-      id,
-      descriptor,
-      makeCallbacks(set, get, id),
-    );
+    const result = await terminalManager.createSession(id, descriptor, makeCallbacks(set, get, id));
     applySpawnSuccess(set, id, descriptor.kind, title ?? result.title);
   } catch (error) {
     // A superseding restart (or disposal) abandoned this attempt; the winner
     // owns the session's state, so leave it untouched.
     if (isSpawnAbandoned(error)) return;
-    if (
-      descriptor.kind === "mosh" &&
-      transport === "auto" &&
-      sessionStillOpen(get, id)
-    ) {
+    if (descriptor.kind === "mosh" && transport === "auto" && sessionStillOpen(get, id)) {
       // Automatic fallback: retry the SAME managed session over plain SSH and
       // leave a dismissible notice. (A Mosh session that connects but stalls
       // cannot be detected here — that usually means UDP is blocked.)
@@ -724,8 +706,7 @@ async function openInNewTab(
     // A background tab must not steal focus, but it still needs to be the
     // active tab when it is the only one — otherwise nothing is selected.
     activeTabId: background && state.activeTabId ? state.activeTabId : tab.id,
-    activeSessionId:
-      background && state.activeTabId ? state.activeSessionId : session.id,
+    activeSessionId: background && state.activeTabId ? state.activeSessionId : session.id,
   }));
   await waitForPaneLayout();
   await launch(set, get, session.id, descriptor, title);
@@ -817,9 +798,7 @@ function buildRestoredNode(
     kind: "split",
     id: crypto.randomUUID(),
     direction: snap.direction,
-    children: snap.children.map((child) =>
-      buildRestoredNode(child, sessions, launches),
-    ),
+    children: snap.children.map((child) => buildRestoredNode(child, sessions, launches)),
     sizes: snap.sizes,
   };
 }
@@ -843,22 +822,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     await openInNewTab(set, get, session, { kind: "local", ref }, title);
   },
 
-  openSshSession: async (
-    hostId,
-    title,
-    hostname,
-    ephemeral,
-    tabColor,
-    multiplexer,
-    options,
-  ) => {
+  openSshSession: async (hostId, title, hostname, ephemeral, tabColor, multiplexer, options) => {
     const id = crypto.randomUUID();
     const agentCommand = options?.mcpRequestId !== undefined;
     // An explicit workspace wins; otherwise the host may have one saved to
     // resume. Either way the title carries the workspace it landed in.
-    const attach = agentCommand
-      ? undefined
-      : multiplexer ?? resumeAttachFor(hostId);
+    const attach = agentCommand ? undefined : (multiplexer ?? resumeAttachFor(hostId));
     const displayTitle = withMultiplexerTitle(title ?? "SSH", attach);
     const session: TerminalSession = {
       id,
@@ -1008,9 +977,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   markHostSaved: (hostId) => {
     set((state) => ({
       sessions: state.sessions.map((s) =>
-        s.hostId === hostId && s.hostEphemeral
-          ? { ...s, hostEphemeral: false }
-          : s,
+        s.hostId === hostId && s.hostEphemeral ? { ...s, hostEphemeral: false } : s,
       ),
     }));
   },
@@ -1055,8 +1022,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           const remaining = collectLeaves(newRoot);
           const removedIndex = leaves.findIndex((l) => l.id === target.id);
           activePaneId =
-            remaining[Math.min(removedIndex, remaining.length - 1)]?.id ??
-            remaining[0].id;
+            remaining[Math.min(removedIndex, remaining.length - 1)]?.id ?? remaining[0].id;
         }
         // Dropping back to a single pane disables broadcast for the tab; drop the
         // closed session from any exclusion set so it can't linger.
@@ -1127,9 +1093,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   focusPane: (tabId, paneId) => {
     set((state) => {
-      const tabs = state.tabs.map((t) =>
-        t.id === tabId ? { ...t, activePaneId: paneId } : t,
-      );
+      const tabs = state.tabs.map((t) => (t.id === tabId ? { ...t, activePaneId: paneId } : t));
       const activeSessionId = computeActiveSession(tabs, tabId);
       if (activeSessionId !== state.activeSessionId) {
         useUiStore.getState().setTerminalSearchOpen(false);
@@ -1164,8 +1128,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       // A split duplicates the HOST, not the workspace: two clients attached to
       // the same tmux session would mirror each other and fight over the size.
       // Drop the workspace suffix so the new pane's title matches what it is.
-      const sourceAttach =
-        source.restore?.kind === "ssh" ? source.restore.multiplexer : undefined;
+      const sourceAttach = source.restore?.kind === "ssh" ? source.restore.multiplexer : undefined;
       const splitTitle = withoutMultiplexerTitle(source.title, sourceAttach);
       descriptor = { kind: "ssh", hostId: source.hostId };
       title = splitTitle;
@@ -1270,13 +1233,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
       let newRoot: PaneNode;
       if (targetPaneId) {
-        newRoot = splitLeaf(
-          target.root,
-          targetPaneId,
-          direction,
-          source.root,
-          placement,
-        );
+        newRoot = splitLeaf(target.root, targetPaneId, direction, source.root, placement);
       } else if (target.root.kind === "split" && target.root.direction === direction) {
         // Append the source tree as a sibling of the same-direction split and
         // give every child an equal share (simple + deterministic).
@@ -1295,9 +1252,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           id: crypto.randomUUID(),
           direction,
           children:
-            placement === "before"
-              ? [source.root, target.root]
-              : [target.root, source.root],
+            placement === "before" ? [source.root, target.root] : [target.root, source.root],
           sizes: [50, 50],
         };
       }
@@ -1305,9 +1260,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       const tabs = state.tabs
         .filter((t) => t.id !== sourceTabId)
         .map((t) =>
-          t.id === targetTabId
-            ? { ...t, root: newRoot, activePaneId: draggedActivePaneId }
-            : t,
+          t.id === targetTabId ? { ...t, root: newRoot, activePaneId: draggedActivePaneId } : t,
         );
       return {
         tabs,
@@ -1322,14 +1275,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (sessionId) requestAnimationFrame(() => terminalManager.focus(sessionId));
   },
 
-  movePaneToPane: (
-    sourceTabId,
-    sourcePaneId,
-    targetTabId,
-    targetPaneId,
-    direction,
-    placement,
-  ) => {
+  movePaneToPane: (sourceTabId, sourcePaneId, targetTabId, targetPaneId, direction, placement) => {
     if (sourcePaneId === targetPaneId) return;
     // Preflight before any mutation, mirroring mergeTabs: a stale pane id (the
     // layout changed between hover and drop) makes the whole move a no-op
@@ -1368,13 +1314,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       }
 
       const prunedSource = removeLeaf(source.root, sourcePaneId);
-      const targetRoot = splitLeaf(
-        target.root,
-        targetPaneId,
-        direction,
-        movedNode,
-        placement,
-      );
+      const targetRoot = splitLeaf(target.root, targetPaneId, direction, movedNode, placement);
 
       const tabs: WorkspaceTab[] = [];
       for (const tab of state.tabs) {
@@ -1386,10 +1326,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           tabs.push({
             ...tab,
             root: prunedSource,
-            activePaneId:
-              tab.activePaneId === sourcePaneId
-                ? remaining[0].id
-                : tab.activePaneId,
+            activePaneId: tab.activePaneId === sourcePaneId ? remaining[0].id : tab.activePaneId,
             broadcastEnabled: stillMultiPane ? tab.broadcastEnabled : false,
             broadcastExcluded: (tab.broadcastExcluded ?? []).filter(
               (sid) => sid !== movedLeaf.sessionId,
@@ -1399,9 +1336,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         }
         // Focus follows the moved pane; its leaf id survives the graft.
         tabs.push(
-          tab.id === targetTabId
-            ? { ...tab, root: targetRoot, activePaneId: sourcePaneId }
-            : tab,
+          tab.id === targetTabId ? { ...tab, root: targetRoot, activePaneId: sourcePaneId } : tab,
         );
       }
       return {
@@ -1450,8 +1385,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           ? {
               ...t,
               root: prunedSource,
-              activePaneId:
-                t.activePaneId === sourcePaneId ? remaining[0].id : t.activePaneId,
+              activePaneId: t.activePaneId === sourcePaneId ? remaining[0].id : t.activePaneId,
               broadcastEnabled: stillMultiPane ? t.broadcastEnabled : false,
               broadcastExcluded: (t.broadcastExcluded ?? []).filter(
                 (sid) => sid !== movedLeaf.sessionId,
@@ -1528,10 +1462,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }
     if (newTabs.length === 0) return;
 
-    const activeIndex = Math.min(
-      Math.max(snapshot.activeTabIndex, 0),
-      newTabs.length - 1,
-    );
+    const activeIndex = Math.min(Math.max(snapshot.activeTabIndex, 0), newTabs.length - 1);
     const activeTab = newTabs[activeIndex];
 
     useUiStore.getState().showTerminal();
@@ -1584,9 +1515,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   resizeSplit: (tabId, splitId, sizes) => {
     set((state) => ({
       tabs: state.tabs.map((t) =>
-        t.id === tabId
-          ? { ...t, root: setSplitSizes(t.root, splitId, sizes) }
-          : t,
+        t.id === tabId ? { ...t, root: setSplitSizes(t.root, splitId, sizes) } : t,
       ),
     }));
   },
@@ -1594,9 +1523,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   toggleBroadcast: (tabId) => {
     set((state) => ({
       tabs: state.tabs.map((t) =>
-        t.id === tabId
-          ? { ...t, broadcastEnabled: !t.broadcastEnabled, broadcastExcluded: [] }
-          : t,
+        t.id === tabId ? { ...t, broadcastEnabled: !t.broadcastEnabled, broadcastExcluded: [] } : t,
       ),
     }));
     syncBroadcast(get().tabs.find((t) => t.id === tabId));

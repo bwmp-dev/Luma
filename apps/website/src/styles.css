@@ -1,6 +1,5 @@
 @import "tailwindcss";
 
-
 :root {
   --background: #08060f;
   --surface: #100c1e;
@@ -26,10 +25,8 @@
   --color-accent-strong: var(--accent-strong);
   --color-accent-foreground: var(--accent-foreground);
   --shadow-glow: 0 0 40px 0 var(--glow);
-  --font-sans:
-    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono:
-    "Cascadia Code", "JetBrains Mono", "SF Mono", Consolas, monospace;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "Cascadia Code", "JetBrains Mono", "SF Mono", Consolas, monospace;
 }
 
 * {
@@ -86,9 +83,7 @@ body {
   width: 46rem;
   height: 46rem;
   transform: translateX(-50%);
-  background: radial-gradient(circle,
-      rgba(var(--accent-rgb), 0.28),
-      transparent 68%);
+  background: radial-gradient(circle, rgba(var(--accent-rgb), 0.28), transparent 68%);
   animation: nebula-pulse 14s ease-in-out infinite;
 }
 
@@ -97,9 +92,7 @@ body {
   left: -12%;
   width: 34rem;
   height: 34rem;
-  background: radial-gradient(circle,
-      rgba(168, 130, 240, 0.22),
-      transparent 70%);
+  background: radial-gradient(circle, rgba(168, 130, 240, 0.22), transparent 70%);
   animation: nebula-pulse 18s ease-in-out infinite 2s;
 }
 
@@ -108,14 +101,11 @@ body {
   right: -8%;
   width: 40rem;
   height: 40rem;
-  background: radial-gradient(circle,
-      rgba(var(--accent-rgb), 0.16),
-      transparent 72%);
+  background: radial-gradient(circle, rgba(var(--accent-rgb), 0.16), transparent 72%);
   animation: nebula-pulse 20s ease-in-out infinite 4s;
 }
 
 @keyframes nebula-pulse {
-
   0%,
   100% {
     opacity: 0.42;

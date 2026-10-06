@@ -56,10 +56,7 @@ export function MultiHostRunDialog() {
   }, [open]);
 
   // Only saved (non-ephemeral) hosts are eligible targets.
-  const hosts = useMemo(
-    () => (allHosts ?? []).filter((h) => !h.isEphemeral),
-    [allHosts],
-  );
+  const hosts = useMemo(() => (allHosts ?? []).filter((h) => !h.isEphemeral), [allHosts]);
   const hostName = useMemo(() => {
     const map = new Map(hosts.map((h) => [h.id, h.name]));
     return (id: string) => map.get(id) ?? id;
@@ -121,9 +118,7 @@ export function MultiHostRunDialog() {
           <>
             <span className="mr-auto text-xs text-muted">
               {selectedCount} selected
-              {tooMany && (
-                <span className="text-danger"> · max {MAX_HOSTS}</span>
-              )}
+              {tooMany && <span className="text-danger"> · max {MAX_HOSTS}</span>}
             </span>
             <button
               type="button"
@@ -372,9 +367,7 @@ function HostCheckbox({
         />
       )}
       <span className="min-w-0 flex-1 truncate">{host.name}</span>
-      <span className="shrink-0 truncate font-mono text-[11px] text-muted">
-        {host.hostname}
-      </span>
+      <span className="shrink-0 truncate font-mono text-[11px] text-muted">{host.hostname}</span>
     </label>
   );
 }
@@ -399,9 +392,7 @@ function ConfirmStep({
         </pre>
       </div>
       <div>
-        <label className="mb-1 block text-xs font-medium text-muted">
-          Timeout (seconds)
-        </label>
+        <label className="mb-1 block text-xs font-medium text-muted">Timeout (seconds)</label>
         <input
           type="number"
           value={timeout}
@@ -417,16 +408,12 @@ function ConfirmStep({
         />
       </div>
       <div>
-        <div className="mb-1 text-xs font-medium text-muted">
-          Targets ({hostNames.length})
-        </div>
+        <div className="mb-1 text-xs font-medium text-muted">Targets ({hostNames.length})</div>
         <div className="flex flex-wrap gap-1.5">
           {hostNames.map((name, i) => (
             <span
               key={`${name}-${i}`}
-              className={cn(
-                "rounded-full bg-raised px-2 py-0.5 text-xs text-foreground",
-              )}
+              className={cn("rounded-full bg-raised px-2 py-0.5 text-xs text-foreground")}
             >
               {name}
             </span>

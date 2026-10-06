@@ -1,20 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { setInvoke, invoke } from "../test/tauriMock";
 import { queryClient } from "../lib/queryClient";
-import {
-  describeClipboard,
-  selectCanPaste,
-  useSftpStore,
-} from "./sftpStore";
+import { describeClipboard, selectCanPaste, useSftpStore } from "./sftpStore";
 import { DEFAULT_VIEW_PREFS } from "../features/sftp/viewPrefs";
 import type { SftpEntry, TransferProgress } from "../lib/sftp";
 
 const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
 
 function fire(channel: unknown, payload: TransferProgress): void {
-  (channel as { onmessage: (message: TransferProgress) => void }).onmessage(
-    payload,
-  );
+  (channel as { onmessage: (message: TransferProgress) => void }).onmessage(payload);
 }
 
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -97,9 +91,7 @@ describe("SFTP transfer queue transitions", () => {
     await flush();
 
     expect(transfers()).toHaveLength(128);
-    expect(transfers().every((transfer) => transfer.state === "failed")).toBe(
-      true,
-    );
+    expect(transfers().every((transfer) => transfer.state === "failed")).toBe(true);
   });
 
   it("moves a transfer running -> completed and clears it on clearFinished", async () => {
@@ -406,9 +398,7 @@ describe("SFTP transfer queue transitions", () => {
       errorMessage: null,
       progressKind: "aggregate",
     });
-    expect(transfers().find((t) => t.transferId === "dir-old")?.state).toBe(
-      "failed",
-    );
+    expect(transfers().find((t) => t.transferId === "dir-old")?.state).toBe("failed");
 
     useSftpStore.getState().retryTransfer("dir-old");
     await flush();
@@ -429,9 +419,7 @@ describe("SFTP transfer queue transitions", () => {
       errorMessage: null,
       progressKind: "aggregate",
     });
-    expect(transfers().find((t) => t.transferId === "dir-new")?.state).toBe(
-      "completed",
-    );
+    expect(transfers().find((t) => t.transferId === "dir-new")?.state).toBe("completed");
     expect(invoke).toHaveBeenCalledWith("sftp_retry", expect.anything());
   });
 
@@ -468,9 +456,7 @@ describe("SFTP transfer queue transitions", () => {
 
     const record = transfers().find((t) => t.transferId === "dir-x");
     expect(record?.state).toBe("failed");
-    expect(record?.errorMessage).toBe(
-      "transfer has no failed or incomplete entries to retry",
-    );
+    expect(record?.errorMessage).toBe("transfer has no failed or incomplete entries to retry");
   });
 
   it("cancelTransfer invokes the backend cancel", () => {
@@ -663,9 +649,7 @@ describe("SFTP panes", () => {
       sessionId: "new-session",
     });
     expect(useSftpStore.getState().sessions.old).toBeUndefined();
-    expect(useSftpStore.getState().sessions["new-session"].remotePath).toBe(
-      "/home/me",
-    );
+    expect(useSftpStore.getState().sessions["new-session"].remotePath).toBe("/home/me");
     // The untouched pane is left alone.
     expect(useSftpStore.getState().panes.left).toEqual({ kind: "local" });
   });
@@ -685,9 +669,7 @@ describe("SFTP clipboard", () => {
   }
 
   function copy(files: SftpEntry[], sessionId = "a", dir = "/src") {
-    useSftpStore
-      .getState()
-      .copyToClipboard({ kind: "remote", sessionId }, files, dir);
+    useSftpStore.getState().copyToClipboard({ kind: "remote", sessionId }, files, dir);
   }
 
   it("pastes onto another host as a host-to-host copy", async () => {
@@ -726,9 +708,7 @@ describe("SFTP clipboard", () => {
     });
 
     copy([remoteFile("one.txt")]);
-    useSftpStore
-      .getState()
-      .pasteInto({ kind: "remote", sessionId: "a" }, "/dest", "/");
+    useSftpStore.getState().pasteInto({ kind: "remote", sessionId: "a" }, "/dest", "/");
     await flush();
 
     // Same session on both ends is exactly what sftp_copy supports; only an
@@ -779,11 +759,9 @@ describe("SFTP clipboard", () => {
     // Nothing started: the caller confirms first.
     expect(calls).toHaveLength(0);
 
-    useSftpStore
-      .getState()
-      .pasteInto({ kind: "remote", sessionId: "b" }, "/dest", "/", {
-        force: true,
-      });
+    useSftpStore.getState().pasteInto({ kind: "remote", sessionId: "b" }, "/dest", "/", {
+      force: true,
+    });
     await flush();
     expect(calls).toHaveLength(2);
 
@@ -797,9 +775,7 @@ describe("SFTP clipboard", () => {
     });
 
     copy([remoteFile("one.txt")]);
-    useSftpStore
-      .getState()
-      .pasteInto({ kind: "remote", sessionId: "b" }, "/dest", "/");
+    useSftpStore.getState().pasteInto({ kind: "remote", sessionId: "b" }, "/dest", "/");
     await flush();
 
     expect(useSftpStore.getState().clipboard?.files).toHaveLength(1);
@@ -849,13 +825,9 @@ describe("SFTP clipboard", () => {
     setInvoke(() => {
       throw new Error("no transfer should start");
     });
-    useSftpStore
-      .getState()
-      .copyToClipboard({ kind: "local" }, [file("a.txt")], "/local");
+    useSftpStore.getState().copyToClipboard({ kind: "local" }, [file("a.txt")], "/local");
 
-    expect(
-      useSftpStore.getState().pasteInto({ kind: "local" }, "/other", "/"),
-    ).toBeNull();
+    expect(useSftpStore.getState().pasteInto({ kind: "local" }, "/other", "/")).toBeNull();
     expect(transfers()).toHaveLength(0);
   });
 
@@ -882,29 +854,19 @@ describe("selectCanPaste", () => {
   };
 
   it("is false with an empty clipboard or no destination", () => {
-    expect(selectCanPaste(null, { kind: "remote", sessionId: "b" }, "/d")).toBe(
-      false,
-    );
+    expect(selectCanPaste(null, { kind: "remote", sessionId: "b" }, "/d")).toBe(false);
     expect(selectCanPaste(clipboard, { kind: "none" }, "/d")).toBe(false);
-    expect(
-      selectCanPaste(clipboard, { kind: "remote", sessionId: "b" }, ""),
-    ).toBe(false);
+    expect(selectCanPaste(clipboard, { kind: "remote", sessionId: "b" }, "")).toBe(false);
   });
 
   it("is false for the source folder but true for a sibling on the same host", () => {
-    expect(
-      selectCanPaste(clipboard, { kind: "remote", sessionId: "a" }, "/src"),
-    ).toBe(false);
-    expect(
-      selectCanPaste(clipboard, { kind: "remote", sessionId: "a" }, "/other"),
-    ).toBe(true);
+    expect(selectCanPaste(clipboard, { kind: "remote", sessionId: "a" }, "/src")).toBe(false);
+    expect(selectCanPaste(clipboard, { kind: "remote", sessionId: "a" }, "/other")).toBe(true);
   });
 
   it("is true for the same path on a DIFFERENT host", () => {
     // /src on host b is not the folder these files came from.
-    expect(
-      selectCanPaste(clipboard, { kind: "remote", sessionId: "b" }, "/src"),
-    ).toBe(true);
+    expect(selectCanPaste(clipboard, { kind: "remote", sessionId: "b" }, "/src")).toBe(true);
   });
 });
 
@@ -917,8 +879,8 @@ describe("describeClipboard", () => {
       files: [file("a.txt")],
     };
     expect(describeClipboard(one)).toBe("Paste “a.txt”");
-    expect(
-      describeClipboard({ ...one, files: [file("a.txt"), file("b.txt")] }),
-    ).toBe("Paste 2 items");
+    expect(describeClipboard({ ...one, files: [file("a.txt"), file("b.txt")] })).toBe(
+      "Paste 2 items",
+    );
   });
 });

@@ -2,9 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { ServerStatsSnapshot } from "../../lib/serverStats";
 import { summarizeFleetHealth } from "./fleetHealth";
 
-function snapshot(
-  overrides: Partial<ServerStatsSnapshot> = {},
-): ServerStatsSnapshot {
+function snapshot(overrides: Partial<ServerStatsSnapshot> = {}): ServerStatsSnapshot {
   return {
     system: null,
     cpu: null,
@@ -130,4 +128,3 @@ describe("summarizeFleetHealth", () => {
     expect(health.severity).toBe("healthy");
   });
 });
-

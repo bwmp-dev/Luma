@@ -41,10 +41,7 @@ export type WorkspaceSnapshot = {
 const SNAPSHOT_VERSION = 1 as const;
 const DEBOUNCE_MS = 500;
 
-function restoreFor(
-  sessions: TerminalSession[],
-  sessionId: string,
-): RestoreDescriptor | undefined {
+function restoreFor(sessions: TerminalSession[], sessionId: string): RestoreDescriptor | undefined {
   return sessions.find((s) => s.id === sessionId)?.restore;
 }
 
@@ -78,9 +75,7 @@ export function serializeNode(
 
   const total = sizes.reduce((a, b) => a + b, 0);
   const normalized =
-    total > 0
-      ? sizes.map((s) => (s / total) * 100)
-      : children.map(() => 100 / children.length);
+    total > 0 ? sizes.map((s) => (s / total) * 100) : children.map(() => 100 / children.length);
   return { kind: "split", direction: node.direction, children, sizes: normalized };
 }
 
@@ -203,8 +198,7 @@ export function parseSnapshot(raw: unknown): WorkspaceSnapshot | null {
     if (!isSnapshotNode(root)) return null;
     tabs.push({ root });
   }
-  const activeTabIndex =
-    typeof record.activeTabIndex === "number" ? record.activeTabIndex : 0;
+  const activeTabIndex = typeof record.activeTabIndex === "number" ? record.activeTabIndex : 0;
   return { version: SNAPSHOT_VERSION, tabs, activeTabIndex };
 }
 

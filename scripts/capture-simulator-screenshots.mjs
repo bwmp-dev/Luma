@@ -66,9 +66,7 @@ function parseArgs() {
   const key = index >= 0 ? args[index + 1] : "iphone";
   const preset = DEVICES[key];
   if (!preset) {
-    throw new Error(
-      `unknown device "${key}" — expected one of ${Object.keys(DEVICES).join(", ")}`,
-    );
+    throw new Error(`unknown device "${key}" — expected one of ${Object.keys(DEVICES).join(", ")}`);
   }
   return { key, preset };
 }
@@ -85,14 +83,24 @@ async function udidFor(name) {
 /** A clean, plausible status bar. Apple's own marketing shots use 9:41. */
 async function overrideStatusBar(udid) {
   await run("xcrun", [
-    "simctl", "status_bar", udid, "override",
-    "--time", "9:41",
-    "--batteryState", "charged",
-    "--batteryLevel", "100",
-    "--cellularMode", "active",
-    "--cellularBars", "4",
-    "--wifiMode", "active",
-    "--wifiBars", "3",
+    "simctl",
+    "status_bar",
+    udid,
+    "override",
+    "--time",
+    "9:41",
+    "--batteryState",
+    "charged",
+    "--batteryLevel",
+    "100",
+    "--cellularMode",
+    "active",
+    "--cellularBars",
+    "4",
+    "--wifiMode",
+    "active",
+    "--wifiBars",
+    "3",
   ]);
 }
 
@@ -127,9 +135,7 @@ async function screenshot(udid, path) {
   await run("xcrun", ["simctl", "io", udid, "screenshot", staging]);
   await copyFile(staging, path);
   await rm(staging, { force: true });
-  const { stdout } = await run("sips", [
-    "-g", "pixelWidth", "-g", "pixelHeight", path,
-  ]);
+  const { stdout } = await run("sips", ["-g", "pixelWidth", "-g", "pixelHeight", path]);
   const width = Number(/pixelWidth:\s*(\d+)/.exec(stdout)?.[1]);
   const height = Number(/pixelHeight:\s*(\d+)/.exec(stdout)?.[1]);
   return [width, height];

@@ -73,8 +73,7 @@ export function ConfirmDialog({
       {requireTyped !== undefined && (
         <label className="mt-3 block">
           <span className="text-xs text-muted">
-            Type <span className="font-medium text-foreground">{requireTyped}</span> to
-            confirm.
+            Type <span className="font-medium text-foreground">{requireTyped}</span> to confirm.
           </span>
           <input
             value={typed}

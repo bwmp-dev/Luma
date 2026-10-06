@@ -25,11 +25,7 @@ async function flush(times = 6): Promise<void> {
  * the host-key preflight that sets `connectionPrompt`, so the number of macrotask
  * ticks needed is not fixed and a hard-coded count races the rAF under load.
  */
-async function waitFor(
-  predicate: () => boolean,
-  message: string,
-  timeoutMs = 2000,
-): Promise<void> {
+async function waitFor(predicate: () => boolean, message: string, timeoutMs = 2000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!predicate()) {
     if (Date.now() > deadline) throw new Error(`waitFor timed out: ${message}`);
@@ -76,9 +72,7 @@ describe("exit before spawn resolution never leaves a connected ghost", () => {
       throw new Error(`unexpected ${cmd}`);
     });
 
-    await useSessionStore
-      .getState()
-      .openSerialSession({ path: "COM3", baudRate: 115200 });
+    await useSessionStore.getState().openSerialSession({ path: "COM3", baudRate: 115200 });
     const session = latestSession();
     expect(session.status).toBe("disconnected");
   });
@@ -189,9 +183,7 @@ describe("SSH host-key preflight decisions", () => {
 
     expect(invoke).not.toHaveBeenCalledWith("ssh_spawn", expect.anything());
     // The session (and its tab) were removed by the cancel.
-    expect(
-      useSessionStore.getState().sessions.some((s) => s.id === pending.id),
-    ).toBe(false);
+    expect(useSessionStore.getState().sessions.some((s) => s.id === pending.id)).toBe(false);
   });
 
   it("changed host key is a blocking error and never spawns", async () => {
@@ -317,9 +309,7 @@ describe("mergeTabs", () => {
 
     const leaves = collectLeaves(merged.root);
     expect(leaves).toHaveLength(2);
-    expect(leaves.map((l) => l.id).sort()).toEqual(
-      [leaf1.id, leaf2.id].sort(),
-    );
+    expect(leaves.map((l) => l.id).sort()).toEqual([leaf1.id, leaf2.id].sort());
     expect(leaves.map((l) => l.sessionId).sort()).toEqual(
       [leaf1.sessionId, leaf2.sessionId].sort(),
     );
@@ -354,20 +344,14 @@ describe("mergeTabs", () => {
     const targetLeaf = collectLeaves(target.root)[0];
     const sourceLeaf = collectLeaves(source.root)[0];
 
-    useSessionStore
-      .getState()
-      .mergeTabs(source.id, target.id, "column", "before");
+    useSessionStore.getState().mergeTabs(source.id, target.id, "column", "before");
 
     const root = useSessionStore.getState().tabs[0].root;
     expect(root.kind).toBe("split");
     if (root.kind !== "split") return;
     expect(root.direction).toBe("column");
-    expect(collectLeaves(root.children[0]).map((leaf) => leaf.id)).toEqual([
-      sourceLeaf.id,
-    ]);
-    expect(collectLeaves(root.children[1]).map((leaf) => leaf.id)).toEqual([
-      targetLeaf.id,
-    ]);
+    expect(collectLeaves(root.children[0]).map((leaf) => leaf.id)).toEqual([sourceLeaf.id]);
+    expect(collectLeaves(root.children[1]).map((leaf) => leaf.id)).toEqual([targetLeaf.id]);
   });
 
   it("grafts a dragged tab beside a specific pane for nested layouts", async () => {
@@ -394,9 +378,7 @@ describe("mergeTabs", () => {
       sourcePane.id,
       targetPanes[0].id,
     ]);
-    expect(collectLeaves(root.children[1]).map((leaf) => leaf.id)).toEqual([
-      targetPanes[1].id,
-    ]);
+    expect(collectLeaves(root.children[1]).map((leaf) => leaf.id)).toEqual([targetPanes[1].id]);
   });
 
   it("grafts a detached multi-pane source as one subtree beside the target pane", async () => {
@@ -412,22 +394,20 @@ describe("mergeTabs", () => {
     const targetPanes = collectLeaves(target.root);
     const sourcePanes = collectLeaves(source.root);
     const sourceActivePaneId = source.activePaneId;
-    const sourceActiveSessionId = sourcePanes.find(
-      (p) => p.id === sourceActivePaneId,
-    )!.sessionId;
+    const sourceActiveSessionId = sourcePanes.find((p) => p.id === sourceActivePaneId)!.sessionId;
 
     // Drop over the target's first pane, splitting it to the right.
-    useSessionStore
-      .getState()
-      .mergeTabs(source.id, target.id, "row", "after", targetPanes[0].id);
+    useSessionStore.getState().mergeTabs(source.id, target.id, "row", "after", targetPanes[0].id);
 
     const after = useSessionStore.getState();
     expect(after.tabs).toHaveLength(1);
     const merged = after.tabs[0];
     // Every pane survives with its id intact — nothing was dropped or renamed.
-    expect(collectLeaves(merged.root).map((l) => l.id).sort()).toEqual(
-      [...targetPanes, ...sourcePanes].map((l) => l.id).sort(),
-    );
+    expect(
+      collectLeaves(merged.root)
+        .map((l) => l.id)
+        .sort(),
+    ).toEqual([...targetPanes, ...sourcePanes].map((l) => l.id).sort());
     // The source's whole subtree is grafted contiguously beside the pane, not
     // flattened: it appears as a single child split holding both source panes.
     expect(merged.root.kind).toBe("split");
@@ -435,9 +415,11 @@ describe("mergeTabs", () => {
     expect(merged.root.children).toHaveLength(3);
     const grafted = merged.root.children[1];
     expect(grafted.kind).toBe("split");
-    expect(collectLeaves(grafted).map((l) => l.id).sort()).toEqual(
-      sourcePanes.map((l) => l.id).sort(),
-    );
+    expect(
+      collectLeaves(grafted)
+        .map((l) => l.id)
+        .sort(),
+    ).toEqual(sourcePanes.map((l) => l.id).sort());
     // Focus follows the source tab's previously active pane.
     expect(merged.activePaneId).toBe(sourceActivePaneId);
     expect(after.activeSessionId).toBe(sourceActiveSessionId);
@@ -455,15 +437,11 @@ describe("mergeTabs", () => {
     const setGroup = vi.spyOn(terminalManager, "setBroadcastGroup");
     const focus = vi.spyOn(terminalManager, "focus");
 
-    useSessionStore
-      .getState()
-      .mergeTabs(source.id, target.id, "row", "after", "ghost-pane");
+    useSessionStore.getState().mergeTabs(source.id, target.id, "row", "after", "ghost-pane");
 
     const after = useSessionStore.getState();
     expect(after.tabs).toHaveLength(2);
-    expect(after.tabs.map((t) => t.id).sort()).toEqual(
-      [target.id, source.id].sort(),
-    );
+    expect(after.tabs.map((t) => t.id).sort()).toEqual([target.id, source.id].sort());
     // Neither pane tree changed: a stale target must not drop the source tree.
     expect(after.tabs.find((t) => t.id === source.id)!.root).toEqual(source.root);
     expect(after.tabs.find((t) => t.id === target.id)!.root).toEqual(target.root);
@@ -515,9 +493,11 @@ describe("movePaneToPane", () => {
     expect(after.tabs).toHaveLength(1);
     const tab = after.tabs[0];
     // Nothing respawned: every pane and session id survived the move.
-    expect(collectLeaves(tab.root).map((l) => l.id).sort()).toEqual(
-      panes.map((l) => l.id).sort(),
-    );
+    expect(
+      collectLeaves(tab.root)
+        .map((l) => l.id)
+        .sort(),
+    ).toEqual(panes.map((l) => l.id).sort());
     expect(after.sessions).toHaveLength(3);
 
     expect(tab.root.kind).toBe("split");
@@ -527,10 +507,7 @@ describe("movePaneToPane", () => {
     expect(stacked.kind).toBe("split");
     if (stacked.kind !== "split") return;
     expect(stacked.direction).toBe("column");
-    expect(collectLeaves(stacked).map((l) => l.id)).toEqual([
-      panes[0].id,
-      panes[2].id,
-    ]);
+    expect(collectLeaves(stacked).map((l) => l.id)).toEqual([panes[0].id, panes[2].id]);
     // Focus follows the moved pane.
     expect(tab.activePaneId).toBe(panes[2].id);
   });
@@ -579,9 +556,7 @@ describe("movePaneToPane", () => {
     const after = useSessionStore.getState();
     expect(after.tabs).toHaveLength(2);
     const remainingSource = after.tabs.find((t) => t.id === source.id)!;
-    expect(collectLeaves(remainingSource.root).map((l) => l.id)).toEqual([
-      sourcePanes[1].id,
-    ]);
+    expect(collectLeaves(remainingSource.root).map((l) => l.id)).toEqual([sourcePanes[1].id]);
     // The source tab's focus moved off the pane that left.
     expect(remainingSource.activePaneId).toBe(sourcePanes[1].id);
     expect(collectLeaves(after.tabs.find((t) => t.id === target.id)!.root)).toHaveLength(2);
@@ -619,9 +594,7 @@ describe("detachPaneToTab", () => {
     const source = useSessionStore.getState().tabs[0];
     const panes = collectLeaves(source.root);
 
-    const detachedTabId = useSessionStore
-      .getState()
-      .detachPaneToTab(source.id, panes[1].id);
+    const detachedTabId = useSessionStore.getState().detachPaneToTab(source.id, panes[1].id);
 
     const after = useSessionStore.getState();
     expect(after.tabs).toHaveLength(2);
@@ -667,9 +640,7 @@ describe("detachPaneToTab", () => {
     const after = useSessionStore.getState();
     expect(detachedTabId).not.toBeNull();
     expect(after.activeTabId).toBe(activeTabId);
-    expect(after.activeSessionId).toBe(
-      collectLeaves(after.tabs[0].root)[0].sessionId,
-    );
+    expect(after.activeSessionId).toBe(collectLeaves(after.tabs[0].root)[0].sessionId);
   });
 
   it("disables broadcast when the source tab drops to a single pane", async () => {
@@ -821,9 +792,7 @@ describe("broadcast input", () => {
 describe("splitActivePaneWith", () => {
   it("splits an SSH pane with a DIFFERENT host, spawning the second host", async () => {
     mockSshSpawn();
-    await useSessionStore
-      .getState()
-      .openSshSession("host-1", "prod", "prod.example.com");
+    await useSessionStore.getState().openSshSession("host-1", "prod", "prod.example.com");
     await useSessionStore.getState().splitActivePaneWith("row", {
       kind: "ssh",
       hostId: "host-2",
@@ -835,9 +804,7 @@ describe("splitActivePaneWith", () => {
     expect(state.tabs).toHaveLength(1);
     const leaves = collectLeaves(state.tabs[0].root);
     expect(leaves).toHaveLength(2);
-    const hostIds = leaves.map(
-      (l) => state.sessions.find((s) => s.id === l.sessionId)?.hostId,
-    );
+    const hostIds = leaves.map((l) => state.sessions.find((s) => s.id === l.sessionId)?.hostId);
     expect(new Set(hostIds)).toEqual(new Set(["host-1", "host-2"]));
   });
 });
@@ -857,9 +824,7 @@ describe("openTemplate / host groups", () => {
     const state = useSessionStore.getState();
     expect(state.tabs).toHaveLength(1);
     expect(collectLeaves(state.tabs[0].root)).toHaveLength(3);
-    const spawnCalls = invoke.mock.calls.filter(
-      (call) => call[0] === "ssh_spawn",
-    ).length;
+    const spawnCalls = invoke.mock.calls.filter((call) => call[0] === "ssh_spawn").length;
     expect(spawnCalls).toBe(3);
   });
 
@@ -893,9 +858,7 @@ describe("openTemplate / host groups", () => {
     // Fresh pane ids — no id is reused from the source tab.
     expect(newLeaves.some((l) => origLeafIds.includes(l.id))).toBe(false);
     // Every leaf was spawned (2 original + 2 restored local panes).
-    const spawnCalls = invoke.mock.calls.filter(
-      (call) => call[0] === "pty_spawn",
-    ).length;
+    const spawnCalls = invoke.mock.calls.filter((call) => call[0] === "pty_spawn").length;
     expect(spawnCalls).toBe(4);
   });
 });

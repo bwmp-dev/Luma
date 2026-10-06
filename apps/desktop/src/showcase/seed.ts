@@ -2,10 +2,7 @@ import type { Host, HostGroup, KeyReference, Identity } from "../lib/hosts";
 import type { Snippet } from "../lib/snippets";
 import type { Vault } from "../lib/vaults";
 import type { DetectedShell, TerminalProfile } from "../lib/terminal";
-import type {
-  CpuCounters,
-  ServerStatsSnapshot,
-} from "../lib/serverStats";
+import type { CpuCounters, ServerStatsSnapshot } from "../lib/serverStats";
 import type { SftpEntry, SftpKind } from "../lib/sftp";
 import { SETTING_KEYS, type ThemeMode } from "../types";
 
@@ -150,11 +147,7 @@ export const HOSTS: Host[] = [
   }),
 ];
 
-export const RECENT_HOSTS: Host[] = [
-  HOSTS[0],
-  HOSTS[2],
-  HOSTS[4],
-];
+export const RECENT_HOSTS: Host[] = [HOSTS[0], HOSTS[2], HOSTS[4]];
 
 export const SNIPPETS: Snippet[] = [
   {
@@ -262,8 +255,22 @@ export const KEY_REFERENCES: KeyReference[] = [
 ];
 
 export const IDENTITIES: Identity[] = [
-  { id: "id-deploy", vaultId: VAULT_ID, name: "deploy", username: "deploy", keyId: "key-ed25519", hasPassword: false },
-  { id: "id-admin", vaultId: VAULT_ID, name: "homelab admin", username: "admin", keyId: "key-vault", hasPassword: true },
+  {
+    id: "id-deploy",
+    vaultId: VAULT_ID,
+    name: "deploy",
+    username: "deploy",
+    keyId: "key-ed25519",
+    hasPassword: false,
+  },
+  {
+    id: "id-admin",
+    vaultId: VAULT_ID,
+    name: "homelab admin",
+    username: "admin",
+    keyId: "key-vault",
+    hasPassword: true,
+  },
 ];
 
 export function buildSettings(theme: ThemeMode): Record<string, unknown> {
@@ -399,25 +406,91 @@ export function serverStatsSnapshot(sample: number): ServerStatsSnapshot {
     ],
     topProcesses: {
       byCpu: [
-        { pid: 1284, user: "postgres", cpuPercent: 24.6, memPercent: 11.2, command: "postgres: writer process" },
-        { pid: 998, user: "ubuntu", cpuPercent: 12.1, memPercent: 6.4, command: "node /srv/api/server.js" },
+        {
+          pid: 1284,
+          user: "postgres",
+          cpuPercent: 24.6,
+          memPercent: 11.2,
+          command: "postgres: writer process",
+        },
+        {
+          pid: 998,
+          user: "ubuntu",
+          cpuPercent: 12.1,
+          memPercent: 6.4,
+          command: "node /srv/api/server.js",
+        },
         { pid: 2210, user: "root", cpuPercent: 6.8, memPercent: 2.1, command: "dockerd" },
-        { pid: 1477, user: "www-data", cpuPercent: 3.2, memPercent: 1.8, command: "nginx: worker process" },
+        {
+          pid: 1477,
+          user: "www-data",
+          cpuPercent: 3.2,
+          memPercent: 1.8,
+          command: "nginx: worker process",
+        },
         { pid: 640, user: "root", cpuPercent: 1.4, memPercent: 0.9, command: "containerd" },
       ],
       byMemory: [
-        { pid: 1284, user: "postgres", cpuPercent: 24.6, memPercent: 11.2, command: "postgres: writer process" },
-        { pid: 998, user: "ubuntu", cpuPercent: 12.1, memPercent: 6.4, command: "node /srv/api/server.js" },
-        { pid: 1806, user: "redis", cpuPercent: 0.8, memPercent: 4.7, command: "redis-server *:6379" },
+        {
+          pid: 1284,
+          user: "postgres",
+          cpuPercent: 24.6,
+          memPercent: 11.2,
+          command: "postgres: writer process",
+        },
+        {
+          pid: 998,
+          user: "ubuntu",
+          cpuPercent: 12.1,
+          memPercent: 6.4,
+          command: "node /srv/api/server.js",
+        },
+        {
+          pid: 1806,
+          user: "redis",
+          cpuPercent: 0.8,
+          memPercent: 4.7,
+          command: "redis-server *:6379",
+        },
         { pid: 2210, user: "root", cpuPercent: 6.8, memPercent: 2.1, command: "dockerd" },
-        { pid: 1477, user: "www-data", cpuPercent: 3.2, memPercent: 1.8, command: "nginx: worker process" },
+        {
+          pid: 1477,
+          user: "www-data",
+          cpuPercent: 3.2,
+          memPercent: 1.8,
+          command: "nginx: worker process",
+        },
       ],
     },
     docker: [
-      { name: "api", state: "running", status: "Up 6 days", image: "ghcr.io/luma/api:1.8.2", health: "healthy" },
-      { name: "postgres", state: "running", status: "Up 6 days", image: "postgres:16-alpine", health: "healthy" },
-      { name: "redis", state: "running", status: "Up 6 days", image: "redis:7-alpine", health: null },
-      { name: "caddy", state: "running", status: "Up 2 hours", image: "caddy:2", health: "starting" },
+      {
+        name: "api",
+        state: "running",
+        status: "Up 6 days",
+        image: "ghcr.io/luma/api:1.8.2",
+        health: "healthy",
+      },
+      {
+        name: "postgres",
+        state: "running",
+        status: "Up 6 days",
+        image: "postgres:16-alpine",
+        health: "healthy",
+      },
+      {
+        name: "redis",
+        state: "running",
+        status: "Up 6 days",
+        image: "redis:7-alpine",
+        health: null,
+      },
+      {
+        name: "caddy",
+        state: "running",
+        status: "Up 2 hours",
+        image: "caddy:2",
+        health: "starting",
+      },
     ],
     failedServices: [],
     // Fixed: `new Date(...).toLocaleTimeString()` in the header would otherwise

@@ -8,11 +8,7 @@ import {
   MIN_FONT_SIZE,
   useTerminalStyleStore,
 } from "../../stores/terminalStyleStore";
-import {
-  AUTO_SCHEME_ID,
-  BUNDLED_SCHEMES,
-  type CustomTheme,
-} from "../terminal/themes";
+import { AUTO_SCHEME_ID, BUNDLED_SCHEMES, type CustomTheme } from "../terminal/themes";
 import { DEFAULT_TERMINAL_FONT_FAMILY } from "../terminal/terminalManager";
 import { parseImportedTheme } from "../../lib/themeImport";
 import { cn } from "../../lib/utils";
@@ -67,8 +63,8 @@ export function AppearanceSection() {
           </button>
         </div>
         <p className="mb-2 text-xs text-muted">
-          Recolors the whole app and terminals. Auto keeps Luma's native look and
-          follows your system appearance.
+          Recolors the whole app and terminals. Auto keeps Luma's native look and follows your
+          system appearance.
         </p>
         <div className="space-y-1.5">
           <SchemeRow
@@ -170,11 +166,7 @@ function SchemeRow({
         >
           {theme ? (
             previewColors(theme).map((color, i) => (
-              <span
-                key={i}
-                className="h-3 w-1.5 rounded-sm"
-                style={{ backgroundColor: color }}
-              />
+              <span key={i} className="h-3 w-1.5 rounded-sm" style={{ backgroundColor: color }} />
             ))
           ) : (
             <Palette size={14} className="text-muted" />
@@ -276,7 +268,9 @@ function ImportThemeDialog({
           onChange={setText}
           rows={8}
           mono
-          placeholder={'{ "colors": { "terminal.background": "#…", "terminal.ansiBlack": "#…", … } }'}
+          placeholder={
+            '{ "colors": { "terminal.background": "#…", "terminal.ansiBlack": "#…", … } }'
+          }
         />
         {error && <p className="text-xs text-danger">{error}</p>}
       </div>

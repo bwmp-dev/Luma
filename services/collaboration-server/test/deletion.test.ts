@@ -58,10 +58,7 @@ describe("collaboration account deletion", () => {
   it("removes sealed keys before the devices they reference", async () => {
     // `room_member_keys.device_id` references `devices` with no cascade, so
     // deleting a device first would violate the constraint.
-    const { transaction, deletes } = transactionSpy([
-      [{ id: firstRoom }],
-      [{ id: "device-1" }],
-    ]);
+    const { transaction, deletes } = transactionSpy([[{ id: firstRoom }], [{ id: "device-1" }]]);
     const database = databaseWithTransaction(transaction);
 
     await database.deleteAccount(ownerSubject);
@@ -73,10 +70,7 @@ describe("collaboration account deletion", () => {
   });
 
   it("deletes the account row last", async () => {
-    const { transaction, deletes } = transactionSpy([
-      [{ id: firstRoom }],
-      [{ id: "device-1" }],
-    ]);
+    const { transaction, deletes } = transactionSpy([[{ id: firstRoom }], [{ id: "device-1" }]]);
     const database = databaseWithTransaction(transaction);
 
     await database.deleteAccount(ownerSubject);
@@ -131,9 +125,7 @@ describe("collaboration account deletion", () => {
       }),
     } as unknown as RoomRouter;
 
-    const report = await new AccountDeleter(database, snapshots, roomRouter).purge(
-      ownerSubject,
-    );
+    const report = await new AccountDeleter(database, snapshots, roomRouter).purge(ownerSubject);
 
     expect(report.roomsDeleted).toBe(2);
     expect(order).toEqual([
@@ -157,9 +149,7 @@ describe("collaboration account deletion", () => {
     const snapshots = { delete: vi.fn() } as unknown as SnapshotStorage;
     const roomRouter = { evictRoom: vi.fn() } as unknown as RoomRouter;
 
-    const report = await new AccountDeleter(database, snapshots, roomRouter).purge(
-      "member-only",
-    );
+    const report = await new AccountDeleter(database, snapshots, roomRouter).purge("member-only");
 
     expect(snapshots.delete).not.toHaveBeenCalled();
     expect(roomRouter.evictRoom).not.toHaveBeenCalled();

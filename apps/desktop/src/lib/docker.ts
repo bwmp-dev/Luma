@@ -132,18 +132,11 @@ export function dockerStats(hostId: string): Promise<DockerStat[]> {
   return invoke<DockerStat[]>("docker_stats", { hostId });
 }
 
-export function dockerLogs(
-  hostId: string,
-  container: string,
-  tail: number,
-): Promise<DockerLogs> {
+export function dockerLogs(hostId: string, container: string, tail: number): Promise<DockerLogs> {
   return invoke<DockerLogs>("docker_logs", { hostId, container, tail });
 }
 
-export function dockerInspect(
-  hostId: string,
-  container: string,
-): Promise<DockerInspect> {
+export function dockerInspect(hostId: string, container: string): Promise<DockerInspect> {
   return invoke<DockerInspect>("docker_inspect", { hostId, container });
 }
 
@@ -226,10 +219,7 @@ export function unavailableHint(reason: string | null): string {
 
 /** Joins a stats sample onto a container. `docker stats` truncates its ids, so
  * the name is the reliable key and the short id is only a fallback. */
-export function statFor(
-  stats: DockerStat[],
-  container: DockerContainer,
-): DockerStat | undefined {
+export function statFor(stats: DockerStat[], container: DockerContainer): DockerStat | undefined {
   return stats.find(
     (stat) =>
       (stat.name.length > 0 && stat.name === container.name) ||

@@ -25,7 +25,11 @@ describe("room key envelopes", () => {
     const bob = await generateDeviceKeyPair();
     const roomKey = generateRoomKey();
     const context = { roomId, keyEpoch: 1, recipientDeviceId: deviceId };
-    const envelope = await sealRoomKey(roomKey, await exportDevicePublicKey(alice.publicKey), context);
+    const envelope = await sealRoomKey(
+      roomKey,
+      await exportDevicePublicKey(alice.publicKey),
+      context,
+    );
     const serializedPrivateKey = await exportDevicePrivateKey(alice.privateKey);
     const restored = await importDevicePrivateKey(serializedPrivateKey);
 
@@ -74,9 +78,9 @@ describe("encrypted room events", () => {
     );
 
     expect(decodeEventText(await decryptRoomEvent(key, event))).toBe("root@host:~$");
-    await expect(
-      decryptRoomEvent(key, { ...event, terminalId: "pane-two" }),
-    ).rejects.toThrow("event authentication failed");
+    await expect(decryptRoomEvent(key, { ...event, terminalId: "pane-two" })).rejects.toThrow(
+      "event authentication failed",
+    );
   });
 
   it("rejects duplicates while tracking split terminals independently", async () => {

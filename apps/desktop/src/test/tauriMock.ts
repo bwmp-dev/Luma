@@ -9,10 +9,7 @@ import { vi } from "vitest";
  */
 
 type InvokeArgs = Record<string, unknown>;
-export type InvokeHandler = (
-  cmd: string,
-  args: InvokeArgs,
-) => unknown | Promise<unknown>;
+export type InvokeHandler = (cmd: string, args: InvokeArgs) => unknown | Promise<unknown>;
 
 let handler: InvokeHandler | null = null;
 let currentDeepLinks: string[] | null = null;
@@ -22,12 +19,10 @@ export function setInvoke(handlerFn: InvokeHandler): void {
   handler = handlerFn;
 }
 
-export const invoke = vi.fn(
-  async (cmd: string, args: InvokeArgs = {}): Promise<unknown> => {
-    if (!handler) throw new Error(`unmocked invoke: ${cmd}`);
-    return handler(cmd, args);
-  },
-);
+export const invoke = vi.fn(async (cmd: string, args: InvokeArgs = {}): Promise<unknown> => {
+  if (!handler) throw new Error(`unmocked invoke: ${cmd}`);
+  return handler(cmd, args);
+});
 
 /** Minimal stand-in for a Tauri `Channel`: the code under test assigns
  * `onmessage`, and the invoke handler (the "backend") calls it. */

@@ -1,0 +1,19 @@
+{
+  "printWidth": 100,
+  "ignorePatterns": [
+    "**/dist/**",
+    "**/dist-showcase/**",
+    "**/src-tauri/**",
+    "**/drizzle/**",
+    "**/*.md",
+    "**/*.yaml",
+    "**/*.yml",
+    "**/*.toml",
+    ".github/**",
+    ".vscode/**",
+    "branding/**",
+    "packaging/**",
+    ".release-please-manifest.json",
+    "release-please-config.json"
+  ]
+}

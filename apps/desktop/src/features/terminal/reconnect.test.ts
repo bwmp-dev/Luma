@@ -89,9 +89,7 @@ describe("planReconnect", () => {
 
   it("gives up after the maximum number of attempts", () => {
     // previousAttempt at the cap means the next would exceed the max.
-    expect(
-      planReconnect("timeout", true, MAX_RECONNECT_ATTEMPTS, rng),
-    ).toBeNull();
+    expect(planReconnect("timeout", true, MAX_RECONNECT_ATTEMPTS, rng)).toBeNull();
   });
 
   it("allows the final attempt exactly at the boundary", () => {

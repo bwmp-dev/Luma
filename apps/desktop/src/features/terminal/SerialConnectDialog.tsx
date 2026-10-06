@@ -77,8 +77,7 @@ export function SerialConnectDialog() {
     void refresh();
   }, [open, refresh]);
 
-  const baudValid =
-    Number.isInteger(baud) && baud >= SERIAL_BAUD_MIN && baud <= SERIAL_BAUD_MAX;
+  const baudValid = Number.isInteger(baud) && baud >= SERIAL_BAUD_MIN && baud <= SERIAL_BAUD_MAX;
   const canConnect = Boolean(path) && baudValid;
 
   const connect = () => {
@@ -129,7 +128,10 @@ export function SerialConnectDialog() {
         <label className="min-w-0 flex-1 block">
           <span className="mb-1 block text-xs font-medium text-muted">Port</span>
           <div className="relative">
-            <Usb size={15} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
+            <Usb
+              size={15}
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted"
+            />
             <select
               value={path}
               onChange={(event) => setPath(event.target.value)}
@@ -148,7 +150,10 @@ export function SerialConnectDialog() {
                 ))
               )}
             </select>
-            <ChevronDown size={15} className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted" />
+            <ChevronDown
+              size={15}
+              className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-muted"
+            />
           </div>
         </label>
         <button
@@ -232,10 +237,32 @@ export function SerialConnectDialog() {
       </button>
       {showAdvanced && (
         <div className="mt-3 grid grid-cols-2 gap-3">
-          <SelectField label="Data bits" value={dataBits} options={DATA_BITS} onChange={(v) => setDataBits(Number(v) as SerialDataBits)} />
-          <SelectField label="Stop bits" value={stopBits} options={STOP_BITS} onChange={(v) => setStopBits(Number(v) as SerialStopBits)} />
-          <SelectField label="Parity" value={parity} options={PARITIES} onChange={(v) => setParity(v as SerialParity)} capitalize />
-          <SelectField label="Flow control" value={flowControl} options={FLOW_CONTROLS} onChange={(v) => setFlowControl(v as SerialFlowControl)} capitalize />
+          <SelectField
+            label="Data bits"
+            value={dataBits}
+            options={DATA_BITS}
+            onChange={(v) => setDataBits(Number(v) as SerialDataBits)}
+          />
+          <SelectField
+            label="Stop bits"
+            value={stopBits}
+            options={STOP_BITS}
+            onChange={(v) => setStopBits(Number(v) as SerialStopBits)}
+          />
+          <SelectField
+            label="Parity"
+            value={parity}
+            options={PARITIES}
+            onChange={(v) => setParity(v as SerialParity)}
+            capitalize
+          />
+          <SelectField
+            label="Flow control"
+            value={flowControl}
+            options={FLOW_CONTROLS}
+            onChange={(v) => setFlowControl(v as SerialFlowControl)}
+            capitalize
+          />
         </div>
       )}
     </Modal>

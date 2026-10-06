@@ -8,10 +8,7 @@ import {
 } from "../../lib/agentInbox";
 import { relativeTime } from "../../lib/relativeTime";
 import { cn } from "../../lib/utils";
-import {
-  type AgentInboxItem,
-  useAgentInboxStore,
-} from "../../stores/agentInboxStore";
+import { type AgentInboxItem, useAgentInboxStore } from "../../stores/agentInboxStore";
 import { useSessionStore } from "../../stores/sessionStore";
 import { terminalManager } from "../terminal/terminalManager";
 import { MobileScreen } from "./MobileScreen";
@@ -110,8 +107,8 @@ export function MobileAgentInboxScreen({
           <Inbox size={26} className="text-muted" />
           <p className="mt-3 text-[15px] font-medium">No agent activity</p>
           <p className="mt-1 text-xs text-muted">
-            Install the luma-hook companion on a host and its coding agents
-            report here — approvals, questions, finished turns and failures.
+            Install the luma-hook companion on a host and its coding agents report here — approvals,
+            questions, finished turns and failures.
           </p>
         </div>
       ) : (
@@ -158,10 +155,7 @@ function InboxCard({
         )}
       >
         <div className="flex items-center gap-2">
-          <span
-            aria-hidden
-            className={cn("h-2.5 w-2.5 shrink-0 rounded-full", TONE_DOT[tone])}
-          />
+          <span aria-hidden className={cn("h-2.5 w-2.5 shrink-0 rounded-full", TONE_DOT[tone])} />
           <span className="min-w-0 flex-1 truncate text-[15px] font-medium">
             {agentDisplayName(item.agent)}
           </span>
@@ -172,9 +166,7 @@ function InboxCard({
 
         {(item.title || item.detail) && (
           <div className="mt-1 pl-4.5 text-xs text-muted">
-            {item.title && (
-              <p className="truncate text-foreground/90">{item.title}</p>
-            )}
+            {item.title && <p className="truncate text-foreground/90">{item.title}</p>}
             {item.detail && <p className="line-clamp-3">{item.detail}</p>}
           </div>
         )}

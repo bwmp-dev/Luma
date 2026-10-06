@@ -1,10 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Loader2, Plus, RefreshCw, TerminalSquare } from "lucide-react";
 import { Modal } from "../../components/Modal";
-import {
-  selectSessionsByKind,
-  useMultiplexerStore,
-} from "../../stores/multiplexerStore";
+import { selectSessionsByKind, useMultiplexerStore } from "../../stores/multiplexerStore";
 import { useSessionStore } from "../../stores/sessionStore";
 import {
   isValidWorkspaceName,
@@ -85,11 +82,7 @@ export function MultiplexerDialog({
   const resume = resumeMap[hostId];
   const nameValid = isValidWorkspaceName(newName);
 
-  const attach = async (
-    kind: MultiplexerKind,
-    sessionName: string,
-    create: boolean,
-  ) => {
+  const attach = async (kind: MultiplexerKind, sessionName: string, create: boolean) => {
     setAttaching(`${kind}:${sessionName}`);
     setAttachError(null);
     try {
@@ -114,15 +107,8 @@ export function MultiplexerDialog({
     }
   };
 
-  const toggleResume = (
-    kind: MultiplexerKind,
-    sessionName: string,
-    enabled: boolean,
-  ) => {
-    void setResume(
-      hostId,
-      enabled ? { multiplexer: kind, sessionName } : null,
-    );
+  const toggleResume = (kind: MultiplexerKind, sessionName: string, enabled: boolean) => {
+    void setResume(hostId, enabled ? { multiplexer: kind, sessionName } : null);
   };
 
   return (
@@ -157,9 +143,7 @@ export function MultiplexerDialog({
         ) : error ? (
           <div className="rounded-lg border border-border bg-background p-3">
             <p className="text-xs text-danger">{error}</p>
-            <p className="mt-1 text-xs text-muted">
-              Rescan once the host is reachable again.
-            </p>
+            <p className="mt-1 text-xs text-muted">Rescan once the host is reachable again.</p>
           </div>
         ) : (
           KINDS.map((kind) => (
@@ -173,8 +157,7 @@ export function MultiplexerDialog({
                 </p>
               ) : byKind[kind].length === 0 ? (
                 <p className="rounded-lg border border-dashed border-border p-3 text-xs text-muted">
-                  No {multiplexerLabel(kind)} workspaces are running. Create one
-                  below.
+                  No {multiplexerLabel(kind)} workspaces are running. Create one below.
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -183,14 +166,9 @@ export function MultiplexerDialog({
                       key={`${kind}:${session.name}`}
                       session={session}
                       busy={attaching === `${kind}:${session.name}`}
-                      resuming={
-                        resume?.multiplexer === kind &&
-                        resume.sessionName === session.name
-                      }
+                      resuming={resume?.multiplexer === kind && resume.sessionName === session.name}
                       onAttach={() => void attach(kind, session.name, false)}
-                      onResumeChange={(enabled) =>
-                        toggleResume(kind, session.name, enabled)
-                      }
+                      onResumeChange={(enabled) => toggleResume(kind, session.name, enabled)}
                     />
                   ))}
                 </div>
@@ -247,13 +225,10 @@ export function MultiplexerDialog({
           </form>
           {newName.length > 0 && !nameValid && (
             <p className="mt-2 text-xs text-muted">
-              Use a short name without quotes, spaces at the edges, or shell
-              symbols.
+              Use a short name without quotes, spaces at the edges, or shell symbols.
             </p>
           )}
-          {attachError && (
-            <p className="mt-2 text-xs text-danger">{attachError}</p>
-          )}
+          {attachError && <p className="mt-2 text-xs text-danger">{attachError}</p>}
         </section>
       </div>
     </Modal>
@@ -312,11 +287,7 @@ function WorkspaceRow({
           onClick={onAttach}
           className="flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-foreground hover:border-accent hover:text-accent disabled:opacity-50"
         >
-          {busy ? (
-            <Loader2 size={12} className="animate-spin" />
-          ) : (
-            <TerminalSquare size={12} />
-          )}
+          {busy ? <Loader2 size={12} className="animate-spin" /> : <TerminalSquare size={12} />}
           Attach
         </button>
       </div>

@@ -1,8 +1,4 @@
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   createPortForward,
   deletePortForward,
@@ -35,8 +31,7 @@ export function useAllPortForwards() {
 
 export function usePortForwardMutations() {
   const queryClient = useQueryClient();
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: PORT_FORWARDS_KEY });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: PORT_FORWARDS_KEY });
 
   const create = useMutation({
     mutationFn: (input: PortForwardInput) => createPortForward(input),

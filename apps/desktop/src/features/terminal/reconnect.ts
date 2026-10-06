@@ -29,9 +29,7 @@ const RECONNECTABLE = new Set<string>([
 
 /** Whether an SSH exit category is a transient failure eligible for an
  * automatic reconnect. */
-export function isReconnectableCategory(
-  category: string | null | undefined,
-): boolean {
+export function isReconnectableCategory(category: string | null | undefined): boolean {
   return category != null && RECONNECTABLE.has(category);
 }
 
@@ -45,10 +43,7 @@ export function backoffBaseDelay(attempt: number): number {
 
 /** Backoff for an attempt with +/-25% jitter applied. Pass a deterministic
  * `rng` (0..1) in tests; defaults to Math.random. */
-export function backoffDelay(
-  attempt: number,
-  rng: () => number = Math.random,
-): number {
+export function backoffDelay(attempt: number, rng: () => number = Math.random): number {
   const base = backoffBaseDelay(attempt);
   const jitter = base * JITTER_RATIO * (rng() * 2 - 1);
   return Math.max(0, Math.round(base + jitter));

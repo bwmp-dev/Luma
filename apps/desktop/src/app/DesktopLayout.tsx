@@ -28,19 +28,11 @@ import { VoiceComposerDialog } from "../features/voiceComposer/VoiceComposerDial
  * they stay out of the initial main bundle. The terminal workspace and hosts
  * screen stay eager since one of them is always the first thing shown.
  */
-const named = <T extends string>(
-  loader: () => Promise<Record<T, ComponentType>>,
-  name: T,
-) => lazy(() => loader().then((m) => ({ default: m[name] })));
+const named = <T extends string>(loader: () => Promise<Record<T, ComponentType>>, name: T) =>
+  lazy(() => loader().then((m) => ({ default: m[name] })));
 
-const SettingsScreen = named(
-  () => import("../features/settings/SettingsScreen"),
-  "SettingsScreen",
-);
-const KeychainScreen = named(
-  () => import("../features/keychain/KeychainScreen"),
-  "KeychainScreen",
-);
+const SettingsScreen = named(() => import("../features/settings/SettingsScreen"), "SettingsScreen");
+const KeychainScreen = named(() => import("../features/keychain/KeychainScreen"), "KeychainScreen");
 const SftpScreen = named(() => import("../features/sftp/SftpScreen"), "SftpScreen");
 const KnownHostsScreen = named(
   () => import("../features/knownHosts/KnownHostsScreen"),
@@ -54,14 +46,8 @@ const FleetOverviewScreen = named(
   () => import("../features/fleet/FleetOverviewScreen"),
   "FleetOverviewScreen",
 );
-const SyncDialogs = named(
-  () => import("../features/sync/SyncDialogs"),
-  "SyncDialogs",
-);
-const UpdateBanner = named(
-  () => import("../features/updater/UpdateBanner"),
-  "UpdateBanner",
-);
+const SyncDialogs = named(() => import("../features/sync/SyncDialogs"), "SyncDialogs");
+const UpdateBanner = named(() => import("../features/updater/UpdateBanner"), "UpdateBanner");
 
 /** Minimal centered fallback shown while a lazy screen chunk loads. */
 function ScreenFallback() {

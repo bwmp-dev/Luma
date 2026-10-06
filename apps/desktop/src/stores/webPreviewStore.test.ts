@@ -1,10 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { setInvoke } from "../test/tauriMock";
-import {
-  useWebPreviewStore,
-  selectPreviewsForHost,
-} from "./webPreviewStore";
+import { useWebPreviewStore, selectPreviewsForHost } from "./webPreviewStore";
 import type { WebPreview } from "../lib/webPreview";
 
 const listener = {
@@ -83,9 +80,7 @@ describe("web preview store", () => {
       throw new Error(`unexpected ${cmd}`);
     });
 
-    const opened = await useWebPreviewStore
-      .getState()
-      .open("host-1", 5173, "127.0.0.1");
+    const opened = await useWebPreviewStore.getState().open("host-1", 5173, "127.0.0.1");
 
     expect(seen).toEqual({
       hostId: "host-1",
@@ -233,10 +228,7 @@ describe("web preview store", () => {
       },
     });
 
-    const forHost = selectPreviewsForHost(
-      useWebPreviewStore.getState(),
-      "host-1",
-    );
+    const forHost = selectPreviewsForHost(useWebPreviewStore.getState(), "host-1");
 
     expect(forHost.map((p) => p.port)).toEqual([3000, 5173]);
   });

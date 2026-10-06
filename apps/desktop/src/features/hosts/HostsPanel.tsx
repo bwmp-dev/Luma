@@ -121,7 +121,7 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
   const multiVault = vaultList.length > 1;
   const activeVault =
     vaultList.find((vault) => vault.id === activeVaultId) ??
-    (multiVault ? null : vaultList[0] ?? null);
+    (multiVault ? null : (vaultList[0] ?? null));
   const vaultId = activeVault?.id ?? null;
   const atVaultRoot = multiVault && !activeVault;
 
@@ -144,9 +144,7 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
 
   // Port forwarding is a desktop-only capability; on mobile the tunnel commands
   // are not registered, so its per-host action and dialog are hidden entirely.
-  const portForwardingEnabled = useCapabilityStore(
-    (s) => s.capabilities.features.portForwarding,
-  );
+  const portForwardingEnabled = useCapabilityStore((s) => s.capabilities.features.portForwarding);
   // The desktop editor is a two-column dialog; on a phone the same fields go in
   // a full-screen grouped form with pushed pickers instead.
   const isMobile = useCapabilityStore((s) => s.capabilities.isMobile);
@@ -187,10 +185,12 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
   const moveHosts = useMutation({
     mutationFn: async ({ ids, groupId }: { ids: string[]; groupId: string | null }) => {
       const byId = new Map(allHosts.map((host) => [host.id, host]));
-      await Promise.all(ids.map((id) => {
-        const host = byId.get(id);
-        return host ? updateHost(id, { ...hostToInput(host), groupId }) : Promise.resolve();
-      }));
+      await Promise.all(
+        ids.map((id) => {
+          const host = byId.get(id);
+          return host ? updateHost(id, { ...hostToInput(host), groupId }) : Promise.resolve();
+        }),
+      );
     },
     onSuccess: () => {
       invalidate();
@@ -224,7 +224,7 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
 
   // A group id left over from another vault must not survive a vault switch.
   const currentGroup = currentGroupId
-    ? scopedGroups.find((group) => group.id === currentGroupId) ?? null
+    ? (scopedGroups.find((group) => group.id === currentGroupId) ?? null)
     : null;
   const groupId = currentGroup?.id ?? null;
   const childGroups = scopedGroups.filter((group) => group.parentId === groupId);
@@ -273,7 +273,11 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
     event.preventDefault();
     const raw = event.dataTransfer.getData("application/x-luma-hosts");
     let ids = draggingHostIds;
-    try { if (raw) ids = JSON.parse(raw) as string[]; } catch { /* use in-memory drag */ }
+    try {
+      if (raw) ids = JSON.parse(raw) as string[];
+    } catch {
+      /* use in-memory drag */
+    }
     setDropTargetId(undefined);
     // Dropping never changes a host's vault: moving one across vaults would have
     // to re-key its secrets under the target's key, so it is not a drag gesture.
@@ -293,9 +297,7 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
     onDuplicate: (h: Host) => duplicate.mutate(h.id),
     onDelete: (h: Host) => setDeletingHost(h),
     onToggleFavorite: (h: Host) => favoriteToggle.mutate(h),
-    onPortForwards: portForwardingEnabled
-      ? (h: Host) => setPortForwardsHost(h)
-      : undefined,
+    onPortForwards: portForwardingEnabled ? (h: Host) => setPortForwardsHost(h) : undefined,
     // The dashboard is a desktop main view and a mobile route, so it is opened
     // through whichever the current shell owns.
     onServerStats: (h: Host) => {
@@ -311,19 +313,23 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
     onWorkspaces: (h: Host) => openMultiplexer(h.id, h.name),
     runningByHost,
     selectedHostIds,
-    onSelect: (host: Host, additive: boolean) => setSelectedHostIds((previous) => {
-      // A selection stays within one vault: the actions it feeds (move, and any
-      // future bulk edit) are vault-scoped, so extending across one restarts it.
-      const byId = new Map(allHosts.map((candidate) => [candidate.id, candidate]));
-      const sameVault = additive && [...previous].every(
-        (id) => byId.get(id)?.vaultId === host.vaultId,
-      );
-      const next = sameVault ? new Set(previous) : new Set<string>();
-      if (sameVault && next.has(host.id)) next.delete(host.id); else next.add(host.id);
-      return next;
-    }),
+    onSelect: (host: Host, additive: boolean) =>
+      setSelectedHostIds((previous) => {
+        // A selection stays within one vault: the actions it feeds (move, and any
+        // future bulk edit) are vault-scoped, so extending across one restarts it.
+        const byId = new Map(allHosts.map((candidate) => [candidate.id, candidate]));
+        const sameVault =
+          additive && [...previous].every((id) => byId.get(id)?.vaultId === host.vaultId);
+        const next = sameVault ? new Set(previous) : new Set<string>();
+        if (sameVault && next.has(host.id)) next.delete(host.id);
+        else next.add(host.id);
+        return next;
+      }),
     onDragStart: startHostDrag,
-    onDragEnd: () => { setDraggingHostIds([]); setDropTargetId(undefined); },
+    onDragEnd: () => {
+      setDraggingHostIds([]);
+      setDropTargetId(undefined);
+    },
   };
 
   return (
@@ -365,7 +371,7 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
             >
               <MenuItem
                 icon={<KeyRound size={14} />}
-                onSelect={() => onOpenKeychain ? onOpenKeychain() : setIdentitiesOpen(true)}
+                onSelect={() => (onOpenKeychain ? onOpenKeychain() : setIdentitiesOpen(true))}
               >
                 Keychain
               </MenuItem>
@@ -397,10 +403,7 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
       </div>
 
       {!atVaultRoot && scopedHosts.length === 0 && scopedGroups.length === 0 ? (
-        <EmptyHosts
-          onAdd={() => openEditor(null)}
-          onImport={() => setImportOpen(true)}
-        />
+        <EmptyHosts onAdd={() => openEditor(null)} onImport={() => setImportOpen(true)} />
       ) : searching ? (
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filtered.length === 0 ? (
@@ -417,18 +420,127 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
           )}
         </div>
       ) : (
-        <div className="space-y-6" onClick={(event) => { if (event.target === event.currentTarget) setSelectedHostIds(new Set()); }}>
-          <nav className="flex items-center gap-1 text-sm text-muted" aria-label="Vault and group path">
-            <button type="button" onClick={() => (multiVault ? openVault(null) : setCurrentGroupId(null))} onDragOver={(e) => { if (!multiVault && draggingHostIds.length) { e.preventDefault(); setDropTargetId(null); } }} onDrop={(e) => { if (!multiVault) dropHosts(e, null); }} className={cn("flex items-center gap-1 rounded-md px-2 py-1 hover:bg-raised hover:text-foreground", !multiVault && dropTargetId === null && "bg-accent/15 text-accent")}><Home size={14} /> Hosts</button>
-            {multiVault && activeVault && <span className="flex items-center gap-1"><ChevronRight size={13} /><button type="button" onClick={() => setCurrentGroupId(null)} onDragOver={(e) => { if (draggingHostIds.length) { e.preventDefault(); setDropTargetId(null); } }} onDrop={(e) => dropHosts(e, null)} className={cn("rounded-md px-2 py-1 hover:bg-raised hover:text-foreground", dropTargetId === null && "bg-accent/15 text-accent")}>{activeVault.name}</button></span>}
-            {breadcrumbs.map((group) => <span key={group.id} className="flex items-center gap-1"><ChevronRight size={13} /><button type="button" onClick={() => setCurrentGroupId(group.id)} className="rounded-md px-2 py-1 hover:bg-raised hover:text-foreground">{group.name}</button></span>)}
+        <div
+          className="space-y-6"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setSelectedHostIds(new Set());
+          }}
+        >
+          <nav
+            className="flex items-center gap-1 text-sm text-muted"
+            aria-label="Vault and group path"
+          >
+            <button
+              type="button"
+              onClick={() => (multiVault ? openVault(null) : setCurrentGroupId(null))}
+              onDragOver={(e) => {
+                if (!multiVault && draggingHostIds.length) {
+                  e.preventDefault();
+                  setDropTargetId(null);
+                }
+              }}
+              onDrop={(e) => {
+                if (!multiVault) dropHosts(e, null);
+              }}
+              className={cn(
+                "flex items-center gap-1 rounded-md px-2 py-1 hover:bg-raised hover:text-foreground",
+                !multiVault && dropTargetId === null && "bg-accent/15 text-accent",
+              )}
+            >
+              <Home size={14} /> Hosts
+            </button>
+            {multiVault && activeVault && (
+              <span className="flex items-center gap-1">
+                <ChevronRight size={13} />
+                <button
+                  type="button"
+                  onClick={() => setCurrentGroupId(null)}
+                  onDragOver={(e) => {
+                    if (draggingHostIds.length) {
+                      e.preventDefault();
+                      setDropTargetId(null);
+                    }
+                  }}
+                  onDrop={(e) => dropHosts(e, null)}
+                  className={cn(
+                    "rounded-md px-2 py-1 hover:bg-raised hover:text-foreground",
+                    dropTargetId === null && "bg-accent/15 text-accent",
+                  )}
+                >
+                  {activeVault.name}
+                </button>
+              </span>
+            )}
+            {breadcrumbs.map((group) => (
+              <span key={group.id} className="flex items-center gap-1">
+                <ChevronRight size={13} />
+                <button
+                  type="button"
+                  onClick={() => setCurrentGroupId(group.id)}
+                  className="rounded-md px-2 py-1 hover:bg-raised hover:text-foreground"
+                >
+                  {group.name}
+                </button>
+              </span>
+            ))}
           </nav>
           {atVaultRoot ? (
-            <Section title="Vaults">{vaultList.map((vault) => <VaultCard key={vault.id} vault={vault} hosts={allHosts} groups={allGroups} onOpen={() => openVault(vault.id)} />)}</Section>
+            <Section title="Vaults">
+              {vaultList.map((vault) => (
+                <VaultCard
+                  key={vault.id}
+                  vault={vault}
+                  hosts={allHosts}
+                  groups={allGroups}
+                  onOpen={() => openVault(vault.id)}
+                />
+              ))}
+            </Section>
           ) : (
             <>
-              {childGroups.length > 0 && <section><h2 className="mb-3 text-sm font-semibold">Folders</h2><div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{childGroups.map((group) => <FolderCard key={group.id} group={group} groups={scopedGroups} hosts={scopedHosts} active={dropTargetId === group.id} onOpen={() => { setCurrentGroupId(group.id); setSelectedHostIds(new Set()); }} onDragOver={(e) => { if (draggingHostIds.length) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setDropTargetId(group.id); } }} onDragLeave={() => setDropTargetId(undefined)} onDrop={(e) => dropHosts(e, group.id)} onRename={() => { setGroupDialogGroup(group); setGroupDialogOpen(true); }} onDelete={() => setDeletingGroup(group)} />)}</div></section>}
-              <Section title={currentGroup ? "Hosts in this folder and subfolders" : "All hosts"}>{visibleHosts.length ? visibleHosts.map((host) => <HostRow key={host.id} host={host} {...rowProps} />) : <p className="col-span-full rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted">This folder is empty. Drag hosts here to add them.</p>}</Section>
+              {childGroups.length > 0 && (
+                <section>
+                  <h2 className="mb-3 text-sm font-semibold">Folders</h2>
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {childGroups.map((group) => (
+                      <FolderCard
+                        key={group.id}
+                        group={group}
+                        groups={scopedGroups}
+                        hosts={scopedHosts}
+                        active={dropTargetId === group.id}
+                        onOpen={() => {
+                          setCurrentGroupId(group.id);
+                          setSelectedHostIds(new Set());
+                        }}
+                        onDragOver={(e) => {
+                          if (draggingHostIds.length) {
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = "move";
+                            setDropTargetId(group.id);
+                          }
+                        }}
+                        onDragLeave={() => setDropTargetId(undefined)}
+                        onDrop={(e) => dropHosts(e, group.id)}
+                        onRename={() => {
+                          setGroupDialogGroup(group);
+                          setGroupDialogOpen(true);
+                        }}
+                        onDelete={() => setDeletingGroup(group)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+              <Section title={currentGroup ? "Hosts in this folder and subfolders" : "All hosts"}>
+                {visibleHosts.length ? (
+                  visibleHosts.map((host) => <HostRow key={host.id} host={host} {...rowProps} />)
+                ) : (
+                  <p className="col-span-full rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-muted">
+                    This folder is empty. Drag hosts here to add them.
+                  </p>
+                )}
+              </Section>
             </>
           )}
         </div>
@@ -455,7 +567,17 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
         );
       })()}
       {!onOpenKeychain && <KeyReferencesDialog open={keysOpen} onOpenChange={setKeysOpen} />}
-      {!onOpenKeychain && <IdentitiesDialog open={identitiesOpen} onOpenChange={setIdentitiesOpen} keys={scopedKeys} onManageKeys={() => { setIdentitiesOpen(false); setKeysOpen(true); }} />}
+      {!onOpenKeychain && (
+        <IdentitiesDialog
+          open={identitiesOpen}
+          onOpenChange={setIdentitiesOpen}
+          keys={scopedKeys}
+          onManageKeys={() => {
+            setIdentitiesOpen(false);
+            setKeysOpen(true);
+          }}
+        />
+      )}
       <ImportDialog
         open={importOpen}
         onOpenChange={setImportOpen}
@@ -470,9 +592,11 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
         open={groupDialogOpen}
         onOpenChange={setGroupDialogOpen}
         group={groupDialogGroup}
-        groups={groupDialogVaultId
-          ? allGroups.filter((group) => group.vaultId === groupDialogVaultId)
-          : allGroups}
+        groups={
+          groupDialogVaultId
+            ? allGroups.filter((group) => group.vaultId === groupDialogVaultId)
+            : allGroups
+        }
         hosts={allHosts.filter((host) => host.vaultId === groupDialogVaultId)}
         identities={(identities ?? []).filter(
           (identity) => identity.vaultId === groupDialogVaultId,
@@ -490,8 +614,8 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
         onConfirm={() => deletingHost && removeHost.mutate(deletingHost.id)}
         message={
           <>
-            Delete <span className="font-medium text-foreground">{deletingHost?.name}</span>?
-            This cannot be undone.
+            Delete <span className="font-medium text-foreground">{deletingHost?.name}</span>? This
+            cannot be undone.
           </>
         }
       />
@@ -506,8 +630,8 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
         message={
           <>
             Delete the group{" "}
-            <span className="font-medium text-foreground">{deletingGroup?.name}</span>?
-            Its hosts are kept and moved to Ungrouped — only the group is removed.
+            <span className="font-medium text-foreground">{deletingGroup?.name}</span>? Its hosts
+            are kept and moved to Ungrouped — only the group is removed.
           </>
         }
       />
@@ -515,13 +639,7 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
   );
 }
 
-function EmptyHosts({
-  onAdd,
-  onImport,
-}: {
-  onAdd: () => void;
-  onImport: () => void;
-}) {
+function EmptyHosts({ onAdd, onImport }: { onAdd: () => void; onImport: () => void }) {
   return (
     <div className="rounded-lg border border-dashed border-border px-3 py-6 text-center">
       <Server size={22} className="mx-auto text-muted" />
@@ -600,7 +718,12 @@ function descendantGroupIds(rootId: string, groups: HostGroup[]): Set<string> {
  * dragged between vaults, because moving it would mean re-keying its secrets
  * under the target vault's key.
  */
-function VaultCard({ vault, hosts, groups, onOpen }: {
+function VaultCard({
+  vault,
+  hosts,
+  groups,
+  onOpen,
+}: {
   vault: Vault;
   hosts: Host[];
   groups: HostGroup[];
@@ -638,7 +761,16 @@ function VaultCard({ vault, hosts, groups, onOpen }: {
   );
 }
 
-function FolderCard({ group, groups, hosts, active, onOpen, onRename, onDelete, ...dropProps }: {
+function FolderCard({
+  group,
+  groups,
+  hosts,
+  active,
+  onOpen,
+  onRename,
+  onDelete,
+  ...dropProps
+}: {
   group: HostGroup;
   groups: HostGroup[];
   hosts: Host[];
@@ -651,7 +783,9 @@ function FolderCard({ group, groups, hosts, active, onOpen, onRename, onDelete, 
   onDrop: React.DragEventHandler<HTMLDivElement>;
 }) {
   const containedGroupIds = descendantGroupIds(group.id, groups);
-  const containedHosts = hosts.filter((host) => host.groupId !== null && containedGroupIds.has(host.groupId)).length;
+  const containedHosts = hosts.filter(
+    (host) => host.groupId !== null && containedGroupIds.has(host.groupId),
+  ).length;
   const subgroups = groups.filter((candidate) => candidate.parentId === group.id).length;
   const folderActions: MenuAction[] = [
     { label: "Open", icon: <Folder size={14} />, onSelect: onOpen },
@@ -661,24 +795,58 @@ function FolderCard({ group, groups, hosts, active, onOpen, onRename, onDelete, 
   ];
   return (
     <ContextMenu actions={folderActions}>
-    <div {...dropProps} className={cn("group/folder flex items-center gap-3 rounded-xl bg-raised px-4 py-3 transition-all hover:ring-1 hover:ring-accent", active && "ring-2 ring-accent bg-accent/10")}>
-      <button type="button" onClick={onOpen} onDoubleClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent/20 text-accent"><Folder size={19} fill="currentColor" /></span>
-        <span className="min-w-0"><span className="block truncate text-sm font-semibold text-foreground">{group.name}</span><span className="block text-xs text-muted">{containedHosts} host{containedHosts === 1 ? "" : "s"}{subgroups > 0 ? ` · ${subgroups} folder${subgroups === 1 ? "" : "s"}` : ""}</span></span>
-      </button>
-      <DropdownMenu.Root>
-        <DropdownMenu.Trigger asChild>
+      <div
+        {...dropProps}
+        className={cn(
+          "group/folder flex items-center gap-3 rounded-xl bg-raised px-4 py-3 transition-all hover:ring-1 hover:ring-accent",
+          active && "ring-2 ring-accent bg-accent/10",
+        )}
+      >
         <button
           type="button"
-          aria-label={`${group.name} folder actions`}
-          className="invisible rounded p-1 text-muted hover:text-foreground group-hover/folder:visible"
+          onClick={onOpen}
+          onDoubleClick={onOpen}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
         >
-          <MoreHorizontal size={15} />
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent/20 text-accent">
+            <Folder size={19} fill="currentColor" />
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-sm font-semibold text-foreground">
+              {group.name}
+            </span>
+            <span className="block text-xs text-muted">
+              {containedHosts} host{containedHosts === 1 ? "" : "s"}
+              {subgroups > 0 ? ` · ${subgroups} folder${subgroups === 1 ? "" : "s"}` : ""}
+            </span>
+          </span>
         </button>
-        </DropdownMenu.Trigger>
-        <DropdownMenu.Portal><DropdownMenu.Content align="end" sideOffset={4} className="z-50 min-w-36 rounded-lg border border-border bg-raised p-1 text-sm shadow-glow"><MenuItem icon={<Pencil size={14} />} onSelect={onRename}>Rename</MenuItem><MenuItem icon={<Trash2 size={14} />} destructive onSelect={onDelete}>Delete</MenuItem></DropdownMenu.Content></DropdownMenu.Portal>
-      </DropdownMenu.Root>
-    </div>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button
+              type="button"
+              aria-label={`${group.name} folder actions`}
+              className="invisible rounded p-1 text-muted hover:text-foreground group-hover/folder:visible"
+            >
+              <MoreHorizontal size={15} />
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              align="end"
+              sideOffset={4}
+              className="z-50 min-w-36 rounded-lg border border-border bg-raised p-1 text-sm shadow-glow"
+            >
+              <MenuItem icon={<Pencil size={14} />} onSelect={onRename}>
+                Rename
+              </MenuItem>
+              <MenuItem icon={<Trash2 size={14} />} destructive onSelect={onDelete}>
+                Delete
+              </MenuItem>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
+      </div>
     </ContextMenu>
   );
 }
@@ -768,104 +936,123 @@ function HostRow({
       onSelect: () => onToggleFavorite(host),
     },
     { separator: true },
-    { label: "Delete", icon: <Trash2 size={14} />, destructive: true, onSelect: () => onDelete(host) },
+    {
+      label: "Delete",
+      icon: <Trash2 size={14} />,
+      destructive: true,
+      onSelect: () => onDelete(host),
+    },
   ];
   return (
     <ContextMenu actions={hostActions}>
-    <div draggable onDragStart={(event) => onDragStart(event, host)} onDragEnd={onDragEnd} onClick={(event) => { if ((event.target as HTMLElement).closest("button")) return; onSelect(host, event.ctrlKey || event.metaKey); }} aria-selected={selected} className={cn("group/row flex min-h-15.5 cursor-grab items-center gap-2 rounded-xl bg-raised px-3 py-2 text-sm text-muted transition-all hover:ring-1 hover:ring-accent hover:text-foreground active:cursor-grabbing", selected && "ring-2 ring-accent bg-accent/10")}>
-      <button
-        type="button"
+      <div
+        draggable
+        onDragStart={(event) => onDragStart(event, host)}
+        onDragEnd={onDragEnd}
         onClick={(event) => {
-          if (event.ctrlKey || event.metaKey) onSelect(host, true);
-          else if (selectedHostIds.size > 0) onSelect(host, false);
-          else onConnect(host);
+          if ((event.target as HTMLElement).closest("button")) return;
+          onSelect(host, event.ctrlKey || event.metaKey);
         }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            onConnect(host);
-          }
-        }}
-        title={`${host.username ? `${host.username}@` : ""}${host.hostname}:${host.port}`}
-        className="flex min-w-0 flex-1 items-center gap-3 text-left"
-      >
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
-          {host.osId && host.osId !== "unknown" ? (
-            <DistroIcon
-              osId={host.osId}
-              size={22}
-              label={host.osPrettyName ?? undefined}
-            />
-          ) : (
-            <Server size={18} />
-          )}
-        </span>
-        <span className="min-w-0 flex-1"><span className="block truncate font-semibold text-foreground">{host.name}</span><span className="block truncate text-xs text-muted">ssh, {host.username || host.hostname}{vaultName ? ` · ${vaultName}` : ""}</span></span>
-      </button>
-
-      {runningTunnels > 0 && (
-        <span
-          title={`${runningTunnels} active tunnel${runningTunnels === 1 ? "" : "s"}`}
-          className="flex shrink-0 items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-[10px] text-green-400"
-        >
-          <Cable size={11} /> {runningTunnels}
-        </span>
-      )}
-
-      {fleetEntry && host.favorite && fleetEntry.status !== "checking" && (
-        <span
-          title={
-            fleetEntry.status === "offline"
-              ? "Unreachable during the last fleet check"
-              : `${fleetEntry.health?.severity ?? "Healthy"} during the last fleet check`
-          }
-          className={cn(
-            "h-2 w-2 shrink-0 rounded-full",
-            fleetEntry.status === "offline" ||
-              fleetEntry.health?.severity === "critical"
-              ? "bg-danger"
-              : fleetEntry.health?.severity === "warning"
-                ? "bg-amber-400"
-                : "bg-green-400",
-          )}
-        />
-      )}
-      <button
-        type="button"
-        aria-label={host.favorite ? `Unfavorite ${host.name}` : `Favorite ${host.name}`}
-        aria-pressed={host.favorite}
-        onClick={() => onToggleFavorite(host)}
+        aria-selected={selected}
         className={cn(
-          "shrink-0 rounded p-0.5",
-          host.favorite
-            ? "text-accent"
-            : "invisible text-muted hover:text-foreground group-hover/row:visible",
+          "group/row flex min-h-15.5 cursor-grab items-center gap-2 rounded-xl bg-raised px-3 py-2 text-sm text-muted transition-all hover:ring-1 hover:ring-accent hover:text-foreground active:cursor-grabbing",
+          selected && "ring-2 ring-accent bg-accent/10",
         )}
       >
-        <Star size={13} fill={host.favorite ? "currentColor" : "none"} />
-      </button>
+        <button
+          type="button"
+          onClick={(event) => {
+            if (event.ctrlKey || event.metaKey) onSelect(host, true);
+            else if (selectedHostIds.size > 0) onSelect(host, false);
+            else onConnect(host);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              onConnect(host);
+            }
+          }}
+          title={`${host.username ? `${host.username}@` : ""}${host.hostname}:${host.port}`}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
+            {host.osId && host.osId !== "unknown" ? (
+              <DistroIcon osId={host.osId} size={22} label={host.osPrettyName ?? undefined} />
+            ) : (
+              <Server size={18} />
+            )}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate font-semibold text-foreground">{host.name}</span>
+            <span className="block truncate text-xs text-muted">
+              ssh, {host.username || host.hostname}
+              {vaultName ? ` · ${vaultName}` : ""}
+            </span>
+          </span>
+        </button>
 
-      <DropdownMenu.Root>
-        <DropdownMenu.Trigger asChild>
-          <button
-            type="button"
-            aria-label={`${host.name} actions`}
-            className="invisible shrink-0 rounded p-0.5 text-muted hover:text-foreground group-hover/row:visible"
+        {runningTunnels > 0 && (
+          <span
+            title={`${runningTunnels} active tunnel${runningTunnels === 1 ? "" : "s"}`}
+            className="flex shrink-0 items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-[10px] text-green-400"
           >
-            <MoreHorizontal size={14} />
-          </button>
-        </DropdownMenu.Trigger>
-        <DropdownMenu.Portal>
-          <DropdownMenu.Content
-            align="end"
-            sideOffset={4}
-            className="z-50 min-w-40 rounded-lg border border-border bg-raised p-1 text-sm shadow-glow"
-          >
-            <DropdownActionItems actions={hostActions} />
-          </DropdownMenu.Content>
-        </DropdownMenu.Portal>
-      </DropdownMenu.Root>
-    </div>
+            <Cable size={11} /> {runningTunnels}
+          </span>
+        )}
+
+        {fleetEntry && host.favorite && fleetEntry.status !== "checking" && (
+          <span
+            title={
+              fleetEntry.status === "offline"
+                ? "Unreachable during the last fleet check"
+                : `${fleetEntry.health?.severity ?? "Healthy"} during the last fleet check`
+            }
+            className={cn(
+              "h-2 w-2 shrink-0 rounded-full",
+              fleetEntry.status === "offline" || fleetEntry.health?.severity === "critical"
+                ? "bg-danger"
+                : fleetEntry.health?.severity === "warning"
+                  ? "bg-amber-400"
+                  : "bg-green-400",
+            )}
+          />
+        )}
+        <button
+          type="button"
+          aria-label={host.favorite ? `Unfavorite ${host.name}` : `Favorite ${host.name}`}
+          aria-pressed={host.favorite}
+          onClick={() => onToggleFavorite(host)}
+          className={cn(
+            "shrink-0 rounded p-0.5",
+            host.favorite
+              ? "text-accent"
+              : "invisible text-muted hover:text-foreground group-hover/row:visible",
+          )}
+        >
+          <Star size={13} fill={host.favorite ? "currentColor" : "none"} />
+        </button>
+
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button
+              type="button"
+              aria-label={`${host.name} actions`}
+              className="invisible shrink-0 rounded p-0.5 text-muted hover:text-foreground group-hover/row:visible"
+            >
+              <MoreHorizontal size={14} />
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              align="end"
+              sideOffset={4}
+              className="z-50 min-w-40 rounded-lg border border-border bg-raised p-1 text-sm shadow-glow"
+            >
+              <DropdownActionItems actions={hostActions} />
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
+      </div>
     </ContextMenu>
   );
 }
@@ -889,9 +1076,7 @@ function MenuItem({
       disabled={disabled}
       className={cn(
         "flex cursor-default items-center gap-2 rounded-md px-2.5 py-1.5 outline-none data-highlighted:bg-surface data-disabled:opacity-50",
-        destructive
-          ? "text-danger data-highlighted:text-danger"
-          : "data-highlighted:text-accent",
+        destructive ? "text-danger data-highlighted:text-danger" : "data-highlighted:text-accent",
       )}
     >
       {icon}
@@ -907,10 +1092,7 @@ function DropdownActionItems({ actions }: { actions: MenuAction[] }) {
     <>
       {actions.map((action, index) =>
         "separator" in action && action.separator ? (
-          <DropdownMenu.Separator
-            key={`sep-${index}`}
-            className="my-1 h-px bg-border"
-          />
+          <DropdownMenu.Separator key={`sep-${index}`} className="my-1 h-px bg-border" />
         ) : (
           <MenuItem
             key={action.label}

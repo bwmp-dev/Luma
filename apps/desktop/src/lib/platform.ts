@@ -7,9 +7,6 @@ export function isMac(): boolean {
 }
 
 /** Whether the platform's primary modifier is held for this event. */
-export function hasPlatformModifier(event: {
-  metaKey: boolean;
-  ctrlKey: boolean;
-}): boolean {
+export function hasPlatformModifier(event: { metaKey: boolean; ctrlKey: boolean }): boolean {
   return isMac() ? event.metaKey : event.ctrlKey;
 }

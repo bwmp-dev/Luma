@@ -34,9 +34,7 @@ export type LiveActivityPayload = {
  * "reconnecting" (see handleSessionExit in sessionStore), so state is read from
  * connectionState first. Cleanly disconnected sessions are not connections and
  * count towards nothing. */
-function classify(
-  session: TerminalSession,
-): "connected" | "reconnecting" | "failed" | null {
+function classify(session: TerminalSession): "connected" | "reconnecting" | "failed" | null {
   if (session.connectionState === "reconnecting") return "reconnecting";
   if (session.status === "connecting") return "reconnecting";
   if (session.status === "connected") return "connected";
@@ -77,10 +75,7 @@ function transferProgress(record: TransferRecord): {
   return { done: record.transferred, total: record.total };
 }
 
-function buildTransfer(
-  record: TransferRecord,
-  includeName: boolean,
-): LiveActivityTransfer {
+function buildTransfer(record: TransferRecord, includeName: boolean): LiveActivityTransfer {
   const { done, total } = transferProgress(record);
   const parts: string[] = [];
   if (includeName && record.name) parts.push(record.name);
@@ -91,8 +86,7 @@ function buildTransfer(
   return {
     // Host-to-host copies read as outbound: the bytes end up on a remote host.
     uploading: record.kind !== "down",
-    fraction:
-      total != null && total > 0 ? Math.min(1, Math.max(0, done / total)) : undefined,
+    fraction: total != null && total > 0 ? Math.min(1, Math.max(0, done / total)) : undefined,
     detail: parts.join(" · "),
   };
 }
@@ -124,8 +118,7 @@ export function buildLiveActivityPayload(
   // back to whichever is healthiest.
   const ordered = [...live].sort((a, b) => rank(a.state) - rank(b.state));
   const primary =
-    live.find((entry) => entry.session.id === activeSessionId)?.session ??
-    ordered[0]?.session;
+    live.find((entry) => entry.session.id === activeSessionId)?.session ?? ordered[0]?.session;
 
   // With no connection to name, the file being moved takes the title line and the
   // transfer row must not repeat it.
@@ -160,13 +153,9 @@ function rank(state: "connected" | "reconnecting" | "failed" | null): number {
 }
 
 /** Push the card state to iOS; `null` ends the activity. */
-export function syncLiveActivity(
-  payload: LiveActivityPayload | null,
-): Promise<void> {
+export function syncLiveActivity(payload: LiveActivityPayload | null): Promise<void> {
   return invoke<void>("live_activity_sync", {
-    state: payload
-      ? { ...payload, appearance: getResolvedAppAppearance() }
-      : null,
+    state: payload ? { ...payload, appearance: getResolvedAppAppearance() } : null,
   });
 }
 
@@ -176,11 +165,7 @@ const UPDATE_INTERVAL_MS = 1000;
 
 function currentPayload(): LiveActivityPayload | null {
   const { sessions, activeSessionId } = useSessionStore.getState();
-  return buildLiveActivityPayload(
-    sessions,
-    useSftpStore.getState().transfers,
-    activeSessionId,
-  );
+  return buildLiveActivityPayload(sessions, useSftpStore.getState().transfers, activeSessionId);
 }
 
 /**
@@ -219,10 +204,7 @@ export function startLiveActivitySync(): () => void {
   };
 
   schedule();
-  const unsubscribe = [
-    useSessionStore.subscribe(schedule),
-    useSftpStore.subscribe(schedule),
-  ];
+  const unsubscribe = [useSessionStore.subscribe(schedule), useSftpStore.subscribe(schedule)];
   const themeObserver = new MutationObserver(schedule);
   themeObserver.observe(document.documentElement, {
     attributes: true,

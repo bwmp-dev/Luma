@@ -10,10 +10,7 @@ import {
   type DockerStat,
 } from "../lib/docker";
 
-function container(
-  name: string,
-  overrides: Partial<DockerContainer> = {},
-): DockerContainer {
+function container(name: string, overrides: Partial<DockerContainer> = {}): DockerContainer {
   return {
     id: `id-${name}`,
     name,
@@ -86,14 +83,9 @@ describe("docker store — listing", () => {
     expect(state.error).toBeNull();
     expect(state.list?.containers).toHaveLength(3);
     expect(state.list?.projects.map((p) => p.name)).toEqual(["shop", null]);
-    expect(state.list?.projects[0].containers.map((c) => c.name)).toEqual([
-      "shop_api",
-      "shop_db",
-    ]);
+    expect(state.list?.projects[0].containers.map((c) => c.name)).toEqual(["shop_api", "shop_db"]);
     // The ungrouped bucket is last so hand-started containers follow projects.
-    expect(state.list?.projects[1].containers.map((c) => c.name)).toEqual([
-      "loose",
-    ]);
+    expect(state.list?.projects[1].containers.map((c) => c.name)).toEqual(["loose"]);
   });
 
   it("refresh does nothing until a host is opened", async () => {
@@ -393,9 +385,7 @@ describe("docker store — mutation gating", () => {
     useDockerStore.getState().requestAction(container("web"), "restart");
     await useDockerStore.getState().confirmAction();
 
-    expect(useDockerStore.getState().actionError).toBe(
-      "docker restart exited with 125",
-    );
+    expect(useDockerStore.getState().actionError).toBe("docker restart exited with 125");
   });
 
   it("a transport failure during a mutation clears the busy flag", async () => {
@@ -446,7 +436,16 @@ describe("docker action availability", () => {
 
   it("never offers a destructive action", () => {
     const every = (
-      ["running", "exited", "paused", "restarting", "created", "dead", "removing", "unknown"] as const
+      [
+        "running",
+        "exited",
+        "paused",
+        "restarting",
+        "created",
+        "dead",
+        "removing",
+        "unknown",
+      ] as const
     ).flatMap(allowedActions);
     expect(new Set(every)).toEqual(new Set(["start", "stop", "restart"]));
   });
@@ -464,16 +463,12 @@ describe("stats joining", () => {
   ];
 
   it("joins on the name, which docker does not truncate", () => {
-    expect(statFor(stats, container("web", { id: "abc1234567890" }))?.name).toBe(
-      "web",
-    );
+    expect(statFor(stats, container("web", { id: "abc1234567890" }))?.name).toBe("web");
   });
 
   it("falls back to a short-id prefix match", () => {
     const unnamed = [{ ...stats[0], name: "" }];
-    expect(statFor(unnamed, container("web", { id: "abc1234567890" }))?.id).toBe(
-      "abc123",
-    );
+    expect(statFor(unnamed, container("web", { id: "abc1234567890" }))?.id).toBe("abc123");
   });
 
   it("returns nothing for a container with no sample", () => {

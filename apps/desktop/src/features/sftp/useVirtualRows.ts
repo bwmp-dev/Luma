@@ -43,9 +43,7 @@ export function useVirtualRows(
       const onScreen = Math.ceil(node.clientHeight / rowHeight);
       const start = Math.max(0, first - overscan);
       const end = Math.min(count, first + onScreen + overscan);
-      setRange((prev) =>
-        prev.start === start && prev.end === end ? prev : { start, end },
-      );
+      setRange((prev) => (prev.start === start && prev.end === end ? prev : { start, end }));
     };
     // Scroll fires far faster than the list can usefully change, so coalesce to
     // one recompute per frame.
@@ -55,8 +53,7 @@ export function useVirtualRows(
 
     measure();
     node.addEventListener("scroll", schedule, { passive: true });
-    const observer =
-      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(schedule);
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(schedule);
     observer?.observe(node);
     return () => {
       if (frame !== 0) cancelAnimationFrame(frame);
@@ -79,11 +76,7 @@ export function useVirtualRows(
 
 /** Scroll `index` into view in a windowed list, arithmetically — the row may
  * not be mounted, so `scrollIntoView` is not available. */
-export function scrollRowIntoView(
-  node: HTMLElement,
-  index: number,
-  rowHeight: number,
-): void {
+export function scrollRowIntoView(node: HTMLElement, index: number, rowHeight: number): void {
   const top = index * rowHeight;
   const bottom = top + rowHeight;
   if (top < node.scrollTop) node.scrollTop = top;

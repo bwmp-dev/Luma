@@ -1,9 +1,5 @@
 import { create } from "zustand";
-import {
-  sessionLogStart,
-  sessionLogStop,
-  type SessionLogMode,
-} from "../lib/sessionLog";
+import { sessionLogStart, sessionLogStop, type SessionLogMode } from "../lib/sessionLog";
 import { terminalManager } from "../features/terminal/terminalManager";
 
 /*

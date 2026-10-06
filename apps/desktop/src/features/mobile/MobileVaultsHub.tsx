@@ -53,9 +53,7 @@ const VAULT_SYMBOL: Record<VaultKind, string> = {
 export function MobileVaultsHub() {
   const push = useMobileNavStore((s) => s.push);
   const vaultId = useBrowsingVaultId();
-  const portForwarding = useCapabilityStore(
-    (s) => s.capabilities.features.portForwarding,
-  );
+  const portForwarding = useCapabilityStore((s) => s.capabilities.features.portForwarding);
 
   const { data: hosts } = useHosts(vaultId);
   const { data: keys } = useKeyReferences(vaultId);
@@ -201,11 +199,7 @@ function VaultPicker() {
         // Fallback dropdown for platforms with no native menu. Anchored under
         // the trigger and right-aligned to it, so it reads the same as the
         // UIMenu it stands in for rather than as a bottom sheet.
-        <div
-          className="fixed inset-0 z-50"
-          onClick={() => setAnchor(null)}
-          role="presentation"
-        >
+        <div className="fixed inset-0 z-50" onClick={() => setAnchor(null)} role="presentation">
           <ul
             role="menu"
             aria-label="Select vault"
@@ -233,11 +227,7 @@ function VaultPicker() {
                 key={vault.id}
                 label={vault.name}
                 icon={
-                  vault.kind === "personal"
-                    ? CloudOff
-                    : vault.kind === "managed"
-                      ? Cloud
-                      : Users
+                  vault.kind === "personal" ? CloudOff : vault.kind === "managed" ? Cloud : Users
                 }
                 selected={activeVaultId === vault.id}
                 onSelect={() => {
@@ -273,10 +263,7 @@ function VaultOption({
         onClick={onSelect}
         className="flex min-h-12 w-full items-center gap-2.5 rounded-xl px-2.5 text-left active:bg-raised"
       >
-        <Check
-          size={18}
-          className={cn("shrink-0 text-accent", !selected && "invisible")}
-        />
+        <Check size={18} className={cn("shrink-0 text-accent", !selected && "invisible")} />
         {Icon && <Icon size={18} className="shrink-0 text-muted" />}
         <span className="min-w-0 flex-1 truncate text-[17px]">{label}</span>
       </button>

@@ -37,9 +37,7 @@ export function resolvePaneTarget(
   y: number,
 ): PaneDropTarget | null {
   const pane =
-    element instanceof Element
-      ? element.closest<HTMLElement>("[data-tab-drop-pane]")
-      : null;
+    element instanceof Element ? element.closest<HTMLElement>("[data-tab-drop-pane]") : null;
   if (!pane) return null;
   const targetPaneId = pane.dataset.tabDropPane;
   const targetTabId = pane.dataset.tabDropTab;

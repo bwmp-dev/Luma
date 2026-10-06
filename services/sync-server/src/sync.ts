@@ -1,11 +1,7 @@
 import { positiveInteger, updateUsage } from "./accounts";
 import { HttpError } from "./auth";
 import { securityHeaders } from "./responses";
-import {
-  ownerQuota,
-  ownerUsageExcluding,
-  setVaultUsage,
-} from "./vaults";
+import { ownerQuota, ownerUsageExcluding, setVaultUsage } from "./vaults";
 import type { Account, Env, Vault } from "./types";
 
 const CONTENT_TYPE = "application/vnd.luma.sync";
@@ -140,9 +136,7 @@ function normalizeEtag(value: string): string {
   if (trimmed.startsWith("W/")) {
     throw new HttpError(400, "weak ETags are not supported");
   }
-  return trimmed.startsWith('"') && trimmed.endsWith('"')
-    ? trimmed.slice(1, -1)
-    : trimmed;
+  return trimmed.startsWith('"') && trimmed.endsWith('"') ? trimmed.slice(1, -1) : trimmed;
 }
 
 function parseContentLength(request: Request): number {
@@ -179,10 +173,7 @@ async function pruneRevisions(env: Env, target: SyncTarget): Promise<void> {
  * prefix, not a full `SyncTarget`, so an account being deleted can be purged
  * without first resolving quotas that its own deletion is invalidating.
  */
-export async function deleteAll(
-  env: Env,
-  target: Pick<SyncTarget, "prefix">,
-): Promise<void> {
+export async function deleteAll(env: Env, target: Pick<SyncTarget, "prefix">): Promise<void> {
   const keys = [currentKey(target)];
   let cursor: string | undefined;
   do {

@@ -43,11 +43,7 @@ describe("splitLeaf", () => {
     expect(next.kind).toBe("split");
     if (next.kind !== "split") return;
     // 'a' is split in place; its 40 is halved between 'a' and the new leaf.
-    expect(next.children.map((c) => c.kind === "leaf" && c.id)).toEqual([
-      "a",
-      added.id,
-      "b",
-    ]);
+    expect(next.children.map((c) => c.kind === "leaf" && c.id)).toEqual(["a", added.id, "b"]);
     expect(next.sizes).toEqual([20, 20, 60]);
   });
 
@@ -92,12 +88,7 @@ describe("splitLeaf", () => {
     };
     const added = makeLeaf("session-d");
     const next = splitLeaf(root, "c", "column", added);
-    expect(collectLeaves(next).map((l) => l.id)).toEqual([
-      "a",
-      "b",
-      "c",
-      added.id,
-    ]);
+    expect(collectLeaves(next).map((l) => l.id)).toEqual(["a", "b", "c", added.id]);
   });
 
   it("returns the leaf unchanged when the target id is absent", () => {
@@ -134,10 +125,7 @@ describe("removeLeaf", () => {
     const next = removeLeaf(root, "a");
     expect(next?.kind).toBe("split");
     if (next?.kind !== "split") return;
-    expect(next.children.map((c) => c.kind === "leaf" && c.id)).toEqual([
-      "b",
-      "c",
-    ]);
+    expect(next.children.map((c) => c.kind === "leaf" && c.id)).toEqual(["b", "c"]);
     // 30 + 50 = 80 -> renormalized to 37.5 / 62.5.
     expect(next.sizes[0]).toBeCloseTo(37.5);
     expect(next.sizes[1]).toBeCloseTo(62.5);

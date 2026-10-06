@@ -11,11 +11,7 @@ function level(draft: string): DestructiveLevel {
 }
 
 /** Assert the draft fires a rule whose label contains `needle`, at `expected`. */
-function expectFlagged(
-  draft: string,
-  expected: Exclude<DestructiveLevel, "none">,
-  needle: string,
-) {
+function expectFlagged(draft: string, expected: Exclude<DestructiveLevel, "none">, needle: string) {
   const report = classifyDraft(draft);
   expect(report.level, `level for ${JSON.stringify(draft)}`).toBe(expected);
   expect(
@@ -362,9 +358,7 @@ describe("classifyDraft — reporting shape", () => {
     expect(report.level).toBe("danger");
     expect(report.matches.length).toBeGreaterThanOrEqual(2);
     expect(report.matches[0].label).toContain("rm -rf");
-    expect(report.matches.map((m) => m.label)).toContain(
-      "Force push (git push --force)",
-    );
+    expect(report.matches.map((m) => m.label)).toContain("Force push (git push --force)");
   });
 
   it("gives a trimmed, separator-free snippet", () => {

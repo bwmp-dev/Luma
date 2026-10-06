@@ -111,11 +111,7 @@ export function sftpRename(sessionId: string, from: string, to: string): Promise
   return invoke<void>("sftp_rename", { sessionId, from, to });
 }
 
-export function sftpDelete(
-  sessionId: string,
-  path: string,
-  recursive: boolean,
-): Promise<void> {
+export function sftpDelete(sessionId: string, path: string, recursive: boolean): Promise<void> {
   return invoke<void>("sftp_delete", { sessionId, path, recursive });
 }
 
@@ -157,10 +153,7 @@ export function sftpMobileDownloadDir(): Promise<string> {
  * empty file and returns where the user put the real one; the placeholder is
  * left behind. No-op when nothing was staged. Mobile only.
  */
-export function sftpDiscardSavePlaceholder(
-  fileName: string,
-  savedPath: string,
-): Promise<void> {
+export function sftpDiscardSavePlaceholder(fileName: string, savedPath: string): Promise<void> {
   return invoke<void>("sftp_discard_save_placeholder", { fileName, savedPath });
 }
 

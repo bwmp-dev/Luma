@@ -218,9 +218,7 @@ export class RoomRouter {
     if (message.keyEpoch !== connection.identity.keyEpoch) {
       throw new ProtocolError("event key epoch is not current for this connection");
     }
-    const currentKeyEpoch = await this.command.get(
-      this.keyEpochKey(connection.identity.roomId),
-    );
+    const currentKeyEpoch = await this.command.get(this.keyEpochKey(connection.identity.roomId));
     if (currentKeyEpoch !== connection.identity.keyEpoch.toString()) {
       throw new ProtocolError("room key epoch changed; reconnect to continue");
     }
@@ -298,7 +296,11 @@ export class RoomRouter {
   private async updatePresence(identity: RealtimeTicket, terminalId: string | null): Promise<void> {
     await this.command.set(
       this.presenceKey(identity),
-      JSON.stringify({ memberId: identity.memberId, connectionId: identity.connectionId, terminalId }),
+      JSON.stringify({
+        memberId: identity.memberId,
+        connectionId: identity.connectionId,
+        terminalId,
+      }),
       { EX: this.config.presenceTtlSeconds },
     );
   }

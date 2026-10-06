@@ -25,9 +25,7 @@ export type ProfileInput = {
 };
 
 /** Reference to what a new terminal should run. */
-export type ShellRef =
-  | { kind: "shell"; id: string }
-  | { kind: "profile"; id: string };
+export type ShellRef = { kind: "shell"; id: string } | { kind: "profile"; id: string };
 
 export function serializeShellRef(ref: ShellRef): string {
   return `${ref.kind}:${ref.id}`;

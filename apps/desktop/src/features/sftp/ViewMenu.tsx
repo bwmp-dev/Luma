@@ -1,11 +1,6 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { ArrowDownUp, Check, ChevronRight, Eye, EyeOff } from "lucide-react";
-import {
-  SORT_FIELD_LABELS,
-  toggleSort,
-  type SortField,
-  type ViewPrefs,
-} from "./viewPrefs";
+import { SORT_FIELD_LABELS, toggleSort, type SortField, type ViewPrefs } from "./viewPrefs";
 import { cn } from "../../lib/utils";
 
 /*
@@ -18,8 +13,7 @@ import { cn } from "../../lib/utils";
 const ITEM_CLASS =
   "flex cursor-default items-center gap-2 rounded-md px-2.5 outline-none data-[highlighted]:bg-surface data-[highlighted]:text-accent";
 
-const CONTENT_CLASS =
-  "z-50 rounded-lg border border-border bg-raised p-1 text-sm shadow-glow";
+const CONTENT_CLASS = "z-50 rounded-lg border border-border bg-raised p-1 text-sm shadow-glow";
 
 /**
  * "Sort by" submenu plus a "Hidden files" toggle.
@@ -41,9 +35,7 @@ export function ViewMenuItems({
   return (
     <>
       <DropdownMenu.Sub>
-        <DropdownMenu.SubTrigger
-          className={cn(ITEM_CLASS, rowHeight, "justify-between")}
-        >
+        <DropdownMenu.SubTrigger className={cn(ITEM_CLASS, rowHeight, "justify-between")}>
           <span className="flex items-center gap-2">
             <ArrowDownUp size={15} />
             <span>
@@ -56,10 +48,7 @@ export function ViewMenuItems({
           <ChevronRight size={14} className="text-muted" />
         </DropdownMenu.SubTrigger>
         <DropdownMenu.Portal>
-          <DropdownMenu.SubContent
-            sideOffset={4}
-            className={cn(CONTENT_CLASS, "min-w-44")}
-          >
+          <DropdownMenu.SubContent sideOffset={4} className={cn(CONTENT_CLASS, "min-w-44")}>
             {fields.map((field) => {
               const active = prefs.sortField === field;
               return (
@@ -74,10 +63,7 @@ export function ViewMenuItems({
                   className={cn(ITEM_CLASS, rowHeight, "justify-between")}
                 >
                   <span className="flex items-center gap-2">
-                    <Check
-                      size={14}
-                      className={active ? "text-accent" : "invisible"}
-                    />
+                    <Check size={14} className={active ? "text-accent" : "invisible"} />
                     {SORT_FIELD_LABELS[field]}
                   </span>
                   {active && (
@@ -98,9 +84,7 @@ export function ViewMenuItems({
       >
         {prefs.showHidden ? <Eye size={15} /> : <EyeOff size={15} />}
         Hidden files
-        <span className="ml-auto text-xs text-muted">
-          {prefs.showHidden ? "Shown" : "Hidden"}
-        </span>
+        <span className="ml-auto text-xs text-muted">{prefs.showHidden ? "Shown" : "Hidden"}</span>
       </DropdownMenu.Item>
     </>
   );

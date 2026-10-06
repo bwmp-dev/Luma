@@ -35,9 +35,7 @@ describe("updater channel bridge", () => {
       notes: "Nightly changes",
     });
     await found?.update.downloadAndInstall((event) => events.push(event));
-    expect(events).toEqual([
-      { event: "Progress", data: { chunkLength: 512 } },
-    ]);
+    expect(events).toEqual([{ event: "Progress", data: { chunkLength: 512 } }]);
   });
 
   it("returns null when the selected channel is current", async () => {

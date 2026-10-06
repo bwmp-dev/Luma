@@ -36,9 +36,7 @@ export function EndpointSelector({
   const isLocal = endpoint.kind === "local";
   const name = isLocal ? "This computer" : (host?.name ?? "Remote");
   const detail =
-    !isLocal && host
-      ? `${host.username ? `${host.username}@` : ""}${host.hostname}`
-      : null;
+    !isLocal && host ? `${host.username ? `${host.username}@` : ""}${host.hostname}` : null;
 
   return (
     <DropdownMenu.Root>
@@ -58,9 +56,7 @@ export function EndpointSelector({
             {name}
           </span>
           {detail && (
-            <span className="truncate text-[11px] normal-case text-muted/70">
-              {detail}
-            </span>
+            <span className="truncate text-[11px] normal-case text-muted/70">{detail}</span>
           )}
           <ChevronDown size={12} className="shrink-0 text-muted" />
         </button>
@@ -82,14 +78,10 @@ export function EndpointSelector({
           >
             <Monitor size={14} />
             <span className="flex-1">This computer</span>
-            {otherIsLocal && (
-              <span className="text-[10px] text-muted">in other pane</span>
-            )}
+            {otherIsLocal && <span className="text-[10px] text-muted">in other pane</span>}
           </DropdownMenu.Item>
 
-          {hosts.length > 0 && (
-            <DropdownMenu.Separator className="my-1 h-px bg-border" />
-          )}
+          {hosts.length > 0 && <DropdownMenu.Separator className="my-1 h-px bg-border" />}
           {hosts.map((candidate) => (
             <DropdownMenu.Item
               key={candidate.id}

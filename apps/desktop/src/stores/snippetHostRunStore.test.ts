@@ -1,10 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { setInvoke } from "../test/tauriMock";
-import {
-  reduceEvent,
-  useSnippetHostRunStore,
-  type HostRunState,
-} from "./snippetHostRunStore";
+import { reduceEvent, useSnippetHostRunStore, type HostRunState } from "./snippetHostRunStore";
 import type { SnippetRunEvent } from "../lib/snippets";
 
 function seed(...hostIds: string[]): Record<string, HostRunState> {

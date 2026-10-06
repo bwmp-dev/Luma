@@ -1,10 +1,5 @@
 import { create } from "zustand";
-import {
-  repoDiff,
-  repoStatus,
-  type RepoDiff,
-  type RepoStatus,
-} from "../lib/repo";
+import { repoDiff, repoStatus, type RepoDiff, type RepoStatus } from "../lib/repo";
 import { parseLumaError } from "../lib/hosts";
 
 /*
@@ -25,12 +20,7 @@ export type DiffEntry = {
 
 /** Cache key for one file's patch. The host and cwd are part of it so a dialog
  * opened on another session never shows a stale patch. */
-export function diffKey(
-  hostId: string,
-  cwd: string,
-  path: string,
-  staged: boolean,
-): string {
+export function diffKey(hostId: string, cwd: string, path: string, staged: boolean): string {
   return `${hostId}\0${cwd}\0${staged ? "s" : "u"}\0${path}`;
 }
 
@@ -44,12 +34,7 @@ type RepoState = {
   diffs: Record<string, DiffEntry>;
 
   refresh: (hostId: string, cwd: string) => Promise<void>;
-  loadDiff: (
-    hostId: string,
-    cwd: string,
-    path: string,
-    staged: boolean,
-  ) => Promise<void>;
+  loadDiff: (hostId: string, cwd: string, path: string, staged: boolean) => Promise<void>;
   reset: () => void;
 };
 

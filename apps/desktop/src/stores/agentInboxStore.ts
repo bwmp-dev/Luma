@@ -1,10 +1,6 @@
 import { create } from "zustand";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import {
-  type AgentEventPayload,
-  DONE_STATE,
-  isAttentionState,
-} from "../lib/agentInbox";
+import { type AgentEventPayload, DONE_STATE, isAttentionState } from "../lib/agentInbox";
 
 /*
  * Agent Inbox: collates `agent-event` window events (see src/lib/agentInbox.ts)
@@ -113,12 +109,9 @@ function enforceItemLimit(items: AgentInboxItem[]): AgentInboxItem[] {
     // Oldest first within a rank — the list is newest-first, so by index desc.
     .sort(
       (left, right) =>
-        evictionRank(left.item) - evictionRank(right.item) ||
-        right.index - left.index,
+        evictionRank(left.item) - evictionRank(right.item) || right.index - left.index,
     );
-  const dropped = new Set(
-    order.slice(0, items.length - ITEM_LIMIT).map(({ index }) => index),
-  );
+  const dropped = new Set(order.slice(0, items.length - ITEM_LIMIT).map(({ index }) => index));
   return items.filter((_, index) => !dropped.has(index));
 }
 
@@ -165,8 +158,7 @@ export const useAgentInboxStore = create<AgentInboxState>((set) => ({
         // prior unacknowledged alert is not silently cleared by a later
         // non-attention event. A silent event is still recorded — it just does
         // not demand attention the user has already given.
-        unread:
-          attention && !payload.silent ? true : (existing?.unread ?? false),
+        unread: attention && !payload.silent ? true : (existing?.unread ?? false),
         done: done || (existing?.done ?? false),
         // A fresh event proves the terminal session is alive again.
         stale: false,
@@ -196,9 +188,7 @@ export const useAgentInboxStore = create<AgentInboxState>((set) => ({
   markAllRead: () => {
     set((state) => {
       if (state.unreadCount === 0) return {};
-      const items = state.items.map((item) =>
-        item.unread ? { ...item, unread: false } : item,
-      );
+      const items = state.items.map((item) => (item.unread ? { ...item, unread: false } : item));
       return { items, unreadCount: 0 };
     });
   },
@@ -233,9 +223,7 @@ export const useAgentInboxStore = create<AgentInboxState>((set) => ({
       });
       // Hook-source tracking only matters while a session can still produce
       // output, so a closed session drops out of the set with it.
-      const hookSessions = new Set(
-        [...state.hookSessions].filter((id) => live.has(id)),
-      );
+      const hookSessions = new Set([...state.hookSessions].filter((id) => live.has(id)));
       const prunedHooks = hookSessions.size !== state.hookSessions.size;
       if (!changed && !prunedHooks) return {};
       return changed ? { items, hookSessions } : { hookSessions };
@@ -252,16 +240,13 @@ export function startAgentInboxListener(): () => void {
   let unlisten: (() => void) | undefined;
   let cancelled = false;
   void (async () => {
-    const un = await getCurrentWindow().listen<AgentEventPayload>(
-      "agent-event",
-      (event) => {
-        const payload = event.payload;
-        // Defensive: ignore malformed payloads missing their identifying ids.
-        if (!payload?.terminalSessionId || !payload?.agentSessionId) return;
-        // The wire carries no source; anything arriving here is a real hook.
-        useAgentInboxStore.getState().recordEvent({ ...payload, source: "hook" });
-      },
-    );
+    const un = await getCurrentWindow().listen<AgentEventPayload>("agent-event", (event) => {
+      const payload = event.payload;
+      // Defensive: ignore malformed payloads missing their identifying ids.
+      if (!payload?.terminalSessionId || !payload?.agentSessionId) return;
+      // The wire carries no source; anything arriving here is a real hook.
+      useAgentInboxStore.getState().recordEvent({ ...payload, source: "hook" });
+    });
     if (cancelled) un();
     else unlisten = un;
   })();

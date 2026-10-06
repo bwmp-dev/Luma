@@ -45,9 +45,7 @@ export type MultiplexerAttach = {
   create?: boolean;
 };
 
-export function listMultiplexerSessions(
-  hostId: string,
-): Promise<MultiplexerDiscovery> {
+export function listMultiplexerSessions(hostId: string): Promise<MultiplexerDiscovery> {
   return invoke<MultiplexerDiscovery>("multiplexer_list", { hostId });
 }
 
@@ -82,10 +80,7 @@ export function multiplexerTitleSuffix(attach: MultiplexerAttach): string {
 
 /** Append the workspace suffix to a session title, without doubling it up when
  * the title already carries one (restart / restore paths reuse the title). */
-export function withMultiplexerTitle(
-  title: string,
-  attach: MultiplexerAttach | undefined,
-): string {
+export function withMultiplexerTitle(title: string, attach: MultiplexerAttach | undefined): string {
   if (!attach) return title;
   const suffix = multiplexerTitleSuffix(attach);
   return title.endsWith(suffix) ? title : `${title}${suffix}`;

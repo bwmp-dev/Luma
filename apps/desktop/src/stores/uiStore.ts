@@ -80,11 +80,7 @@ type UiState = {
   /** Terminal session the dialog was opened from, so previews it starts are
    * torn down with that session. */
   webPreviewSessionId: string | null;
-  openWebPreview: (
-    hostId: string,
-    hostLabel?: string,
-    sessionId?: string,
-  ) => void;
+  openWebPreview: (hostId: string, hostLabel?: string, sessionId?: string) => void;
   closeWebPreview: () => void;
   /** Multiplexer workspace dialog: the host whose tmux/zellij sessions are being
    * managed, plus an optional label for the subtitle. Null host means closed. */
@@ -107,12 +103,7 @@ type UiState = {
     sessionId: string;
     label?: string;
   } | null;
-  openRepo: (target: {
-    hostId: string;
-    cwd: string;
-    sessionId: string;
-    label?: string;
-  }) => void;
+  openRepo: (target: { hostId: string; cwd: string; sessionId: string; label?: string }) => void;
   closeRepo: () => void;
   /** Voice composer dialog: the session a composed draft is destined for, plus
    * an optional label for the subtitle. Null target means closed. */
@@ -163,9 +154,7 @@ export const useUiStore = create<UiState>((set) => ({
     }),
   selectNewTab: (tabId) =>
     set((state) =>
-      state.newTabIds.includes(tabId)
-        ? { mainView: "terminal", activeNewTabId: tabId }
-        : {},
+      state.newTabIds.includes(tabId) ? { mainView: "terminal", activeNewTabId: tabId } : {},
     ),
   closeNewTab: (tabId) =>
     set((state) => {
@@ -204,8 +193,7 @@ export const useUiStore = create<UiState>((set) => ({
   multiplexerHostLabel: null,
   openMultiplexer: (hostId, hostLabel) =>
     set({ multiplexerHostId: hostId, multiplexerHostLabel: hostLabel ?? null }),
-  closeMultiplexer: () =>
-    set({ multiplexerHostId: null, multiplexerHostLabel: null }),
+  closeMultiplexer: () => set({ multiplexerHostId: null, multiplexerHostLabel: null }),
   dockerHostId: null,
   dockerHostLabel: null,
   openDocker: (hostId, hostLabel) =>

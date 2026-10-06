@@ -20,11 +20,7 @@ const created: string[] = [];
 
 /** Spawn a managed local session so it has a backend id, and return its React id. */
 async function spawn(reactId: string, backendId: string): Promise<void> {
-  await terminalManager.createSession(
-    reactId,
-    { kind: "local", ref: undefined },
-    callbacks(),
-  );
+  await terminalManager.createSession(reactId, { kind: "local", ref: undefined }, callbacks());
   created.push(reactId);
   // Sanity: the backend id is what the logging commands must receive.
   expect(terminalManager.getBackendId(reactId)).toBe(backendId);
@@ -65,9 +61,9 @@ describe("session logging store", () => {
     setInvoke((cmd) => {
       throw new Error(`unexpected ${cmd}`);
     });
-    await expect(
-      useSessionLogStore.getState().start("ghost", "raw"),
-    ).rejects.toMatchObject({ category: "invalid-input" });
+    await expect(useSessionLogStore.getState().start("ghost", "raw")).rejects.toMatchObject({
+      category: "invalid-input",
+    });
     expect(useSessionLogStore.getState().logs["ghost"]).toBeUndefined();
   });
 

@@ -1,12 +1,4 @@
-import {
-  ChevronRight,
-  Inbox,
-  Plus,
-  RotateCw,
-  Server,
-  SquareTerminal,
-  X,
-} from "lucide-react";
+import { ChevronRight, Inbox, Plus, RotateCw, Server, SquareTerminal, X } from "lucide-react";
 import { useSessionStore } from "../../stores/sessionStore";
 import { useMobileNavStore } from "../../stores/mobileNavStore";
 import { useSettings } from "../../hooks/useSettings";
@@ -109,85 +101,82 @@ export function MobileConnectionsScreen({
     <MobileScreen title="Connections" large action={newButton}>
       <div className="pt-1">{agentInbox}</div>
       <ul className="space-y-2">
-          {tabs.map((tab) => {
-            const sessionId = firstSessionId(tab.root);
-            const session = sessions.find((s) => s.id === sessionId);
-            const status = session?.status ?? "connecting";
-            const title = session?.title ?? "Terminal";
-            const actions: MenuAction[] = [
-              {
-                label: "Open",
-                icon: <SquareTerminal size={15} />,
-                onSelect: () => onOpen(tab.id),
+        {tabs.map((tab) => {
+          const sessionId = firstSessionId(tab.root);
+          const session = sessions.find((s) => s.id === sessionId);
+          const status = session?.status ?? "connecting";
+          const title = session?.title ?? "Terminal";
+          const actions: MenuAction[] = [
+            {
+              label: "Open",
+              icon: <SquareTerminal size={15} />,
+              onSelect: () => onOpen(tab.id),
+            },
+            {
+              label: "Reconnect",
+              icon: <RotateCw size={15} />,
+              disabled: sessionId === null,
+              onSelect: () => {
+                if (sessionId) void restartSession(sessionId);
               },
-              {
-                label: "Reconnect",
-                icon: <RotateCw size={15} />,
-                disabled: sessionId === null,
-                onSelect: () => {
-                  if (sessionId) void restartSession(sessionId);
-                },
-              },
-              { separator: true },
-              {
-                label: "Close session",
-                icon: <X size={15} />,
-                destructive: true,
-                onSelect: () => closeTab(tab.id),
-              },
-            ];
-            return (
-              <ContextMenu key={tab.id} actions={actions} minWidth="min-w-44">
-                <li className="overflow-hidden rounded-xl bg-raised">
-                  {/* A live window onto the session, so the list answers "what is
+            },
+            { separator: true },
+            {
+              label: "Close session",
+              icon: <X size={15} />,
+              destructive: true,
+              onSelect: () => closeTab(tab.id),
+            },
+          ];
+          return (
+            <ContextMenu key={tab.id} actions={actions} minWidth="min-w-44">
+              <li className="overflow-hidden rounded-xl bg-raised">
+                {/* A live window onto the session, so the list answers "what is
                       it doing?" without opening it. Only rendered once there is a
                       session to show; the row below is the tap target. The box
                       holds the session's real terminal, scaled to this width and
                       cropped to its last rows, so its height is what decides how
                       many of them the card shows. No padding: the terminal draws
                       edge to edge, exactly as it does full-screen. */}
-                  {previews && sessionId && (
-                    <MobileTerminalPreview
-                      sessionId={sessionId}
-                      status={status}
-                      className="h-36 w-full border-b border-border/60"
+                {previews && sessionId && (
+                  <MobileTerminalPreview
+                    sessionId={sessionId}
+                    status={status}
+                    className="h-36 w-full border-b border-border/60"
+                  />
+                )}
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onOpen(tab.id)}
+                    className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-3 text-left active:bg-surface"
+                  >
+                    <span
+                      className={cn("h-2.5 w-2.5 shrink-0 rounded-full", DOT[status] ?? "bg-muted")}
                     />
-                  )}
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => onOpen(tab.id)}
-                      className="flex min-h-14 min-w-0 flex-1 items-center gap-3 px-3 text-left active:bg-surface"
-                    >
-                      <span
-                        className={cn(
-                          "h-2.5 w-2.5 shrink-0 rounded-full",
-                          DOT[status] ?? "bg-muted",
-                        )}
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-foreground">
-                          {title}
-                        </span>
-                        <span className="block truncate text-xs text-muted">
-                          {session?.connectionTarget ?? status}
-                        </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-foreground">
+                        {title}
                       </span>
-                      <ChevronRight size={16} className="shrink-0 text-muted" />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`Close ${title}`}
-                      onClick={() => closeTab(tab.id)}
-                      className="mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted active:bg-surface"
-                    >
-                      <X size={16} />
-                    </button>
-                  </div>
-                </li>
-              </ContextMenu>
-            );
-          })}
+                      <span className="block truncate text-xs text-muted">
+                        {session?.connectionTarget ?? status}
+                      </span>
+                    </span>
+                    <ChevronRight size={16} className="shrink-0 text-muted" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Close ${title}`}
+                    onClick={() => closeTab(tab.id)}
+                    className="mr-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted active:bg-surface"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              </li>
+            </ContextMenu>
+          );
+        })}
       </ul>
     </MobileScreen>
   );

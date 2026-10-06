@@ -71,7 +71,10 @@ export function parseClientMessage(data: string, maxBytes: number): ClientMessag
     if (typeof value.eventId !== "string" || !UUID.test(value.eventId)) {
       throw new ProtocolError("eventId must be a UUID");
     }
-    if (typeof value.kind !== "string" || !ENCRYPTED_EVENT_KINDS.includes(value.kind as EncryptedEventKind)) {
+    if (
+      typeof value.kind !== "string" ||
+      !ENCRYPTED_EVENT_KINDS.includes(value.kind as EncryptedEventKind)
+    ) {
       throw new ProtocolError("unsupported encrypted event kind");
     }
     if (!Number.isSafeInteger(value.senderSequence) || (value.senderSequence as number) < 0) {
@@ -114,7 +117,11 @@ function validateIdentifier(value: unknown, name: string): asserts value is stri
   }
 }
 
-function validateBase64UrlLength(value: unknown, length: number, name: string): asserts value is string {
+function validateBase64UrlLength(
+  value: unknown,
+  length: number,
+  name: string,
+): asserts value is string {
   if (typeof value !== "string" || !BASE64URL.test(value)) {
     throw new ProtocolError(`${name} must be base64url encoded`);
   }

@@ -99,8 +99,7 @@ export function parseUnifiedDiff(patch: string): ParsedDiff {
     // A line without one means the hunk header lied (or the patch is damaged),
     // so header detection resumes rather than swallowing the rest of the patch.
     const owed = hunk !== null && (oldOwed > 0 || newOwed > 0);
-    const carriesMarker =
-      line.length === 0 || " +-\\".includes(line.charAt(0));
+    const carriesMarker = line.length === 0 || " +-\\".includes(line.charAt(0));
     if (!(owed && carriesMarker)) {
       if (line.startsWith("diff --git ") || line.startsWith("diff -")) {
         file = newFile();

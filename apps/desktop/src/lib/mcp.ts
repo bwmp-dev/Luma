@@ -116,11 +116,7 @@ export function listSharedPanes(): Promise<McpSharedPane[]> {
   return invoke<McpSharedPane[]>("mcp_shared_panes");
 }
 
-export function sharePane(
-  sessionId: string,
-  grantId: string,
-  title: string,
-): Promise<void> {
+export function sharePane(sessionId: string, grantId: string, title: string): Promise<void> {
   return invoke<void>("mcp_pane_share", { sessionId, grantId, title });
 }
 
@@ -128,17 +124,11 @@ export function unsharePane(sessionId: string): Promise<void> {
   return invoke<void>("mcp_pane_unshare", { sessionId });
 }
 
-export function resolveMcpApproval(
-  requestId: string,
-  allowed: boolean,
-): Promise<void> {
+export function resolveMcpApproval(requestId: string, allowed: boolean): Promise<void> {
   return invoke<void>("mcp_approval_resolve", { requestId, allowed });
 }
 
-export function mcpSessionReady(
-  requestId: string,
-  error: string,
-): Promise<void> {
+export function mcpSessionReady(requestId: string, error: string): Promise<void> {
   return invoke<void>("mcp_session_ready", { requestId, error });
 }
 

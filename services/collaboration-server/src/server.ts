@@ -32,11 +32,15 @@ const MIN_CAPABILITY_TTL_SECONDS = 60;
 const MAX_CAPABILITY_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 redis.on("error", (error) => console.error("redis command connection error", error.message));
-subscriber.on("error", (error) => console.error("redis subscriber connection error", error.message));
+subscriber.on("error", (error) =>
+  console.error("redis subscriber connection error", error.message),
+);
 await Promise.all([redis.connect(), subscriber.connect()]);
 
 const server = createServer((request, response) => {
-  void handleRequest(request, response).catch((error: unknown) => handleRequestError(request, response, error));
+  void handleRequest(request, response).catch((error: unknown) =>
+    handleRequestError(request, response, error),
+  );
 });
 
 server.on("upgrade", (request, socket, head) => {
@@ -53,12 +57,16 @@ server.on("upgrade", (request, socket, head) => {
     });
   })().catch((error: unknown) => {
     const status = error instanceof HttpError ? error.status : 500;
-    socket.end(`HTTP/1.1 ${status} ${status === 401 ? "Unauthorized" : "Error"}\r\nConnection: close\r\n\r\n`);
+    socket.end(
+      `HTTP/1.1 ${status} ${status === 401 ? "Unauthorized" : "Error"}\r\nConnection: close\r\n\r\n`,
+    );
   });
 });
 
 server.listen(config.port, config.host, () => {
-  console.log(`collaboration server ${config.instanceId} listening on ${config.host}:${config.port}`);
+  console.log(
+    `collaboration server ${config.instanceId} listening on ${config.host}:${config.port}`,
+  );
 });
 
 async function handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -149,9 +157,7 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     return;
   }
 
-  const capabilitiesMatch = url.pathname.match(
-    /^\/v1\/rooms\/([0-9a-f-]+)\/capabilities$/i,
-  );
+  const capabilitiesMatch = url.pathname.match(/^\/v1\/rooms\/([0-9a-f-]+)\/capabilities$/i);
   if (method === "POST" && capabilitiesMatch) {
     const roomId = validatedRoomId(capabilitiesMatch[1]);
     const body = await readJson(request, 16 * 1024);
@@ -249,7 +255,9 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
     const membership = await database.membership(roomId, user.subject);
     if (method === "GET") {
       const object = await snapshots.get(roomId);
-      const bytes = object.Body ? Buffer.from(await object.Body.transformToByteArray()) : Buffer.alloc(0);
+      const bytes = object.Body
+        ? Buffer.from(await object.Body.transformToByteArray())
+        : Buffer.alloc(0);
       response.writeHead(200, {
         ...securityHeaders(),
         "content-type": object.ContentType ?? SNAPSHOT_CONTENT_TYPE,
@@ -260,7 +268,8 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       return;
     }
     if (method === "PUT") {
-      if (membership.role !== "owner") throw new HttpError(403, "only the room owner can update snapshots");
+      if (membership.role !== "owner")
+        throw new HttpError(403, "only the room owner can update snapshots");
       if (request.headers["content-type"]?.split(";", 1)[0] !== SNAPSHOT_CONTENT_TYPE) {
         throw new HttpError(415, `content type must be ${SNAPSHOT_CONTENT_TYPE}`);
       }
@@ -287,7 +296,10 @@ async function enforceHttpRateLimit(subject: string): Promise<void> {
   if (count > config.httpRequestsPerMinute) throw new HttpError(429, "too many requests");
 }
 
-async function readJson(request: IncomingMessage, maxBytes: number): Promise<Record<string, unknown>> {
+async function readJson(
+  request: IncomingMessage,
+  maxBytes: number,
+): Promise<Record<string, unknown>> {
   const bytes = await readBytes(request, maxBytes);
   try {
     const value: unknown = JSON.parse(bytes.toString("utf8"));
@@ -400,7 +412,11 @@ function securityHeaders(): Record<string, string> {
   };
 }
 
-function handleRequestError(request: IncomingMessage, response: ServerResponse, error: unknown): void {
+function handleRequestError(
+  request: IncomingMessage,
+  response: ServerResponse,
+  error: unknown,
+): void {
   if (response.headersSent) {
     response.destroy();
     return;
@@ -409,7 +425,8 @@ function handleRequestError(request: IncomingMessage, response: ServerResponse, 
     sendJson(response, error.status, { error: error.message });
     return;
   }
-  const statusCode = (error as { $metadata?: { httpStatusCode?: number } })?.$metadata?.httpStatusCode;
+  const statusCode = (error as { $metadata?: { httpStatusCode?: number } })?.$metadata
+    ?.httpStatusCode;
   if (statusCode === 404) {
     sendJson(response, 404, { error: "snapshot not found" });
     return;
@@ -422,7 +439,11 @@ function handleRequestError(request: IncomingMessage, response: ServerResponse, 
     sendJson(response, 409, { error: "resource already exists" });
     return;
   }
-  console.error("request failed", { method: request.method, url: request.url, error: error instanceof Error ? error.message : "unknown error" });
+  console.error("request failed", {
+    method: request.method,
+    url: request.url,
+    error: error instanceof Error ? error.message : "unknown error",
+  });
   sendJson(response, 500, { error: "internal server error" });
 }
 

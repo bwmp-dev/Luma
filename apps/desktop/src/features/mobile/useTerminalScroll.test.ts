@@ -6,8 +6,7 @@ type Point = { x: number; y: number };
 
 function dispatch(target: Element, type: string, points: Point[]): Event {
   const event = new Event(type, { bubbles: true, cancelable: true });
-  const toTouch = (point: Point) =>
-    ({ clientX: point.x, clientY: point.y }) as Touch;
+  const toTouch = (point: Point) => ({ clientX: point.x, clientY: point.y }) as Touch;
   Object.defineProperty(event, "touches", { value: points.map(toTouch) });
   Object.defineProperty(event, "changedTouches", { value: points.map(toTouch) });
   target.dispatchEvent(event);

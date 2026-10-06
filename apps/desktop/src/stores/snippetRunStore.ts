@@ -1,9 +1,5 @@
 import { create } from "zustand";
-import {
-  extractVariables,
-  substituteVariables,
-  type Snippet,
-} from "../lib/snippets";
+import { extractVariables, substituteVariables, type Snippet } from "../lib/snippets";
 import { terminalManager } from "../features/terminal/terminalManager";
 import { useSessionStore } from "./sessionStore";
 import { useSnippetHostRunStore } from "./snippetHostRunStore";

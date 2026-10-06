@@ -48,9 +48,9 @@ export function PaneTitleBar({
 
   const subtitle =
     session.type === "ssh"
-      ? session.connectionTarget ?? null
+      ? (session.connectionTarget ?? null)
       : session.type === "serial"
-        ? session.serialPort ?? null
+        ? (session.serialPort ?? null)
         : null;
   // The server sends opaque member ids only — there are no display names to
   // show, so presence is expressed as a count plus the control-lease holder.
@@ -58,11 +58,8 @@ export function PaneTitleBar({
     ? room.participants.filter((p) => p.memberId !== room.selfMemberId).length
     : 0;
   const controlHolder =
-    room && room.sharedTerminalId
-      ? room.control[room.sharedTerminalId] ?? null
-      : null;
-  const someoneElseHasControl =
-    controlHolder !== null && controlHolder !== room?.selfMemberId;
+    room && room.sharedTerminalId ? (room.control[room.sharedTerminalId] ?? null) : null;
+  const someoneElseHasControl = controlHolder !== null && controlHolder !== room?.selfMemberId;
 
   return (
     <div
@@ -99,9 +96,7 @@ export function PaneTitleBar({
 
       {session.type === "ssh" &&
         session.status === "connected" &&
-        typeof session.latencyMs === "number" && (
-          <LatencyChip latencyMs={session.latencyMs} />
-        )}
+        typeof session.latencyMs === "number" && <LatencyChip latencyMs={session.latencyMs} />}
 
       {room && (
         <button

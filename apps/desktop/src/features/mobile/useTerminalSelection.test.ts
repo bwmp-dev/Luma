@@ -64,11 +64,7 @@ describe("bindTerminalSelection", () => {
     dispatch(child, "touchstart", [{ x: 15, y: 25 }]);
     dispatch(child, "touchmove", [{ x: 95, y: 65 }]);
 
-    expect(selectCells).toHaveBeenCalledWith(
-      "s1",
-      { x: 1, y: 2 },
-      { x: 9, y: 6 },
-    );
+    expect(selectCells).toHaveBeenCalledWith("s1", { x: 1, y: 2 }, { x: 9, y: 6 });
   });
 
   it("treats a press that never moved as a tap on whatever is under it", () => {
@@ -111,8 +107,7 @@ describe("bindTerminalSelection", () => {
   });
 
   it("scrolls and keeps extending while the finger rests at the bottom edge", () => {
-    host.getBoundingClientRect = () =>
-      ({ top: 0, bottom: 100, left: 0, right: 200 }) as DOMRect;
+    host.getBoundingClientRect = () => ({ top: 0, bottom: 100, left: 0, right: 200 }) as DOMRect;
 
     dispatch(child, "touchstart", [{ x: 15, y: 25 }]);
     dispatch(child, "touchmove", [{ x: 95, y: 95 }]);
@@ -124,8 +119,7 @@ describe("bindTerminalSelection", () => {
   });
 
   it("stops edge scrolling once the listeners are removed", () => {
-    host.getBoundingClientRect = () =>
-      ({ top: 0, bottom: 100, left: 0, right: 200 }) as DOMRect;
+    host.getBoundingClientRect = () => ({ top: 0, bottom: 100, left: 0, right: 200 }) as DOMRect;
     dispatch(child, "touchstart", [{ x: 15, y: 25 }]);
     dispatch(child, "touchmove", [{ x: 95, y: 95 }]);
 

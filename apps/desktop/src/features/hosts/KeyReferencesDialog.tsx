@@ -87,12 +87,26 @@ export function KeyReferencesDialog({
       setPendingDelete(null);
     },
   });
-  const generate = useMutation({ mutationFn: ({ name, path, passphrase, certificate }: { name: string; path: string; passphrase: string; certificate: string | null }) => generateSshKey(name, path, passphrase, certificate, creationVaultId), onSuccess: () => { invalidate(); setDraft(null); } });
+  const generate = useMutation({
+    mutationFn: ({
+      name,
+      path,
+      passphrase,
+      certificate,
+    }: {
+      name: string;
+      path: string;
+      passphrase: string;
+      certificate: string | null;
+    }) => generateSshKey(name, path, passphrase, certificate, creationVaultId),
+    onSuccess: () => {
+      invalidate();
+      setDraft(null);
+    },
+  });
 
   const nameMissing = draft ? !draft.name.trim() : false;
-  const pathMissing = draft
-    ? draft.storageMode === "local-path" && !draft.localPath.trim()
-    : false;
+  const pathMissing = draft ? draft.storageMode === "local-path" && !draft.localPath.trim() : false;
   const canSave = draft ? !nameMissing && !pathMissing : false;
 
   const submit = () => {
@@ -103,8 +117,7 @@ export function KeyReferencesDialog({
         vaultId: creationVaultId,
         name: draft.name.trim(),
         storageMode: draft.storageMode,
-        localPath:
-          draft.storageMode === "local-path" ? draft.localPath.trim() || null : null,
+        localPath: draft.storageMode === "local-path" ? draft.localPath.trim() || null : null,
         publicKey: draft.publicKey.trim() || null,
         fingerprint: draft.fingerprint.trim() || null,
         certificate: draft.certificate.trim() || null,
@@ -126,8 +139,7 @@ export function KeyReferencesDialog({
       <div className="space-y-3">
         {(keys ?? []).length === 0 && !draft && (
           <p className="text-sm text-muted">
-            No key references yet. Add one to point a host at a private key on
-            disk.
+            No key references yet. Add one to point a host at a private key on disk.
           </p>
         )}
 
@@ -201,8 +213,23 @@ export function KeyReferencesDialog({
               onChange={(v) => setDraft({ ...draft, publicKey: v })}
               placeholder="ssh-ed25519 AAAA…"
             />
-            <TextField label={draft.id ? "Passphrase (leave blank to keep current)" : "Passphrase (saved in encrypted keystore)"} type="password" value={draft.passphrase} onChange={(passphrase) => setDraft({ ...draft, passphrase })} />
-            <TextField label="Certificate (optional)" mono value={draft.certificate} onChange={(certificate) => setDraft({ ...draft, certificate })} placeholder="ssh-ed25519-cert-v01@openssh.com …" />
+            <TextField
+              label={
+                draft.id
+                  ? "Passphrase (leave blank to keep current)"
+                  : "Passphrase (saved in encrypted keystore)"
+              }
+              type="password"
+              value={draft.passphrase}
+              onChange={(passphrase) => setDraft({ ...draft, passphrase })}
+            />
+            <TextField
+              label="Certificate (optional)"
+              mono
+              value={draft.certificate}
+              onChange={(certificate) => setDraft({ ...draft, certificate })}
+              placeholder="ssh-ed25519-cert-v01@openssh.com …"
+            />
             <TextField
               label="Fingerprint (optional)"
               mono
@@ -210,10 +237,10 @@ export function KeyReferencesDialog({
               onChange={(v) => setDraft({ ...draft, fingerprint: v })}
               placeholder="SHA256:…"
             />
-            {backendError && (
-              <p className="text-xs text-danger">{backendError.message}</p>
+            {backendError && <p className="text-xs text-danger">{backendError.message}</p>}
+            {generate.isError && (
+              <p className="text-xs text-danger">{parseLumaError(generate.error).message}</p>
             )}
-            {generate.isError && <p className="text-xs text-danger">{parseLumaError(generate.error).message}</p>}
             <div className="flex gap-2">
               <button
                 type="button"
@@ -223,7 +250,23 @@ export function KeyReferencesDialog({
               >
                 {draft.id ? "Save key" : "Add key"}
               </button>
-              {!draft.id && draft.storageMode === "local-path" && <button type="button" onClick={() => generate.mutate({ name: draft.name.trim(), path: draft.localPath.trim(), passphrase: draft.passphrase, certificate: draft.certificate.trim() || null })} disabled={!canSave || generate.isPending} className="rounded-md border border-accent px-3 py-1.5 text-sm text-accent disabled:opacity-50">Generate Ed25519 key pair</button>}
+              {!draft.id && draft.storageMode === "local-path" && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    generate.mutate({
+                      name: draft.name.trim(),
+                      path: draft.localPath.trim(),
+                      passphrase: draft.passphrase,
+                      certificate: draft.certificate.trim() || null,
+                    })
+                  }
+                  disabled={!canSave || generate.isPending}
+                  className="rounded-md border border-accent px-3 py-1.5 text-sm text-accent disabled:opacity-50"
+                >
+                  Generate Ed25519 key pair
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setDraft(null)}
@@ -261,10 +304,9 @@ export function KeyReferencesDialog({
         message={
           <div className="space-y-2">
             <p>
-              Delete{" "}
-              <span className="font-medium text-foreground">{pendingDelete?.name}</span>?
-              Identities and hosts using this key will no longer have one. This
-              can&apos;t be undone.
+              Delete <span className="font-medium text-foreground">{pendingDelete?.name}</span>?
+              Identities and hosts using this key will no longer have one. This can&apos;t be
+              undone.
             </p>
             {remove.isError && (
               <p role="alert" className="text-danger">

@@ -1,16 +1,15 @@
 {
   "name": "luma-monorepo",
   "private": true,
-  "type": "module",
-  "packageManager": "pnpm@11.20.0",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/bwmp-dev/Luma.git"
-  },
   "homepage": "https://github.com/bwmp-dev/Luma",
   "bugs": {
     "url": "https://github.com/bwmp-dev/Luma/issues"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bwmp-dev/Luma.git"
+  },
+  "type": "module",
   "scripts": {
     "dev": "pnpm --dir apps/desktop dev",
     "build": "pnpm shared:build && pnpm --dir apps/desktop build",
@@ -18,6 +17,8 @@
     "typecheck": "pnpm shared:build && pnpm --dir apps/desktop typecheck",
     "test": "pnpm --dir apps/desktop test",
     "lint": "pnpm --dir apps/desktop lint",
+    "format": "vp fmt -c .oxfmtrc.json",
+    "format:check": "vp fmt --check -c .oxfmtrc.json",
     "tauri": "pnpm --dir apps/desktop tauri",
     "website:dev": "pnpm --dir apps/website dev",
     "website:build": "pnpm --dir apps/website build",
@@ -45,5 +46,9 @@
     "release:check": "node scripts/release-preflight.mjs",
     "release:desktop": "pnpm --dir apps/desktop tauri build",
     "release:android": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/android-release.ps1"
-  }
+  },
+  "devDependencies": {
+    "vite-plus": "0.2.5"
+  },
+  "packageManager": "pnpm@11.20.0"
 }

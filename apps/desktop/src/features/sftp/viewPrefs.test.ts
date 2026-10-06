@@ -10,10 +10,7 @@ import {
 } from "./viewPrefs";
 import type { SftpEntry } from "../../lib/sftp";
 
-function entry(
-  name: string,
-  overrides: Partial<SftpEntry> = {},
-): SftpEntry {
+function entry(name: string, overrides: Partial<SftpEntry> = {}): SftpEntry {
   return {
     name,
     path: `/d/${name}`,
@@ -39,12 +36,7 @@ describe("applyViewPrefs sorting", () => {
   it("sorts by name ascending and keeps directories first", () => {
     const list = [entry("b.txt"), dir("zeta"), entry("a.txt"), dir("alpha")];
 
-    expect(names(applyViewPrefs(list, prefs()))).toEqual([
-      "alpha",
-      "zeta",
-      "a.txt",
-      "b.txt",
-    ]);
+    expect(names(applyViewPrefs(list, prefs()))).toEqual(["alpha", "zeta", "a.txt", "b.txt"]);
   });
 
   it("keeps directories first even when the direction is reversed", () => {
@@ -52,9 +44,12 @@ describe("applyViewPrefs sorting", () => {
 
     // Reversing name order flips within each group; it must not bury the
     // folders you navigate with underneath the files.
-    expect(names(applyViewPrefs(list, prefs({ sortDirection: "desc" })))).toEqual(
-      ["zeta", "alpha", "b.txt", "a.txt"],
-    );
+    expect(names(applyViewPrefs(list, prefs({ sortDirection: "desc" })))).toEqual([
+      "zeta",
+      "alpha",
+      "b.txt",
+      "a.txt",
+    ]);
   });
 
   it("sorts by size, treating a null size as zero", () => {
@@ -70,12 +65,7 @@ describe("applyViewPrefs sorting", () => {
       "big",
     ]);
     expect(
-      names(
-        applyViewPrefs(
-          list,
-          prefs({ sortField: "size", sortDirection: "desc" }),
-        ),
-      ),
+      names(applyViewPrefs(list, prefs({ sortField: "size", sortDirection: "desc" }))),
     ).toEqual(["big", "small", "unknown"]);
   });
 
@@ -86,9 +76,11 @@ describe("applyViewPrefs sorting", () => {
       entry("mid", { modifiedAt: 500 }),
     ];
 
-    expect(
-      names(applyViewPrefs(list, prefs({ sortField: "modified" }))),
-    ).toEqual(["old", "mid", "new"]);
+    expect(names(applyViewPrefs(list, prefs({ sortField: "modified" })))).toEqual([
+      "old",
+      "mid",
+      "new",
+    ]);
   });
 
   it("sorts by kind, then by name inside each kind", () => {
@@ -108,27 +100,15 @@ describe("applyViewPrefs sorting", () => {
   });
 
   it("breaks ties on name so equal values keep a stable order", () => {
-    const list = [
-      entry("c", { size: 5 }),
-      entry("a", { size: 5 }),
-      entry("b", { size: 5 }),
-    ];
+    const list = [entry("c", { size: 5 }), entry("a", { size: 5 }), entry("b", { size: 5 })];
 
-    expect(names(applyViewPrefs(list, prefs({ sortField: "size" })))).toEqual([
-      "a",
-      "b",
-      "c",
-    ]);
+    expect(names(applyViewPrefs(list, prefs({ sortField: "size" })))).toEqual(["a", "b", "c"]);
   });
 
   it("orders case-insensitively", () => {
     const list = [entry("Banana"), entry("apple"), entry("Cherry")];
 
-    expect(names(applyViewPrefs(list, prefs()))).toEqual([
-      "apple",
-      "Banana",
-      "Cherry",
-    ]);
+    expect(names(applyViewPrefs(list, prefs()))).toEqual(["apple", "Banana", "Cherry"]);
   });
 
   it("does not mutate the listing it was given", () => {
@@ -207,8 +187,6 @@ describe("parseViewPrefs", () => {
       ...DEFAULT_VIEW_PREFS,
       showHidden: true,
     });
-    expect(parseViewPrefs({ sortDirection: "sideways" })).toEqual(
-      DEFAULT_VIEW_PREFS,
-    );
+    expect(parseViewPrefs({ sortDirection: "sideways" })).toEqual(DEFAULT_VIEW_PREFS);
   });
 });

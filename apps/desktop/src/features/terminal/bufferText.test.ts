@@ -68,8 +68,7 @@ function stub(rows: string[], wrapped: number[] = []): Terminal {
 }
 
 /** "see https://" / "example.com/" / "a b" — one URL broken over three rows. */
-const wrappedUrl = () =>
-  stub(["see https://", "example.com/", "a b"], [1, 2]);
+const wrappedUrl = () => stub(["see https://", "example.com/", "a b"], [1, 2]);
 
 describe("logicalLineAt", () => {
   it("joins wrapped rows and maps every character back to its cell", () => {

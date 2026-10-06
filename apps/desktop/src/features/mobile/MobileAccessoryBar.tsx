@@ -72,10 +72,7 @@ export function MobileAccessoryBar({ sessionId }: { sessionId: string }) {
   // manager callback) or toggled off.
   const [sticky, setSticky] = useState<"ctrl" | "alt" | null>(null);
 
-  useEffect(
-    () => () => terminalManager.setPendingModifier(sessionId, null),
-    [sessionId],
-  );
+  useEffect(() => () => terminalManager.setPendingModifier(sessionId, null), [sessionId]);
 
   const armModifier = (modifier: "ctrl" | "alt") => {
     if (sticky === modifier) {
@@ -100,16 +97,8 @@ export function MobileAccessoryBar({ sessionId }: { sessionId: string }) {
         role="toolbar"
         aria-label="Terminal keys"
       >
-        <ModKey
-          label="Ctrl"
-          active={sticky === "ctrl"}
-          onPress={() => armModifier("ctrl")}
-        />
-        <ModKey
-          label="Alt"
-          active={sticky === "alt"}
-          onPress={() => armModifier("alt")}
-        />
+        <ModKey label="Ctrl" active={sticky === "ctrl"} onPress={() => armModifier("ctrl")} />
+        <ModKey label="Alt" active={sticky === "alt"} onPress={() => armModifier("alt")} />
         {KEYS.map((key) => (
           <KeyButton
             key={key.aria}
@@ -133,10 +122,7 @@ export function MobileAccessoryBar({ sessionId }: { sessionId: string }) {
           <TextSelect size={16} />
         </ActionKey>
         {canAttachFile(session) && session && (
-          <ActionKey
-            aria="Attach file"
-            onPress={() => void attachFileToSession(session)}
-          >
+          <ActionKey aria="Attach file" onPress={() => void attachFileToSession(session)}>
             <Paperclip size={16} />
           </ActionKey>
         )}
@@ -148,11 +134,7 @@ export function MobileAccessoryBar({ sessionId }: { sessionId: string }) {
           aria={DICTATION_AVAILABLE ? "Voice composer" : "Compose command"}
           onPress={() => openVoice({ sessionId, label: session?.title })}
         >
-          {DICTATION_AVAILABLE ? (
-            <Mic size={16} />
-          ) : (
-            <MessageSquarePlus size={16} />
-          )}
+          {DICTATION_AVAILABLE ? <Mic size={16} /> : <MessageSquarePlus size={16} />}
         </ActionKey>
         <ActionKey aria="Search terminal" onPress={() => setSearchOpen(true)}>
           <Search size={16} />
@@ -160,11 +142,7 @@ export function MobileAccessoryBar({ sessionId }: { sessionId: string }) {
         <ActionKey aria="Reconnect" onPress={() => void restartSession(sessionId)}>
           <RotateCw size={16} />
         </ActionKey>
-        <ActionKey
-          aria="Disconnect"
-          destructive
-          onPress={() => closeSession(sessionId)}
-        >
+        <ActionKey aria="Disconnect" destructive onPress={() => closeSession(sessionId)}>
           <Plug size={16} />
         </ActionKey>
       </div>

@@ -79,11 +79,7 @@ describe("arrow pad", () => {
     gestures.move({ x: 0, y: ARROW_STEP_PX * 2, t: 20 });
     gestures.move({ x: 0, y: ARROW_STEP_PX * 3, t: 30 });
 
-    expect(keys).toEqual([
-      ARROW_SEQUENCES.down,
-      ARROW_SEQUENCES.down,
-      ARROW_SEQUENCES.down,
-    ]);
+    expect(keys).toEqual([ARROW_SEQUENCES.down, ARROW_SEQUENCES.down, ARROW_SEQUENCES.down]);
   });
 
   it("emits the opposite arrow when the finger drags back", () => {
@@ -106,11 +102,7 @@ describe("arrow pad", () => {
     // Drifts vertically, but never as far as it travels horizontally.
     gestures.move({ x: ARROW_STEP_PX * 3, y: ARROW_STEP_PX - 1, t: 10 });
 
-    expect(keys).toEqual([
-      ARROW_SEQUENCES.right,
-      ARROW_SEQUENCES.right,
-      ARROW_SEQUENCES.right,
-    ]);
+    expect(keys).toEqual([ARROW_SEQUENCES.right, ARROW_SEQUENCES.right, ARROW_SEQUENCES.right]);
   });
 
   it("consumes moves while open so the caller can block xterm scrolling", () => {

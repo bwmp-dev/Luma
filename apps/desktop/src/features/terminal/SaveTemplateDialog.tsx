@@ -24,10 +24,7 @@ export function SaveTemplateDialog({
   const addTemplate = useTemplateStore((s) => s.addTemplate);
   const [name, setName] = useState("");
 
-  const root = useMemo(
-    () => (tab ? serializeNode(tab.root, sessions) : null),
-    [tab, sessions],
-  );
+  const root = useMemo(() => (tab ? serializeNode(tab.root, sessions) : null), [tab, sessions]);
 
   useEffect(() => {
     if (open) setName("");
@@ -67,9 +64,7 @@ export function SaveTemplateDialog({
       }
     >
       <label className="block">
-        <span className="mb-1 block text-xs font-medium text-muted">
-          Template name
-        </span>
+        <span className="mb-1 block text-xs font-medium text-muted">Template name</span>
         <input
           autoFocus
           value={name}
@@ -82,9 +77,7 @@ export function SaveTemplateDialog({
         />
       </label>
       {!root && (
-        <p className="mt-3 text-xs text-muted">
-          This tab has no restorable panes to save.
-        </p>
+        <p className="mt-3 text-xs text-muted">This tab has no restorable panes to save.</p>
       )}
     </Modal>
   );

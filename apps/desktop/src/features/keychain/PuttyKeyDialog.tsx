@@ -126,12 +126,10 @@ export function PuttyKeyDialog({
               <KeyRound size={18} />
             </span>
             <div className="min-w-0 flex-1">
-              <Dialog.Title className="text-sm font-semibold">
-                Import PuTTY key
-              </Dialog.Title>
+              <Dialog.Title className="text-sm font-semibold">Import PuTTY key</Dialog.Title>
               <p className="mt-0.5 text-xs text-muted">
-                The key is converted to OpenSSH format and stored in your
-                keychain. The .ppk file is left untouched.
+                The key is converted to OpenSSH format and stored in your keychain. The .ppk file is
+                left untouched.
               </p>
             </div>
             <Dialog.Close className="rounded p-1 text-muted hover:bg-raised hover:text-foreground">
@@ -210,8 +208,8 @@ export function PuttyKeyDialog({
                       className="mt-1 w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground outline-none focus:border-accent"
                     />
                     <span className="mt-1 block text-[10px] text-muted">
-                      The converted key keeps this passphrase, so it stays as
-                      protected as the original.
+                      The converted key keeps this passphrase, so it stays as protected as the
+                      original.
                     </span>
                   </label>
                 )}

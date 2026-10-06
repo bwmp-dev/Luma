@@ -1,10 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  diffStats,
-  hunkToText,
-  parseUnifiedDiff,
-  toSideBySide,
-} from "./diff";
+import { diffStats, hunkToText, parseUnifiedDiff, toSideBySide } from "./diff";
 
 /*
  * The parser only ever sees output from a remote `git diff`, which may be
@@ -56,9 +51,7 @@ describe("parseUnifiedDiff", () => {
   });
 
   it("keeps a section heading on the hunk header", () => {
-    const parsed = parseUnifiedDiff(
-      "@@ -10,2 +10,2 @@ fn helper() {\n-a\n+b\n",
-    );
+    const parsed = parseUnifiedDiff("@@ -10,2 +10,2 @@ fn helper() {\n-a\n+b\n");
     expect(parsed.files[0].hunks[0].header).toBe("@@ -10,2 +10,2 @@ fn helper() {");
     expect(parsed.files[0].hunks[0].oldStart).toBe(10);
   });
@@ -116,12 +109,7 @@ diff --git a/b.txt b/b.txt
   it("treats empty lines as empty context lines", () => {
     const parsed = parseUnifiedDiff("@@ -1,3 +1,3 @@\n a\n\n-b\n+c\n");
     const lines = parsed.files[0].hunks[0].lines;
-    expect(lines.map((line) => line.kind)).toEqual([
-      "context",
-      "context",
-      "remove",
-      "add",
-    ]);
+    expect(lines.map((line) => line.kind)).toEqual(["context", "context", "remove", "add"]);
     expect(lines[1].text).toBe("");
     // The trailing newline of the patch must not become a fifth line.
     expect(lines).toHaveLength(4);
@@ -137,9 +125,7 @@ diff --git a/b.txt b/b.txt
   });
 
   it("flags a git binary patch", () => {
-    const parsed = parseUnifiedDiff(
-      "diff --git a/x.bin b/x.bin\nGIT binary patch\nliteral 12\n",
-    );
+    const parsed = parseUnifiedDiff("diff --git a/x.bin b/x.bin\nGIT binary patch\nliteral 12\n");
     expect(parsed.binary).toBe(true);
   });
 
@@ -248,9 +234,8 @@ describe("hunkToText", () => {
   });
 
   it("re-emits the no-newline marker", () => {
-    const hunk = parseUnifiedDiff(
-      "@@ -1,1 +1,1 @@\n-old\n\\ No newline at end of file\n+new\n",
-    ).files[0].hunks[0];
+    const hunk = parseUnifiedDiff("@@ -1,1 +1,1 @@\n-old\n\\ No newline at end of file\n+new\n")
+      .files[0].hunks[0];
     expect(hunkToText(hunk)).toContain("-old\n\\ No newline at end of file");
   });
 });

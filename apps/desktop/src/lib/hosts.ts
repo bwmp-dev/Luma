@@ -173,8 +173,21 @@ export type SshAgentIdentity = {
   hardwareBacked: boolean;
 };
 
-export type Identity = { id: string; vaultId: string; name: string; username: string; keyId: string | null; hasPassword: boolean };
-export type IdentityInput = { vaultId?: string; name: string; username: string; keyId: string | null; password: string | null };
+export type Identity = {
+  id: string;
+  vaultId: string;
+  name: string;
+  username: string;
+  keyId: string | null;
+  hasPassword: boolean;
+};
+export type IdentityInput = {
+  vaultId?: string;
+  name: string;
+  username: string;
+  keyId: string | null;
+  password: string | null;
+};
 
 export type SshConfigCandidate = {
   name: string;
@@ -319,7 +332,7 @@ export function groupInheritedDefaults(
 // Key references ------------------------------------------------------------
 
 export function listKeyReferences(vaultId?: string): Promise<KeyReference[]> {
-    return invoke<KeyReference[]>("key_references_list", { vaultId: vaultId ?? null });
+  return invoke<KeyReference[]>("key_references_list", { vaultId: vaultId ?? null });
 }
 
 export type KeyReferenceSecrets = { privateKey: string | null; passphrase: string | null };
@@ -339,18 +352,21 @@ export type DerivedPublicKey = { publicKey: string; fingerprint: string };
  * an encrypted PKCS#8 key needs / was given the wrong passphrase. Encrypted
  * OpenSSH keys derive their public half without a passphrase, so callers need
  * not supply one just to derive. */
-export function derivePublicKey(privateKey: string, passphrase?: string): Promise<DerivedPublicKey> {
-  return invoke<DerivedPublicKey>("derive_public_key", { privateKey, passphrase: passphrase ?? null });
+export function derivePublicKey(
+  privateKey: string,
+  passphrase?: string,
+): Promise<DerivedPublicKey> {
+  return invoke<DerivedPublicKey>("derive_public_key", {
+    privateKey,
+    passphrase: passphrase ?? null,
+  });
 }
 
 export function createKeyReference(input: KeyReferenceInput): Promise<KeyReference> {
   return invoke<KeyReference>("key_reference_create", { input });
 }
 
-export function updateKeyReference(
-  id: string,
-  input: KeyReferenceInput,
-): Promise<KeyReference> {
+export function updateKeyReference(id: string, input: KeyReferenceInput): Promise<KeyReference> {
   return invoke<KeyReference>("key_reference_update", { id, input });
 }
 
@@ -362,7 +378,17 @@ export function deleteKeyReference(id: string): Promise<void> {
 export function listSshAgentIdentities(): Promise<SshAgentIdentity[]> {
   return invoke<SshAgentIdentity[]>("ssh_agent_identities");
 }
-export function generateSshKey(name: string, localPath: string, passphrase: string, certificate: string | null, vaultId?: string): Promise<KeyReference> { return invoke<KeyReference>("ssh_key_generate", { input: { vaultId, name, localPath, passphrase, certificate } }); }
+export function generateSshKey(
+  name: string,
+  localPath: string,
+  passphrase: string,
+  certificate: string | null,
+  vaultId?: string,
+): Promise<KeyReference> {
+  return invoke<KeyReference>("ssh_key_generate", {
+    input: { vaultId, name, localPath, passphrase, certificate },
+  });
+}
 
 /** SSH key algorithms Luma can generate into the encrypted keystore. */
 export type GeneratedKeyType = "ed25519" | "rsa4096";
@@ -389,8 +415,10 @@ export function generateKeystoreSshKey(input: {
 
 export const listIdentities = (vaultId?: string) =>
   invoke<Identity[]>("identities_list", { vaultId: vaultId ?? null });
-export const createIdentity = (input: IdentityInput) => invoke<Identity>("identity_create", { input });
-export const updateIdentity = (id: string, input: IdentityInput) => invoke<Identity>("identity_update", { id, input });
+export const createIdentity = (input: IdentityInput) =>
+  invoke<Identity>("identity_create", { input });
+export const updateIdentity = (id: string, input: IdentityInput) =>
+  invoke<Identity>("identity_update", { id, input });
 export const deleteIdentity = (id: string) => invoke<void>("identity_delete", { id });
 
 // SSH availability + config import ------------------------------------------
@@ -430,12 +458,7 @@ export type ImportedHostAuthHint =
  * - `ppk`: converted to OpenSSH and stored in the keystore, no prompt needed.
  * - `ppk-encrypted`: same, but needs a passphrase first.
  * - `missing` / `unreadable`: the host imports without a key. */
-export type ImportedKeyStatus =
-  | "openssh"
-  | "ppk"
-  | "ppk-encrypted"
-  | "missing"
-  | "unreadable";
+export type ImportedKeyStatus = "openssh" | "ppk" | "ppk-encrypted" | "missing" | "unreadable";
 
 export type ImportedHostCandidate = {
   name: string;
@@ -545,7 +568,9 @@ export function parseLumaError(error: unknown): { category: string; message: str
 
 export type KeystoreStatus = { configured: boolean; unlocked: boolean; rememberOnDevice: boolean };
 export const getKeystoreStatus = () => invoke<KeystoreStatus>("keystore_status");
-export const setupKeystore = (password: string, rememberDevice: boolean) => invoke<void>("keystore_setup", { input: { password, rememberDevice } });
+export const setupKeystore = (password: string, rememberDevice: boolean) =>
+  invoke<void>("keystore_setup", { input: { password, rememberDevice } });
 export const unlockKeystore = (password: string) => invoke<void>("keystore_unlock", { password });
 export const lockKeystore = () => invoke<void>("keystore_lock");
-export const setKeystorePolicy = (rememberDevice: boolean) => invoke<void>("keystore_set_policy", { rememberDevice });
+export const setKeystorePolicy = (rememberDevice: boolean) =>
+  invoke<void>("keystore_set_policy", { rememberDevice });

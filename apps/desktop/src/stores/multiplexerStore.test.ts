@@ -9,9 +9,7 @@ import {
 import { SETTING_KEYS } from "../types";
 import type { MultiplexerSession } from "../lib/multiplexer";
 
-function session(
-  overrides: Partial<MultiplexerSession> = {},
-): MultiplexerSession {
+function session(overrides: Partial<MultiplexerSession> = {}): MultiplexerSession {
   return {
     kind: "tmux",
     name: "main",
@@ -113,9 +111,7 @@ describe("multiplexer store", () => {
     await useMultiplexerStore
       .getState()
       .setResume("host-1", { multiplexer: "zellij", sessionName: "deploy" });
-    expect(useMultiplexerStore.getState().resume["host-1"].multiplexer).toBe(
-      "zellij",
-    );
+    expect(useMultiplexerStore.getState().resume["host-1"].multiplexer).toBe("zellij");
 
     await useMultiplexerStore.getState().setResume("host-1", null);
     expect(useMultiplexerStore.getState().resume["host-1"]).toBeUndefined();
@@ -170,9 +166,7 @@ describe("multiplexer store", () => {
   it("parseResumeMap rejects non-object input", () => {
     expect(parseResumeMap(null)).toEqual({});
     expect(parseResumeMap("nope")).toEqual({});
-    expect(parseResumeMap({ h: { multiplexer: "tmux", sessionName: "" } })).toEqual(
-      {},
-    );
+    expect(parseResumeMap({ h: { multiplexer: "tmux", sessionName: "" } })).toEqual({});
   });
 
   it("selects one multiplexer's sessions, attached first then by name", () => {
@@ -188,9 +182,7 @@ describe("multiplexer store", () => {
       "alpha",
       "zeta",
     ]);
-    expect(selectSessionsByKind(sessions, "zellij").map((s) => s.name)).toEqual([
-      "other",
-    ]);
+    expect(selectSessionsByKind(sessions, "zellij").map((s) => s.name)).toEqual(["other"]);
     expect(selectSessionsByKind(undefined, "tmux")).toEqual([]);
   });
 });

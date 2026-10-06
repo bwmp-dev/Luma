@@ -12,10 +12,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import type {
-  DevicePublicKey,
-  RoomKeyEnvelope,
-} from "@luma/collaboration-encryption";
+import type { DevicePublicKey, RoomKeyEnvelope } from "@luma/collaboration-encryption";
 import type { RoomRole } from "@luma/collaboration-protocol";
 
 export const accounts = pgTable("collaboration_accounts", {
@@ -71,10 +68,7 @@ export const roomInvites = pgTable(
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
   },
   (table) => [
-    check(
-      "collaboration_room_invites_role_check",
-      sql`${table.role} IN ('controller', 'viewer')`,
-    ),
+    check("collaboration_room_invites_role_check", sql`${table.role} IN ('controller', 'viewer')`),
     uniqueIndex("collaboration_room_invites_secret_hash_idx").on(table.secretHash),
   ],
 );
@@ -98,10 +92,7 @@ export const roomMembers = pgTable(
       "collaboration_room_members_role_check",
       sql`${table.role} IN ('owner', 'controller', 'viewer')`,
     ),
-    unique("collaboration_room_members_room_id_subject_key").on(
-      table.roomId,
-      table.subject,
-    ),
+    unique("collaboration_room_members_room_id_subject_key").on(table.roomId, table.subject),
     index("collaboration_room_members_subject_idx")
       .on(table.subject)
       .where(sql`${table.revokedAt} IS NULL`),
@@ -130,9 +121,6 @@ export const roomMemberKeys = pgTable(
       columns: [table.roomId, table.deviceId, table.keyEpoch],
     }),
     check("collaboration_room_member_keys_key_epoch_check", sql`${table.keyEpoch} > 0`),
-    index("collaboration_room_member_keys_member_idx").on(
-      table.memberId,
-      table.keyEpoch,
-    ),
+    index("collaboration_room_member_keys_member_idx").on(table.memberId, table.keyEpoch),
   ],
 );

@@ -24,15 +24,11 @@ export function emptyGenerateKeyDraft(): GenerateKeyDraft {
   };
 }
 
-export type GenerateKeyValidation =
-  | { ok: true }
-  | { ok: false; error: string };
+export type GenerateKeyValidation = { ok: true } | { ok: false; error: string };
 
 /** Validate a generate-key draft: a name is required, and when a passphrase is
  * given it must be confirmed. Returns the first blocking problem, if any. */
-export function validateGenerateKey(
-  draft: GenerateKeyDraft,
-): GenerateKeyValidation {
+export function validateGenerateKey(draft: GenerateKeyDraft): GenerateKeyValidation {
   if (!draft.name.trim()) return { ok: false, error: "A name is required." };
   if (draft.passphrase !== draft.confirmPassphrase) {
     return { ok: false, error: "Passphrases do not match." };

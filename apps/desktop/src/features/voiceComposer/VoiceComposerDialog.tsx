@@ -28,17 +28,9 @@ import {
   type VoiceSource,
 } from "../../lib/voiceHistory";
 import { cn } from "../../lib/utils";
-import {
-  canAttachFile,
-  pickLocalFile,
-  uploadAttachment,
-} from "../terminal/attachFile";
+import { canAttachFile, pickLocalFile, uploadAttachment } from "../terminal/attachFile";
 import { terminalManager } from "../terminal/terminalManager";
-import {
-  detectSpeechSupport,
-  startDictation,
-  type DictationSession,
-} from "./speechProvider";
+import { detectSpeechSupport, startDictation, type DictationSession } from "./speechProvider";
 
 /*
  * Reviewed voice composer.
@@ -415,8 +407,7 @@ export function VoiceComposerDialog({
               <span className="flex items-start gap-2 text-xs text-muted">
                 <Info size={14} className="mt-0.5 shrink-0" />
                 <span>
-                  On-device dictation is unavailable here. {support.reason}{" "}
-                  {support.privacyNote}
+                  On-device dictation is unavailable here. {support.reason} {support.privacyNote}
                 </span>
               </span>
             )}
@@ -477,11 +468,7 @@ export function VoiceComposerDialog({
       <ConfirmDialog
         open={confirmMode !== null}
         onOpenChange={(value) => !value && setConfirmMode(null)}
-        title={
-          report.level === "danger"
-            ? "Run a destructive command?"
-            : "Run a risky command?"
-        }
+        title={report.level === "danger" ? "Run a destructive command?" : "Run a risky command?"}
         destructive
         confirmLabel="Send with Enter"
         onConfirm={() => {
@@ -493,16 +480,14 @@ export function VoiceComposerDialog({
           <>
             <p>
               This draft will run immediately on{" "}
-              <span className="font-medium text-foreground">{label ?? "this host"}</span>{" "}
-              and matched:
+              <span className="font-medium text-foreground">{label ?? "this host"}</span> and
+              matched:
             </p>
             <ul className="mt-2 space-y-1">
               {report.matches.map((match) => (
                 <li key={`${match.label}-${match.snippet}`}>
                   <span className="font-medium text-foreground">{match.label}</span>
-                  <code className="ml-1 break-all text-xs text-danger">
-                    {match.snippet}
-                  </code>
+                  <code className="ml-1 break-all text-xs text-danger">{match.snippet}</code>
                 </li>
               ))}
             </ul>
@@ -535,9 +520,7 @@ function SafetyBanner({ report }: { report: DestructiveReport }) {
       role="alert"
       className={cn(
         "rounded-lg border p-3",
-        danger
-          ? "border-danger/50 bg-danger/10"
-          : "border-amber-500/50 bg-amber-500/10",
+        danger ? "border-danger/50 bg-danger/10" : "border-amber-500/50 bg-amber-500/10",
       )}
     >
       <p
@@ -547,9 +530,7 @@ function SafetyBanner({ report }: { report: DestructiveReport }) {
         )}
       >
         {danger ? <TriangleAlert size={15} /> : <AlertTriangle size={15} />}
-        {danger
-          ? "This draft looks destructive"
-          : "This draft needs a second look"}
+        {danger ? "This draft looks destructive" : "This draft needs a second look"}
       </p>
       <ul className="mt-2 space-y-1">
         {report.matches.map((match) => (
@@ -560,8 +541,8 @@ function SafetyBanner({ report }: { report: DestructiveReport }) {
         ))}
       </ul>
       <p className="mt-2 text-xs text-muted">
-        Pattern matching only — it cannot understand the whole command. Read the
-        draft before sending.
+        Pattern matching only — it cannot understand the whole command. Read the draft before
+        sending.
       </p>
     </div>
   );
@@ -591,11 +572,7 @@ function HistoryPanel({
           Recent drafts — this device only
         </h3>
         {entries.length > 0 && (
-          <button
-            type="button"
-            onClick={onClear}
-            className="text-xs text-muted hover:text-danger"
-          >
+          <button type="button" onClick={onClear} className="text-xs text-muted hover:text-danger">
             Clear history
           </button>
         )}

@@ -113,18 +113,14 @@ describe("deriveAppTokens", () => {
 
   it("prefers brightRed then red for danger", () => {
     expect(deriveAppTokens(DRACULA, "dark")["--danger"]).toBe("#ff6e6e");
-    expect(
-      deriveAppTokens({ ...DRACULA, brightRed: undefined }, "dark")["--danger"],
-    ).toBe("#ff5555");
+    expect(deriveAppTokens({ ...DRACULA, brightRed: undefined }, "dark")["--danger"]).toBe(
+      "#ff5555",
+    );
   });
 
   it("derives a low-alpha glow from the accent color", () => {
-    expect(deriveAppTokens(DRACULA, "dark")["--glow"]).toBe(
-      "rgba(164, 255, 255, 0.24)",
-    );
-    expect(deriveAppTokens(DRACULA, "light")["--glow"]).toBe(
-      "rgba(164, 255, 255, 0.18)",
-    );
+    expect(deriveAppTokens(DRACULA, "dark")["--glow"]).toBe("rgba(164, 255, 255, 0.24)");
+    expect(deriveAppTokens(DRACULA, "light")["--glow"]).toBe("rgba(164, 255, 255, 0.18)");
   });
 
   it("falls back to native Luma tokens for a fully sparse theme", () => {
@@ -141,10 +137,7 @@ describe("deriveAppTokens", () => {
   });
 
   it("never crashes on non-hex background/foreground", () => {
-    const tokens = deriveAppTokens(
-      { background: "rgb(1,2,3)", foreground: "var(--x)" },
-      "dark",
-    );
+    const tokens = deriveAppTokens({ background: "rgb(1,2,3)", foreground: "var(--x)" }, "dark");
     // Non-hex background/foreground fall back to native Luma values.
     expect(tokens["--background"]).toBe("#101217");
     expect(tokens["--foreground"]).toBe("#f2f3f5");

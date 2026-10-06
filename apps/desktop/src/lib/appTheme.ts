@@ -106,11 +106,7 @@ function mix(base: Rgb, target: Rgb, ratio: number): Rgb {
  * Blend base toward target by ratio and return a hex string. If either input is
  * not a parseable hex color, return the base string unchanged (never crash).
  */
-export function blendHex(
-  base: string,
-  target: string,
-  ratio: number,
-): string {
+export function blendHex(base: string, target: string, ratio: number): string {
   const a = hexToRgb(base);
   const b = hexToRgb(target);
   if (!a || !b) return base;
@@ -128,9 +124,7 @@ export function relativeLuminance(rgb: Rgb): number {
 
 /** Euclidean distance in RGB space (0..~441). */
 function distance(a: Rgb, b: Rgb): number {
-  return Math.sqrt(
-    (a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.b) ** 2,
-  );
+  return Math.sqrt((a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.b) ** 2);
 }
 
 /** Minimum separation from both foreground and background for `cursor` to be
@@ -160,13 +154,8 @@ function pickAccent(theme: ITheme, kind: SchemeKind, bg: Rgb, fg: Rgb): string {
     return theme.cursor as string;
   }
   return (
-    firstHex(
-      theme.brightCyan,
-      theme.cyan,
-      theme.blue,
-      theme.brightBlue,
-      theme.magenta,
-    ) ?? FALLBACK[kind].accent
+    firstHex(theme.brightCyan, theme.cyan, theme.blue, theme.brightBlue, theme.magenta) ??
+    FALLBACK[kind].accent
   );
 }
 
@@ -176,8 +165,12 @@ function pickAccent(theme: ITheme, kind: SchemeKind, bg: Rgb, fg: Rgb): string {
  */
 export function deriveAppTokens(theme: ITheme, kind: SchemeKind): AppTokens {
   const defaults = FALLBACK[kind];
-  const backgroundHex = hexToRgb(theme.background) ? (theme.background as string) : defaults.background;
-  const foregroundHex = hexToRgb(theme.foreground) ? (theme.foreground as string) : defaults.foreground;
+  const backgroundHex = hexToRgb(theme.background)
+    ? (theme.background as string)
+    : defaults.background;
+  const foregroundHex = hexToRgb(theme.foreground)
+    ? (theme.foreground as string)
+    : defaults.foreground;
 
   const ratios = SURFACE_RATIOS[kind];
   const surface = blendHex(backgroundHex, foregroundHex, ratios.surface);

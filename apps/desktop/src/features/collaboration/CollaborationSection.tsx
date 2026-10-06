@@ -1,10 +1,6 @@
 import { useEffect, useState } from "react";
 import { Check, Users } from "lucide-react";
-import {
-  collabGetConfig,
-  collabSetServerUrl,
-  parseCollaborationError,
-} from "../../lib/collab";
+import { collabGetConfig, collabSetServerUrl, parseCollaborationError } from "../../lib/collab";
 import { useCollabStore } from "../../stores/collabStore";
 
 /*
@@ -101,16 +97,16 @@ export function CollaborationSection() {
         ) : (
           <>
             <Users size={14} className="mt-0.5 shrink-0" />
-            Sign in to your Luma account under Settings → Account to share and join
-            collaborative terminals.
+            Sign in to your Luma account under Settings → Account to share and join collaborative
+            terminals.
           </>
         )}
       </div>
 
       <p className="flex items-start gap-1.5 text-xs text-muted">
         <Users size={13} className="mt-0.5 shrink-0" />
-        Use the collaboration button above the terminal tabs to share a terminal or
-        join one you have been invited to.
+        Use the collaboration button above the terminal tabs to share a terminal or join one you
+        have been invited to.
       </p>
     </div>
   );

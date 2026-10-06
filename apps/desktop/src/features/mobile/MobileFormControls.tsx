@@ -14,13 +14,7 @@ import { cn } from "../../lib/utils";
  */
 
 /** Titled card grouping related fields. */
-export function Section({
-  title,
-  children,
-}: {
-  title?: string;
-  children: ReactNode;
-}) {
+export function Section({ title, children }: { title?: string; children: ReactNode }) {
   return (
     <section className="mt-6 first:mt-3">
       {title && (
@@ -28,9 +22,7 @@ export function Section({
           {title}
         </h2>
       )}
-      <div className="space-y-5 rounded-xl border border-border bg-surface p-4">
-        {children}
-      </div>
+      <div className="space-y-5 rounded-xl border border-border bg-surface p-4">{children}</div>
     </section>
   );
 }
@@ -125,9 +117,7 @@ export function RowGroup({
   return (
     <div className={cn("mt-3 first:mt-0", className)}>
       <div className="overflow-hidden rounded-2xl border border-border bg-surface">
-        {title && (
-          <h3 className="px-4 pb-1 pt-3.5 text-[19px] font-semibold">{title}</h3>
-        )}
+        {title && <h3 className="px-4 pb-1 pt-3.5 text-[19px] font-semibold">{title}</h3>}
         <div className="divide-y divide-border/70">{children}</div>
       </div>
       {footer && <p className="mt-2 px-4 text-xs leading-relaxed text-muted">{footer}</p>}
@@ -167,9 +157,7 @@ export function InputRow({
     <div className="px-4 py-2">
       <div className="flex min-h-11 items-center gap-3">
         <label className="min-w-0 flex-1">
-          {filled && (
-            <span className="block text-[11px] leading-tight text-muted">{label}</span>
-          )}
+          {filled && <span className="block text-[11px] leading-tight text-muted">{label}</span>}
           <input
             type={type}
             inputMode={inputMode}

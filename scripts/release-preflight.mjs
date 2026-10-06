@@ -7,8 +7,9 @@ const json = (path) => JSON.parse(readFileSync(resolve(root, path), "utf8"));
 const tauri = json("apps/desktop/src-tauri/tauri.conf.json");
 const desktop = json("apps/desktop/package.json");
 const manifest = json(".release-please-manifest.json");
-const cargo = readFileSync(resolve(root, "apps/desktop/src-tauri/Cargo.toml"), "utf8")
-  .match(/^version\s*=\s*"([^"]+)"/m)?.[1];
+const cargo = readFileSync(resolve(root, "apps/desktop/src-tauri/Cargo.toml"), "utf8").match(
+  /^version\s*=\s*"([^"]+)"/m,
+)?.[1];
 
 const versions = new Map([
   ["Tauri", tauri.version],

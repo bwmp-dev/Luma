@@ -28,10 +28,7 @@ const EDGE_SCROLL_MS = 60;
  * attached into.
  * @returns a teardown that removes them and stops any edge scrolling.
  */
-export function bindTerminalSelection(
-  host: HTMLElement,
-  sessionId: string,
-): () => void {
+export function bindTerminalSelection(host: HTMLElement, sessionId: string): () => void {
   /** Where the current press started, in buffer coordinates. Absolute rows, so
    * it survives the viewport scrolling underneath the finger. */
   let anchor: { x: number; y: number } | null = null;
@@ -55,8 +52,7 @@ export function bindTerminalSelection(
 
   const updateEdgeScroll = (clientY: number) => {
     const rect = host.getBoundingClientRect();
-    const direction =
-      clientY < rect.top + EDGE_PX ? -1 : clientY > rect.bottom - EDGE_PX ? 1 : 0;
+    const direction = clientY < rect.top + EDGE_PX ? -1 : clientY > rect.bottom - EDGE_PX ? 1 : 0;
     if (direction === edgeDirection) return;
     stopEdgeScroll();
     if (direction === 0) return;
@@ -103,8 +99,7 @@ export function bindTerminalSelection(
     event.stopPropagation();
     if (
       !dragging &&
-      Math.hypot(touch.clientX - origin.x, touch.clientY - origin.y) <=
-        DRAG_SLOP_PX
+      Math.hypot(touch.clientX - origin.x, touch.clientY - origin.y) <= DRAG_SLOP_PX
     ) {
       return;
     }

@@ -260,9 +260,7 @@ export function startDictation(callbacks: DictationCallbacks): DictationSession 
         /* fall through */
       }
     }
-    callbacks.onError(
-      error instanceof Error ? error.message : "Dictation could not be started.",
-    );
+    callbacks.onError(error instanceof Error ? error.message : "Dictation could not be started.");
     return null;
   }
 

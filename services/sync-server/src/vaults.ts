@@ -6,15 +6,12 @@ const MAX_ENVELOPE_BYTES = 8 * 1024;
 const MAX_PUBLIC_KEY_BYTES = 2 * 1024;
 const MAX_KEYS_PER_REQUEST = 64;
 
-const VAULT_COLUMNS =
-  "id, owner_subject, storage_id, key_epoch, used_bytes, deleted_at";
+const VAULT_COLUMNS = "id, owner_subject, storage_id, key_epoch, used_bytes, deleted_at";
 
 export async function createVault(env: Env, subject: string): Promise<Vault> {
   const id = crypto.randomUUID();
   const storageId = crypto.randomUUID();
-  await env.DB.prepare(
-    `INSERT INTO vaults (id, owner_subject, storage_id) VALUES (?1, ?2, ?3)`,
-  )
+  await env.DB.prepare(`INSERT INTO vaults (id, owner_subject, storage_id) VALUES (?1, ?2, ?3)`)
     .bind(id, subject, storageId)
     .run();
   await env.DB.prepare(
@@ -86,10 +83,7 @@ export async function requireMembership(
   return { vault, role: member.role };
 }
 
-export function requireRole(
-  membership: VaultMembership,
-  ...allowed: VaultRole[]
-): void {
+export function requireRole(membership: VaultMembership, ...allowed: VaultRole[]): void {
   if (!allowed.includes(membership.role)) {
     throw new HttpError(403, `this vault is shared with you as a ${membership.role}`);
   }
@@ -237,9 +231,7 @@ export async function putMemberKeys(
     // rotation) and a client has no way to learn its own subject, so an absent
     // subject means the caller.
     const subject =
-      record?.subject === undefined
-        ? caller
-        : requireIdentifier(record.subject, "subject");
+      record?.subject === undefined ? caller : requireIdentifier(record.subject, "subject");
     if (record?.envelope === undefined || record.envelope === null) {
       throw new HttpError(400, "envelope is required");
     }
@@ -291,19 +283,13 @@ export async function getMemberKey(
  */
 export async function bumpKeyEpoch(env: Env, vault: Vault): Promise<number> {
   const next = vault.key_epoch + 1;
-  await env.DB.prepare(
-    `UPDATE vaults SET key_epoch = ?2, updated_at = unixepoch() WHERE id = ?1`,
-  )
+  await env.DB.prepare(`UPDATE vaults SET key_epoch = ?2, updated_at = unixepoch() WHERE id = ?1`)
     .bind(vault.id, next)
     .run();
   return next;
 }
 
-export async function removeMember(
-  env: Env,
-  vault: Vault,
-  subject: string,
-): Promise<void> {
+export async function removeMember(env: Env, vault: Vault, subject: string): Promise<void> {
   if (subject === vault.owner_subject) {
     throw new HttpError(409, "the owner cannot be removed from their own vault");
   }
@@ -315,21 +301,13 @@ export async function removeMember(
     .run();
   // Drop their sealed keys so a stale envelope cannot be replayed after the
   // epoch bump the caller is expected to follow with.
-  await env.DB.prepare(
-    `DELETE FROM vault_member_keys WHERE vault_id = ?1 AND subject = ?2`,
-  )
+  await env.DB.prepare(`DELETE FROM vault_member_keys WHERE vault_id = ?1 AND subject = ?2`)
     .bind(vault.id, subject)
     .run();
 }
 
-export async function setVaultUsage(
-  env: Env,
-  vaultId: string,
-  bytes: number,
-): Promise<void> {
-  await env.DB.prepare(
-    `UPDATE vaults SET used_bytes = ?2, updated_at = unixepoch() WHERE id = ?1`,
-  )
+export async function setVaultUsage(env: Env, vaultId: string, bytes: number): Promise<void> {
+  await env.DB.prepare(`UPDATE vaults SET used_bytes = ?2, updated_at = unixepoch() WHERE id = ?1`)
     .bind(vaultId, bytes)
     .run();
 }
@@ -379,13 +357,8 @@ function randomSecret(): string {
 }
 
 async function hashSecret(secret: string): Promise<string> {
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(secret),
-  );
-  return [...new Uint8Array(digest)]
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret));
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function base64Url(bytes: Uint8Array): string {

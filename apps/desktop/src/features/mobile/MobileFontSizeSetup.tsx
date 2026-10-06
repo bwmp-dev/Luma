@@ -55,8 +55,7 @@ export function MobileFontSizeSetup() {
           Choose terminal text size
         </h2>
         <p className="mt-1 text-sm text-muted">
-          Pick a comfortable size for this screen. You can change it later in
-          Settings → Appearance.
+          Pick a comfortable size for this screen. You can change it later in Settings → Appearance.
         </p>
 
         <div className="mt-5 rounded-xl border border-border bg-[#0b0e14] p-4 text-[#e6eaf2]">
@@ -65,9 +64,14 @@ export function MobileFontSizeSetup() {
             style={{ fontSize: `${fontSize}px` }}
             aria-live="polite"
           >
-            <p><span className="text-green-400">➜</span> <span className="text-cyan-300">~</span> ssh server</p>
+            <p>
+              <span className="text-green-400">➜</span> <span className="text-cyan-300">~</span> ssh
+              server
+            </p>
             <p>Welcome to your terminal</p>
-            <p><span className="text-green-400">➜</span> <span className="text-cyan-300">~</span> _</p>
+            <p>
+              <span className="text-green-400">➜</span> <span className="text-cyan-300">~</span> _
+            </p>
           </div>
         </div>
 

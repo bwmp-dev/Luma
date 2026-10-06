@@ -1,17 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  Copy,
-  ExternalLink,
-  Globe,
-  Loader2,
-  RefreshCw,
-  Square,
-} from "lucide-react";
+import { Copy, ExternalLink, Globe, Loader2, RefreshCw, Square } from "lucide-react";
 import { Modal } from "../../components/Modal";
-import {
-  useWebPreviewStore,
-  selectPreviewsForHost,
-} from "../../stores/webPreviewStore";
+import { useWebPreviewStore, selectPreviewsForHost } from "../../stores/webPreviewStore";
 import { previewUrl, type WebListener } from "../../lib/webPreview";
 import { cn } from "../../lib/utils";
 import { useCapabilityStore } from "../../stores/capabilityStore";
@@ -78,11 +68,9 @@ export function WebPreviewDialog({
   if (!hostId) return null;
 
   const manual = Number.parseInt(manualPort, 10);
-  const manualValid =
-    Number.isInteger(manual) && manual > 0 && manual <= 65535;
+  const manualValid = Number.isInteger(manual) && manual > 0 && manual <= 65535;
 
-  const previewFor = (port: number) =>
-    previews.find((preview) => preview.port === port);
+  const previewFor = (port: number) => previews.find((preview) => preview.port === port);
 
   const copy = (url: string) => {
     void navigator.clipboard?.writeText(url).then(
@@ -97,9 +85,7 @@ export function WebPreviewDialog({
       onOpenChange={onOpenChange}
       title="Preview web server"
       description={
-        hostLabel
-          ? `HTTP servers listening on ${hostLabel}`
-          : "HTTP servers listening on this host"
+        hostLabel ? `HTTP servers listening on ${hostLabel}` : "HTTP servers listening on this host"
       }
       size="lg"
       footer={
@@ -109,10 +95,7 @@ export function WebPreviewDialog({
           onClick={() => void discover(hostId)}
           className="flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm text-foreground hover:border-accent hover:text-accent disabled:opacity-50"
         >
-          <RefreshCw
-            size={14}
-            className={cn(discovering && "animate-spin")}
-          />
+          <RefreshCw size={14} className={cn(discovering && "animate-spin")} />
           Rescan
         </button>
       }
@@ -138,8 +121,8 @@ export function WebPreviewDialog({
             <div className="flex min-h-32 flex-col items-center justify-center rounded-lg border border-dashed border-border text-center">
               <p className="text-sm font-medium">No web servers found</p>
               <p className="mt-1 text-xs text-muted">
-                Nothing HTTP-like is listening, or the host hides other users&apos;
-                sockets. Enter a port manually below.
+                Nothing HTTP-like is listening, or the host hides other users&apos; sockets. Enter a
+                port manually below.
               </p>
             </div>
           ) : (
@@ -151,12 +134,7 @@ export function WebPreviewDialog({
                   busy={!!opening[listener.port]}
                   previewLocalPort={previewFor(listener.port)?.localPort}
                   onOpen={() =>
-                    void openPreview(
-                      hostId,
-                      listener.port,
-                      listener.bindAddress,
-                      sessionId,
-                    )
+                    void openPreview(hostId, listener.port, listener.bindAddress, sessionId)
                   }
                 />
               ))}
@@ -213,9 +191,8 @@ export function WebPreviewDialog({
                  user leaving deliberately -- say so rather than letting a page
                  that stopped loading look like a broken server. */
               <p className="mb-2 text-xs text-muted">
-                Previews open in a browser inside Luma, which keeps the tunnel
-                running while you read. Opening one in another app pauses it
-                until you come back.
+                Previews open in a browser inside Luma, which keeps the tunnel running while you
+                read. Opening one in another app pauses it until you come back.
               </p>
             )}
             <div className="space-y-2">
@@ -231,18 +208,14 @@ export function WebPreviewDialog({
                         <span className="shrink-0 rounded-full bg-surface px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
                           preview
                         </span>
-                        <span className="truncate font-mono text-xs text-foreground">
-                          {url}
-                        </span>
+                        <span className="truncate font-mono text-xs text-foreground">{url}</span>
                       </div>
                       <p className="mt-0.5 truncate font-mono text-xs text-muted">
                         {preview.remoteBind}:{preview.port} → 127.0.0.1:
                         {preview.localPort}
                       </p>
                       {copied === url && (
-                        <p className="mt-1 text-xs text-muted">
-                          Copied to clipboard.
-                        </p>
+                        <p className="mt-1 text-xs text-muted">Copied to clipboard.</p>
                       )}
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
@@ -325,11 +298,7 @@ function ListenerRow({
         onClick={onOpen}
         className="flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-foreground hover:border-accent hover:text-accent disabled:opacity-50"
       >
-        {busy ? (
-          <Loader2 size={12} className="animate-spin" />
-        ) : (
-          <ExternalLink size={12} />
-        )}
+        {busy ? <Loader2 size={12} className="animate-spin" /> : <ExternalLink size={12} />}
         {previewLocalPort === undefined ? "Open preview" : "Reopen"}
       </button>
     </div>

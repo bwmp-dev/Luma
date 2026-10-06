@@ -33,10 +33,7 @@ const HEIGHT = 500;
  * clipping the thing the banner exists to show. */
 const SAFE_INSET = 72;
 
-const starSvg = await readFile(
-  resolve(repoRoot, "branding", "icon-composer", "star.svg"),
-  "utf8",
-);
+const starSvg = await readFile(resolve(repoRoot, "branding", "icon-composer", "star.svg"), "utf8");
 /* Inlined as a data URI: a file:// <img> would need the page to be served from
  * the repo root, and the SVG is small enough that this stays readable. */
 const starUri = `data:image/svg+xml;base64,${Buffer.from(starSvg).toString("base64")}`;

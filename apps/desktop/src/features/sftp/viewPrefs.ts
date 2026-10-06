@@ -92,10 +92,7 @@ function compareField(a: SftpEntry, b: SftpEntry, field: SortField): number {
  *
  * Returns a new array; the input (a TanStack Query result) is never mutated.
  */
-export function applyViewPrefs(
-  entries: SftpEntry[],
-  prefs: ViewPrefs,
-): SftpEntry[] {
+export function applyViewPrefs(entries: SftpEntry[], prefs: ViewPrefs): SftpEntry[] {
   const visible = prefs.showHidden ? entries : entries.filter((e) => !isHidden(e));
   const factor = prefs.sortDirection === "desc" ? -1 : 1;
   return [...visible].sort((a, b) => {
@@ -104,8 +101,7 @@ export function applyViewPrefs(
     if (aDir !== bDir) return aDir ? -1 : 1;
     const byField = compareField(a, b, prefs.sortField) * factor;
     if (byField !== 0) return byField;
-    const byName =
-      a.name.toLowerCase().localeCompare(b.name.toLowerCase()) * factor;
+    const byName = a.name.toLowerCase().localeCompare(b.name.toLowerCase()) * factor;
     if (byName !== 0) return byName;
     // localeCompare treats "A" and "a" as equal; fall back to a byte-ish
     // comparison so two entries differing only in case keep a fixed order.
@@ -152,8 +148,6 @@ export function parseViewPrefs(raw: unknown): ViewPrefs {
     sortField,
     sortDirection,
     showHidden:
-      typeof value.showHidden === "boolean"
-        ? value.showHidden
-        : DEFAULT_VIEW_PREFS.showHidden,
+      typeof value.showHidden === "boolean" ? value.showHidden : DEFAULT_VIEW_PREFS.showHidden,
   };
 }

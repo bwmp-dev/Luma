@@ -102,11 +102,7 @@ export function SplitWithHostDialog({
                 host.favorite && "text-amber-400",
               )}
             >
-              {host.favorite ? (
-                <Star size={15} fill="currentColor" />
-              ) : (
-                <Server size={15} />
-              )}
+              {host.favorite ? <Star size={15} fill="currentColor" /> : <Server size={15} />}
             </span>
             <span className="min-w-0">
               <span className="block truncate text-sm font-medium">{host.name}</span>
@@ -119,9 +115,7 @@ export function SplitWithHostDialog({
           </button>
         ))}
         {matching.length === 0 && (
-          <p className="px-3 py-8 text-center text-sm text-muted">
-            No hosts match “{query}”.
-          </p>
+          <p className="px-3 py-8 text-center text-sm text-muted">No hosts match “{query}”.</p>
         )}
       </div>
     </Modal>

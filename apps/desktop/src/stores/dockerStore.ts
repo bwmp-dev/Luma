@@ -103,8 +103,7 @@ export const useDockerStore = create<DockerStoreState>((set, get) => ({
   hostLabel: null,
   ...EMPTY,
 
-  open: (hostId, hostLabel) =>
-    set({ hostId, hostLabel: hostLabel ?? null, ...EMPTY }),
+  open: (hostId, hostLabel) => set({ hostId, hostLabel: hostLabel ?? null, ...EMPTY }),
 
   refresh: async () => {
     const hostId = get().hostId;
@@ -160,11 +159,7 @@ export const useDockerStore = create<DockerStoreState>((set, get) => ({
       const result = await dockerLogs(hostId, container, tail);
       const current = get().logs;
       // Superseded by a different container, a different tail size, or a close.
-      if (
-        get().hostId !== hostId ||
-        current?.container !== container ||
-        current.tail !== tail
-      ) {
+      if (get().hostId !== hostId || current?.container !== container || current.tail !== tail) {
         return;
       }
       set({
@@ -179,11 +174,7 @@ export const useDockerStore = create<DockerStoreState>((set, get) => ({
       });
     } catch (error) {
       const current = get().logs;
-      if (
-        get().hostId !== hostId ||
-        current?.container !== container ||
-        current.tail !== tail
-      ) {
+      if (get().hostId !== hostId || current?.container !== container || current.tail !== tail) {
         return;
       }
       set({
@@ -230,8 +221,7 @@ export const useDockerStore = create<DockerStoreState>((set, get) => ({
 
   // Records the intent ONLY. No invoke happens here — the dialog shows the
   // container and host name, and `confirmAction` is the sole path to the host.
-  requestAction: (container, action) =>
-    set({ pending: { container, action }, actionError: null }),
+  requestAction: (container, action) => set({ pending: { container, action }, actionError: null }),
 
   cancelAction: () => set({ pending: null }),
 
@@ -240,11 +230,7 @@ export const useDockerStore = create<DockerStoreState>((set, get) => ({
     if (!hostId || !pending || actionBusy) return;
     set({ actionBusy: true, actionError: null });
     try {
-      const result = await dockerAction(
-        hostId,
-        pending.container.name,
-        pending.action,
-      );
+      const result = await dockerAction(hostId, pending.container.name, pending.action);
       if (get().hostId !== hostId) return;
       if (!result.success) {
         set({

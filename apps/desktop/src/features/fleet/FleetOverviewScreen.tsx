@@ -41,9 +41,7 @@ export function FleetOverviewScreen({
   const { data: hosts } = useHosts();
   const favorites = useMemo(
     () =>
-      (hosts ?? [])
-        .filter((host) => host.favorite)
-        .sort((a, b) => a.name.localeCompare(b.name)),
+      (hosts ?? []).filter((host) => host.favorite).sort((a, b) => a.name.localeCompare(b.name)),
     [hosts],
   );
   const favoriteKey = favorites.map((host) => host.id).join("\0");
@@ -80,8 +78,8 @@ export function FleetOverviewScreen({
           <div className="min-w-52 flex-1">
             <h1 className="text-xl font-semibold tracking-tight">Fleet overview</h1>
             <p className="mt-0.5 text-xs text-muted">
-              Foreground health checks for favorite hosts over SSH. No remote
-              agent and no background polling.
+              Foreground health checks for favorite hosts over SSH. No remote agent and no
+              background polling.
             </p>
           </div>
           <label className="flex items-center gap-1.5 text-[11px] text-muted">
@@ -142,8 +140,8 @@ export function FleetOverviewScreen({
 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted">
               <span>
-                Alerts: load ≥100%, memory/disk ≥80%; critical at load ≥150%,
-                memory/disk ≥90%, or any failed service/unhealthy container.
+                Alerts: load ≥100%, memory/disk ≥80%; critical at load ≥150%, memory/disk ≥90%, or
+                any failed service/unhealthy container.
               </span>
               <span>
                 {lastRefreshedAtMs
@@ -176,8 +174,8 @@ function EmptyFleet({ onChooseHosts }: { onChooseHosts?: () => void }) {
       <Server size={25} className="text-muted" />
       <p className="mt-3 text-sm font-medium">No favorite hosts</p>
       <p className="mt-1 max-w-md text-xs text-muted">
-        Mark the hosts you care about with a star. Fleet checks stay deliberately
-        scoped to that list so opening this screen never contacts every saved host.
+        Mark the hosts you care about with a star. Fleet checks stay deliberately scoped to that
+        list so opening this screen never contacts every saved host.
       </p>
       <button
         type="button"
@@ -202,9 +200,7 @@ function FleetHostCard({
   const selectHost = useServerStatsStore((state) => state.select);
   const openStats = useUiStore((state) => state.openServerStats);
   const severity =
-    entry?.status === "offline"
-      ? "offline"
-      : entry?.health?.severity ?? "checking";
+    entry?.status === "offline" ? "offline" : (entry?.health?.severity ?? "checking");
   const snapshot = entry?.snapshot;
   const health = entry?.health;
   const failedUnits = snapshot?.failedServices?.slice(0, 2) ?? [];
@@ -212,10 +208,12 @@ function FleetHostCard({
   return (
     <article className="rounded-xl border border-border bg-raised p-4">
       <div className="flex items-start gap-3">
-        <span className={cn(
-          "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
-          severityTone(severity),
-        )}>
+        <span
+          className={cn(
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+            severityTone(severity),
+          )}
+        >
           {severity === "checking" ? (
             <Loader2 size={16} className="animate-spin" />
           ) : severity === "healthy" ? (
@@ -233,10 +231,12 @@ function FleetHostCard({
             {host.hostname}:{host.port}
           </p>
         </div>
-        <span className={cn(
-          "rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize",
-          severityTone(severity),
-        )}>
+        <span
+          className={cn(
+            "rounded-full px-2 py-0.5 text-[10px] font-semibold capitalize",
+            severityTone(severity),
+          )}
+        >
           {severity}
         </span>
       </div>
@@ -247,9 +247,21 @@ function FleetHostCard({
         </p>
       ) : (
         <div className="mt-4 grid grid-cols-3 gap-2">
-          <Metric icon={<Gauge size={12} />} label="Load" value={formatPercent(health?.loadPercent)} />
-          <Metric icon={<MemoryStick size={12} />} label="Memory" value={formatPercent(health?.memoryPercent)} />
-          <Metric icon={<HardDrive size={12} />} label="Disk" value={formatPercent(health?.diskPercent)} />
+          <Metric
+            icon={<Gauge size={12} />}
+            label="Load"
+            value={formatPercent(health?.loadPercent)}
+          />
+          <Metric
+            icon={<MemoryStick size={12} />}
+            label="Memory"
+            value={formatPercent(health?.memoryPercent)}
+          />
+          <Metric
+            icon={<HardDrive size={12} />}
+            label="Disk"
+            value={formatPercent(health?.diskPercent)}
+          />
         </div>
       )}
 
@@ -305,15 +317,7 @@ function FleetHostCard({
   );
 }
 
-function Metric({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-}) {
+function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <div className="rounded-lg bg-surface px-2 py-2">
       <span className="flex items-center gap-1 text-[10px] text-muted">
@@ -334,10 +338,12 @@ function AlertLine({
   warning?: boolean;
 }) {
   return (
-    <div className={cn(
-      "flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px]",
-      warning ? "bg-amber-500/10 text-amber-400" : "bg-danger/10 text-danger",
-    )}>
+    <div
+      className={cn(
+        "flex items-center gap-1.5 rounded-md px-2 py-1 text-[10px]",
+        warning ? "bg-amber-500/10 text-amber-400" : "bg-danger/10 text-danger",
+      )}
+    >
       {icon}
       <span className="truncate">{text}</span>
     </div>
@@ -357,7 +363,9 @@ function SummaryCard({
 }) {
   return (
     <div className="flex items-center gap-3 rounded-xl bg-raised px-4 py-3">
-      <span className={cn("flex h-8 w-8 items-center justify-center rounded-lg", summaryTone(tone))}>
+      <span
+        className={cn("flex h-8 w-8 items-center justify-center rounded-lg", summaryTone(tone))}
+      >
         {icon}
       </span>
       <div>
