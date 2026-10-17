@@ -121,3 +121,12 @@ windows-sys = { version = "0.59", features = [
   # registry enumeration test needs to build its own key.
   "Win32_Security",
 ] }
+
+# Proc macros and build scripts are host dylibs that rustc loads with dlopen.
+# The release profile's default `strip = "debuginfo"` runs through rustc's
+# bundled rust-objcopy, which leaves a Mach-O string table 4-byte aligned, and
+# macOS 27's dyld refuses to load that ("mis-aligned LINKEDIT string pool", seen
+# on sqlx-macros in the iOS release build). build-override covers only those
+# host artifacts, so the shipped binaries are still stripped.
+[profile.release.build-override]
+strip = "none"

@@ -25,6 +25,14 @@ mkdir -p "${assets_path}"
 cp -R "${desktop_path}/dist/." "${assets_path}/"
 
 export RUST_BACKTRACE=1
+
+# Xcode exports its own build settings into this script. Xcode 27's linker gives
+# a host dylib built with MACOSX_DEPLOYMENT_TARGET set a 4-byte-aligned string
+# table, which macOS 27's dyld then refuses to dlopen, so the first proc macro
+# cargo loads fails the build. Only host artifacts are affected: the iOS target
+# takes its minimum from IPHONEOS_DEPLOYMENT_TARGET, which stays.
+unset MACOSX_DEPLOYMENT_TARGET
+
 export CFLAGS_aarch64_apple_ios="-isysroot ${SDKROOT:?}"
 export CXXFLAGS_aarch64_apple_ios="-isysroot ${SDKROOT}"
 export OBJC_INCLUDE_PATH_aarch64_apple_ios="${SDKROOT}/usr/include"
