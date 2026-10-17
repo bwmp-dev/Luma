@@ -578,6 +578,76 @@ describe("terminalManager shell integration", () => {
   });
 });
 
+describe("terminalManager clipboard paste", () => {
+  /** Stub the PTY backend and a native clipboard holding `clipboard`, then
+   * create a local session and return its terminal. */
+  async function createLocal(id: string, clipboard: () => string): Promise<Terminal> {
+    setInvoke((cmd) => {
+      if (cmd === "pty_spawn") return { sessionId: `${id}-backend`, shellName: "bash" };
+      if (cmd === "pty_kill") return undefined;
+      if (cmd === "plugin:clipboard-manager|read_text") return clipboard();
+      throw new Error(`unexpected ${cmd}`);
+    });
+    const startIndex = createdTerminals.length;
+    await terminalManager.createSession(id, { kind: "local", ref: undefined }, callbacks());
+    return createdTerminals[startIndex];
+  }
+
+  it("pastes Ctrl+Shift+V once, from the native clipboard", async () => {
+    const term = await createLocal("paste-key", () => "ls -la");
+    const paste = vi.spyOn(term, "paste");
+    const preventDefault = vi.fn();
+
+    const handled = term.emitKey({
+      key: "KeyV",
+      ctrlKey: true,
+      metaKey: true,
+      shiftKey: true,
+      preventDefault,
+    } as { key: string });
+    await tick();
+
+    expect(handled).toBe(false);
+    expect(preventDefault).toHaveBeenCalled();
+    expect(paste).toHaveBeenCalledTimes(1);
+    expect(paste).toHaveBeenCalledWith("ls -la");
+
+    terminalManager.dispose("paste-key");
+  });
+
+  it("pastes from the context menu without the WebView clipboard API", async () => {
+    const readText = vi.fn();
+    Object.defineProperty(navigator, "clipboard", { value: { readText }, configurable: true });
+    const term = await createLocal("paste-menu", () => "uptime");
+    const paste = vi.spyOn(term, "paste");
+
+    terminalManager.paste("paste-menu");
+    await tick();
+
+    expect(paste).toHaveBeenCalledWith("uptime");
+    expect(readText).not.toHaveBeenCalled();
+
+    terminalManager.dispose("paste-menu");
+  });
+
+  it("pastes nothing when the clipboard holds no text", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const term = await createLocal("paste-empty", () => {
+      throw new Error("clipboard is empty");
+    });
+    const paste = vi.spyOn(term, "paste");
+
+    terminalManager.paste("paste-empty");
+    await tick();
+
+    expect(paste).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalled();
+
+    warn.mockRestore();
+    terminalManager.dispose("paste-empty");
+  });
+});
+
 describe("terminalManager fit overflow", () => {
   /** Mount a session into a host of `hostHeight` px whose rendered grid measures
    * `renderedHeight` px, then fit. jsdom does no layout, so both heights are

@@ -8,6 +8,7 @@ import {
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { WebLinksAddon } from "@xterm/addon-web-links";
+import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import "@xterm/xterm/css/xterm.css";
 
@@ -700,6 +701,18 @@ async function loadWebgl(term: Terminal): Promise<void> {
   }
 }
 
+// Read through the native clipboard plugin rather than navigator.clipboard:
+// WebView2 gates readText() behind a persistent per-origin permission, and a
+// denied permission would leave paste with no working path (issue #31).
+function pasteClipboard(term: Terminal): void {
+  readText().then(
+    (text) => {
+      if (text) term.paste(text);
+    },
+    (cause: unknown) => console.warn("[luma] clipboard read failed", cause),
+  );
+}
+
 function installKeyHandlers(session: ManagedSession): void {
   const { term } = session;
   term.attachCustomKeyEventHandler((event) => {
@@ -722,9 +735,7 @@ function installKeyHandlers(session: ManagedSession): void {
       // WebView2 treats Ctrl+Shift+V as a native paste that xterm also
       // handles, so without this the text is inserted twice (issue #31).
       event.preventDefault();
-      void navigator.clipboard.readText().then((text) => {
-        if (text) term.paste(text);
-      });
+      pasteClipboard(term);
       return false;
     }
     if (mod && event.shiftKey && event.code === "KeyF") {
@@ -1698,9 +1709,7 @@ export const terminalManager = {
   paste(sessionId: string): void {
     const session = sessions.get(sessionId);
     if (!session) return;
-    void navigator.clipboard.readText().then((text) => {
-      if (text) session.term.paste(text);
-    });
+    pasteClipboard(session.term);
     session.term.focus();
   },
 

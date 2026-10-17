@@ -167,7 +167,10 @@ function ConnectedView({ sessionId, side }: { sessionId: string; side: PaneSide 
     target: string;
     run: () => void;
   } | null>(null);
-  const [pendingPaste, setPendingPaste] = useState<string[] | null>(null);
+  const [pendingOverwrite, setPendingOverwrite] = useState<{
+    collisions: string[];
+    run: () => void;
+  } | null>(null);
   const [downloadNotice, setDownloadNotice] = useState<{
     tone: "info" | "danger";
     message: string;
@@ -227,8 +230,9 @@ function ConnectedView({ sessionId, side }: { sessionId: string; side: PaneSide 
   // Paste the clipboard here, confirming first when it would overwrite.
   const runPaste = (force = false) => {
     const collisions = pasteInto({ kind: "remote", sessionId }, remotePath, "/", { force });
-    if (collisions && collisions.length > 0) setPendingPaste(collisions);
-    else setPendingPaste(null);
+    if (collisions && collisions.length > 0) {
+      setPendingOverwrite({ collisions, run: () => runPaste(true) });
+    } else setPendingOverwrite(null);
   };
 
   const parent = parentPath(remotePath, "/");
@@ -264,13 +268,21 @@ function ConnectedView({ sessionId, side }: { sessionId: string; side: PaneSide 
       modifiedAt: null,
       permissions: null,
     }));
-    transfer({
-      source: { kind: "local" },
-      dest: { kind: "remote", sessionId },
-      files,
-      destDir: remotePath,
-      destSeparator: "/",
-    });
+    const run = () =>
+      transfer({
+        source: { kind: "local" },
+        dest: { kind: "remote", sessionId },
+        files,
+        destDir: remotePath,
+        destSeparator: "/",
+      });
+    // The picker chooses the source; the destination is the folder on screen,
+    // and an upload over an existing name replaces it without the backend
+    // asking, so collisions are confirmed here.
+    const existing = new Set(entries.map((entry) => entry.name));
+    const collisions = files.filter((file) => existing.has(file.name)).map((file) => file.name);
+    if (collisions.length > 0) setPendingOverwrite({ collisions, run });
+    else run();
   };
 
   // Mobile has no folder picker: tauri-plugin-dialog rejects
@@ -338,8 +350,8 @@ function ConnectedView({ sessionId, side }: { sessionId: string; side: PaneSide 
         destDir,
         destSeparator: "/",
       });
-    // Luma picks this destination itself (unlike the system picker paths), so
-    // warn before silently replacing a file on the other host.
+    // Luma picks this destination itself (unlike a download, where the save
+    // dialog asks), so warn before silently replacing a file on the other host.
     const destListing = queryClient.getQueryData<DirectoryListing>(
       sftpListKey(otherEndpoint.sessionId, destDir),
     );
@@ -688,21 +700,26 @@ function ConnectedView({ sessionId, side }: { sessionId: string; side: PaneSide 
         }
       />
       <ConfirmDialog
-        open={pendingPaste !== null}
-        onOpenChange={(o) => !o && setPendingPaste(null)}
+        open={pendingOverwrite !== null}
+        onOpenChange={(o) => !o && setPendingOverwrite(null)}
         title="Replace existing files?"
         destructive
         confirmLabel="Replace"
-        onConfirm={() => runPaste(true)}
+        onConfirm={() => {
+          const run = pendingOverwrite?.run;
+          setPendingOverwrite(null);
+          run?.();
+        }}
         message={
           <div className="space-y-2">
             <p>
-              {pendingPaste?.length} item
-              {pendingPaste?.length === 1 ? "" : "s"} already exist in this folder and will be
-              overwritten:
+              {pendingOverwrite?.collisions.length === 1
+                ? "1 item already exists"
+                : `${pendingOverwrite?.collisions.length} items already exist`}{" "}
+              in this folder and will be overwritten:
             </p>
             <ul className="max-h-32 overflow-y-auto rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground/90">
-              {pendingPaste?.map((name) => (
+              {pendingOverwrite?.collisions.map((name) => (
                 <li key={name} className="truncate">
                   {name}
                 </li>

@@ -315,6 +315,7 @@ export class Terminal {
       metaKey: false,
       shiftKey: false,
       code: init.key,
+      preventDefault: () => {},
       ...init,
     } as unknown as KeyboardEvent;
     return this.keyHandler?.(event) ?? true;

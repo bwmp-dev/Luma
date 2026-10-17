@@ -6,6 +6,7 @@
   "platforms": ["android", "iOS"],
   "permissions": [
     "core:default",
+    "clipboard-manager:allow-read-text",
     "dialog:allow-open",
     "dialog:allow-save",
     "deep-link:default",
