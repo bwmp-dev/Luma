@@ -156,7 +156,10 @@ class GlassTabBarPlugin: Plugin, UITabBarDelegate {
   }
 }
 
+// `public` is load-bearing: Xcode 27's SwiftPM gives a non-public @_cdecl local
+// visibility in a static product, so the release link fails on an undefined
+// `_init_plugin_ios_glass_tabbar` (tauri-apps/tauri#16130).
 @_cdecl("init_plugin_ios_glass_tabbar")
-func initPlugin() -> Plugin {
+public func initPlugin() -> Plugin {
   return GlassTabBarPlugin()
 }
