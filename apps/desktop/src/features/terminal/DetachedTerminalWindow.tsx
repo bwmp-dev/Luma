@@ -6,6 +6,8 @@ import { terminalManager } from "./terminalManager";
 import { PaneTreeView } from "./PaneTreeView";
 import { TabIcon } from "./TabBar";
 import { useSessionStore } from "../../stores/sessionStore";
+import { useTrafficLightInset } from "../../hooks/useTrafficLightInset";
+import { isMac } from "../../lib/platform";
 import type { DetachedTabSnapshot } from "./detachedTabs";
 import { collectLeaves, findLeaf } from "./paneTree";
 
@@ -100,6 +102,7 @@ export function DetachedTerminalWindow() {
   const overMain = useRef(false);
   const detachedTab = useSessionStore((state) => state.tabs[0] ?? null);
   const detachedSessions = useSessionStore((state) => state.sessions);
+  const trafficLightInset = useTrafficLightInset(win);
 
   useEffect(() => {
     let cancelled = false;
@@ -365,7 +368,7 @@ export function DetachedTerminalWindow() {
             void win.startDragging();
           }
         }}
-        className="flex h-10 shrink-0 select-none items-center gap-1 border-b border-border bg-surface pl-1.5"
+        className={`flex h-10 shrink-0 select-none items-center gap-1 border-b border-border bg-surface ${trafficLightInset ? "pl-19" : "pl-1.5"}`}
       >
         <div className="pointer-events-none flex h-7 min-w-0 max-w-52 items-center gap-1.5 rounded-lg bg-raised px-2.5 text-xs text-foreground shadow-sm">
           {tabColor && (
@@ -387,27 +390,31 @@ export function DetachedTerminalWindow() {
           )}
         </div>
         <span className="min-w-0 flex-1 self-stretch" />
-        <button
-          aria-label="Minimize"
-          onClick={() => void win.minimize()}
-          className="flex h-full w-10 items-center justify-center text-muted hover:bg-raised hover:text-foreground"
-        >
-          <Minus size={15} />
-        </button>
-        <button
-          aria-label="Maximize or restore"
-          onClick={() => void win.toggleMaximize()}
-          className="flex h-full w-10 items-center justify-center text-muted hover:bg-raised hover:text-foreground"
-        >
-          <Square size={12} />
-        </button>
-        <button
-          aria-label="Close"
-          onClick={() => void win.close()}
-          className="flex h-full w-10 items-center justify-center text-muted hover:bg-danger hover:text-white"
-        >
-          <X size={15} />
-        </button>
+        {!isMac() && (
+          <>
+            <button
+              aria-label="Minimize"
+              onClick={() => void win.minimize()}
+              className="flex h-full w-10 items-center justify-center text-muted hover:bg-raised hover:text-foreground"
+            >
+              <Minus size={15} />
+            </button>
+            <button
+              aria-label="Maximize or restore"
+              onClick={() => void win.toggleMaximize()}
+              className="flex h-full w-10 items-center justify-center text-muted hover:bg-raised hover:text-foreground"
+            >
+              <Square size={12} />
+            </button>
+            <button
+              aria-label="Close"
+              onClick={() => void win.close()}
+              className="flex h-full w-10 items-center justify-center text-muted hover:bg-danger hover:text-white"
+            >
+              <X size={15} />
+            </button>
+          </>
+        )}
       </header>
       <div className="min-h-0 flex-1 overflow-hidden">
         {detachedTab && <PaneTreeView tab={detachedTab} sessions={detachedSessions} />}

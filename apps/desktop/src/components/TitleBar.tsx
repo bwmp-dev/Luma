@@ -17,6 +17,8 @@ import { useUiStore } from "../stores/uiStore";
 import { selectRunningCount, useTunnelStore } from "../stores/tunnelStore";
 import { selectActiveTransferCount, useSftpStore } from "../stores/sftpStore";
 import { useSyncConfigs } from "../hooks/useSync";
+import { useTrafficLightInset } from "../hooks/useTrafficLightInset";
+import { isMac } from "../lib/platform";
 import { selectAggregateStatus, selectTotalConflictCount, useSyncStore } from "../stores/syncStore";
 import { TabBar } from "../features/terminal/TabBar";
 import { VaultSwitcher } from "./VaultSwitcher";
@@ -35,6 +37,7 @@ export function TitleBar() {
   const runningTunnels = useTunnelStore(selectRunningCount);
   const activeTransfers = useSftpStore(selectActiveTransferCount);
   const { data: syncConfigs } = useSyncConfigs();
+  const trafficLightInset = useTrafficLightInset(appWindow);
   const syncedVaultIds = (syncConfigs ?? [])
     .filter((config) => config.enabled)
     .map((config) => config.vaultId);
@@ -85,7 +88,7 @@ export function TitleBar() {
         }
       }}
       onDoubleClick={() => void appWindow.toggleMaximize()}
-      className="flex h-10 shrink-0 select-none items-center gap-1 border-b border-border bg-surface px-1.5"
+      className={`flex h-10 shrink-0 select-none items-center gap-1 border-b border-border bg-surface ${trafficLightInset ? "pl-19 pr-1.5" : "px-1.5"}`}
     >
       <button
         type="button"
@@ -155,17 +158,19 @@ export function TitleBar() {
       )}
       {syncedVaultIds.length > 0 && <SyncIndicator vaultIds={syncedVaultIds} />}
       <AgentInbox />
-      <div className="flex h-full shrink-0 items-stretch">
-        <WindowButton label="Minimize" onClick={() => void appWindow.minimize()}>
-          <Minus size={15} />
-        </WindowButton>
-        <WindowButton label="Maximize or restore" onClick={() => void appWindow.toggleMaximize()}>
-          <Square size={12} />
-        </WindowButton>
-        <WindowButton label="Close" destructive onClick={() => void appWindow.close()}>
-          <X size={15} />
-        </WindowButton>
-      </div>
+      {!isMac() && (
+        <div className="flex h-full shrink-0 items-stretch">
+          <WindowButton label="Minimize" onClick={() => void appWindow.minimize()}>
+            <Minus size={15} />
+          </WindowButton>
+          <WindowButton label="Maximize or restore" onClick={() => void appWindow.toggleMaximize()}>
+            <Square size={12} />
+          </WindowButton>
+          <WindowButton label="Close" destructive onClick={() => void appWindow.close()}>
+            <X size={15} />
+          </WindowButton>
+        </div>
+      )}
     </header>
   );
 }

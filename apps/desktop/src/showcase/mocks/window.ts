@@ -37,6 +37,10 @@ const fakeWindow = {
   toggleMaximize: async () => {},
   isMaximized: async () => false,
   isFocused: async () => true,
+  isFullscreen: async () => false,
+  onResized: async (_cb: (event: { payload: unknown }) => void) => {
+    return () => {};
+  },
   onFocusChanged: async (_cb: (event: { payload: boolean }) => void) => {
     return () => {};
   },

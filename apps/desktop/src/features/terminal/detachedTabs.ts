@@ -1,4 +1,4 @@
-import { PhysicalPosition } from "@tauri-apps/api/dpi";
+import { LogicalPosition, PhysicalPosition } from "@tauri-apps/api/dpi";
 import { emitTo, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { cursorPosition, monitorFromPoint } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -6,6 +6,8 @@ import { collectLeaves } from "./paneTree";
 import { terminalManager } from "./terminalManager";
 import { useSessionStore } from "../../stores/sessionStore";
 import { useTabDragStore } from "../../stores/tabDragStore";
+import { TRAFFIC_LIGHT_POSITION } from "../../hooks/useTrafficLightInset";
+import { isMac } from "../../lib/platform";
 import type { TerminalSession, WorkspaceTab } from "../../types";
 
 export type DetachedTabSnapshot = {
@@ -136,7 +138,19 @@ export async function detachTab(
     height: 560,
     minWidth: 420,
     minHeight: 260,
-    decorations: false,
+    // Same frame as the main window: native traffic lights over our title bar
+    // on macOS (tauri.macos.conf.json), frameless elsewhere.
+    ...(isMac()
+      ? {
+          decorations: true,
+          titleBarStyle: "overlay" as const,
+          hiddenTitle: true,
+          trafficLightPosition: new LogicalPosition(
+            TRAFFIC_LIGHT_POSITION.x,
+            TRAFFIC_LIGHT_POSITION.y,
+          ),
+        }
+      : { decorations: false }),
     ...(spawnLogical ? { x: spawnLogical.x, y: spawnLogical.y } : { center: true }),
     // During a live tear-off the main window still holds pointer capture and
     // moves this window itself; stealing focus mid-gesture would break that
