@@ -34,6 +34,7 @@ import { useBrowsingVaultId } from "../../stores/vaultStore";
 import { useSnippets } from "../../hooks/useSnippets";
 import { useUpdaterStore } from "../../stores/updaterStore";
 import { collectLeaves } from "../terminal/paneTree";
+import { ShellIcon } from "../terminal/ShellIcon";
 import { cn } from "../../lib/utils";
 import { looksLikeConnectionString } from "../../lib/connectionString";
 import { parseLumaError, quickConnectPrepare } from "../../lib/hosts";
@@ -289,9 +290,10 @@ function useCommands(
       commands.push({
         id: `shell-${shell.id}`,
         group: "Terminal",
-        label: `New terminal: ${shell.name}`,
-        keywords: "shell open local",
-        icon: <SquareTerminal size={15} />,
+        label:
+          shell.kind === "wsl" ? `New WSL terminal: ${shell.name}` : `New terminal: ${shell.name}`,
+        keywords: shell.kind === "wsl" ? "shell open local wsl linux distro" : "shell open local",
+        icon: <ShellIcon shell={shell} size={15} />,
         run: wrap(() => void openLocalSession({ kind: "shell", id: shell.id }, shell.name)),
       });
     }

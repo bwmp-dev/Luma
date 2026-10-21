@@ -84,6 +84,12 @@ const BRANDS: Record<string, BrandGlyph> = {
   linux: siLinux,
 };
 
+/** Brand id for a WSL distribution name such as "Ubuntu-24.04" or "kali-linux". */
+export function wslDistroOsId(name: string): string {
+  const lower = name.toLowerCase();
+  return Object.keys(BRANDS).find((id) => lower.startsWith(id)) ?? "linux";
+}
+
 /** Render an official distro/platform brand glyph when one is known. */
 export function DistroIcon({ osId, size = 12, className, label }: DistroIconProps) {
   const brand = BRANDS[osId];

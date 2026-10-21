@@ -16,6 +16,7 @@ import {
   ServerCog,
   SplitSquareHorizontal,
   SquarePlus,
+  SquareTerminal,
   Rows2,
   Server,
   Users,
@@ -28,6 +29,7 @@ import { useSessionLogStore } from "../../stores/sessionLogStore";
 import { useKeymapStore } from "../../stores/keymapStore";
 import { formatChord } from "../../lib/keymap";
 import { useProfiles, useShells } from "../../hooks/useShells";
+import type { DetectedShell } from "../../lib/terminal";
 import { usePaneShareMutations, useSharedPanes } from "../../hooks/useMcp";
 import { useMcpShareStore } from "../../stores/mcpStore";
 import { terminalManager } from "./terminalManager";
@@ -38,6 +40,7 @@ import { ContextMenu, type MenuAction } from "../../components/ContextMenu";
 import { SaveTemplateDialog } from "./SaveTemplateDialog";
 import { SplitWithHostDialog } from "./SplitWithHostDialog";
 import { SaveHostDialog } from "./SaveHostDialog";
+import { ShellIcon } from "./ShellIcon";
 import { useTabDragStore } from "../../stores/tabDragStore";
 import type { SplitDirection, TerminalSession, WorkspaceTab } from "../../types";
 import type { WebviewWindow } from "@tauri-apps/api/webviewWindow";
@@ -1166,8 +1169,24 @@ export function TabIcon({ session }: { session: TerminalSession | undefined }) {
 
 export function NewTerminalMenu({ children }: { children: React.ReactNode }) {
   const openLocalSession = useSessionStore((s) => s.openLocalSession);
-  const { data: shells } = useShells();
-  const { data: profiles } = useProfiles();
+  const { data: shells = [] } = useShells();
+  const { data: profiles = [] } = useProfiles();
+  const nativeShells = shells.filter((shell) => shell.kind !== "wsl");
+  const wslShells = shells.filter((shell) => shell.kind === "wsl");
+  const itemClass =
+    "flex cursor-default items-center gap-2 rounded-md px-2.5 py-1.5 outline-none data-[highlighted]:bg-surface data-[highlighted]:text-accent";
+  const labelClass = "px-2.5 py-1 text-xs uppercase tracking-wider text-muted";
+
+  const shellItem = (shell: DetectedShell) => (
+    <DropdownMenu.Item
+      key={shell.id}
+      onSelect={() => void openLocalSession({ kind: "shell", id: shell.id }, shell.name)}
+      className={itemClass}
+    >
+      <ShellIcon shell={shell} size={13} className="shrink-0 text-muted" />
+      {shell.name}
+    </DropdownMenu.Item>
+  );
 
   return (
     <DropdownMenu.Root>
@@ -1176,31 +1195,31 @@ export function NewTerminalMenu({ children }: { children: React.ReactNode }) {
         <DropdownMenu.Content
           align="end"
           sideOffset={4}
-          className="z-50 min-w-44 rounded-lg border border-border bg-raised p-1 text-sm shadow-glow"
+          className="z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-44 overflow-y-auto rounded-lg border border-border bg-raised p-1 text-sm shadow-glow"
         >
-          {(shells ?? []).map((shell) => (
-            <DropdownMenu.Item
-              key={shell.id}
-              onSelect={() => void openLocalSession({ kind: "shell", id: shell.id }, shell.name)}
-              className="cursor-default rounded-md px-2.5 py-1.5 outline-none data-[highlighted]:bg-surface data-[highlighted]:text-accent"
-            >
-              {shell.name}
-            </DropdownMenu.Item>
-          ))}
-          {(profiles?.length ?? 0) > 0 && (
+          {nativeShells.map(shellItem)}
+          {wslShells.length > 0 && (
+            <>
+              {nativeShells.length > 0 && (
+                <DropdownMenu.Separator className="my-1 h-px bg-border" />
+              )}
+              <DropdownMenu.Label className={labelClass}>WSL</DropdownMenu.Label>
+              {wslShells.map(shellItem)}
+            </>
+          )}
+          {profiles.length > 0 && (
             <>
               <DropdownMenu.Separator className="my-1 h-px bg-border" />
-              <DropdownMenu.Label className="px-2.5 py-1 text-xs uppercase tracking-wider text-muted">
-                Profiles
-              </DropdownMenu.Label>
-              {(profiles ?? []).map((profile) => (
+              <DropdownMenu.Label className={labelClass}>Profiles</DropdownMenu.Label>
+              {profiles.map((profile) => (
                 <DropdownMenu.Item
                   key={profile.id}
                   onSelect={() =>
                     void openLocalSession({ kind: "profile", id: profile.id }, profile.name)
                   }
-                  className="cursor-default rounded-md px-2.5 py-1.5 outline-none data-[highlighted]:bg-surface data-[highlighted]:text-accent"
+                  className={itemClass}
                 >
+                  <SquareTerminal size={13} className="shrink-0 text-muted" />
                   {profile.name}
                 </DropdownMenu.Item>
               ))}

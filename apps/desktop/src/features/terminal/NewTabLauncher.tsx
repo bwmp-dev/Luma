@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { useHostGroups, useHosts, useRecentHosts } from "../../hooks/useHosts";
+import { useProfiles, useShells } from "../../hooks/useShells";
 import { useBrowsingVaultId } from "../../stores/vaultStore";
 import { useSessionStore } from "../../stores/sessionStore";
 import { useUiStore } from "../../stores/uiStore";
@@ -24,6 +25,16 @@ import {
 import { cn } from "../../lib/utils";
 import { looksLikeConnectionString } from "../../lib/connectionString";
 import { parseLumaError, quickConnectPrepare } from "../../lib/hosts";
+import type { ShellRef } from "../../lib/terminal";
+import { ShellIcon } from "./ShellIcon";
+
+type LocalLauncher = {
+  key: string;
+  ref: ShellRef;
+  name: string;
+  hint: string | null;
+  icon: React.ReactNode;
+};
 
 export function NewTabLauncher({ tabId, active }: { tabId: string; active: boolean }) {
   const [query, setQuery] = useState("");
@@ -34,6 +45,8 @@ export function NewTabLauncher({ tabId, active }: { tabId: string; active: boole
   const { data: hosts = [] } = useHosts(browsingVaultId);
   const { data: recent = [] } = useRecentHosts();
   const { data: groups = [] } = useHostGroups(browsingVaultId);
+  const { data: shells = [] } = useShells();
+  const { data: profiles = [] } = useProfiles();
   const templates = useTemplateStore((s) => s.templates);
   const removeTemplate = useTemplateStore((s) => s.removeTemplate);
   const openSshSession = useSessionStore((s) => s.openSshSession);
@@ -78,6 +91,32 @@ export function NewTabLauncher({ tabId, active }: { tabId: string; active: boole
   const matchingGroups = groups.filter((group) => group.name.toLowerCase().includes(needle));
   const matchingTemplates = templates.filter((template) =>
     template.name.toLowerCase().includes(needle),
+  );
+  const localLaunchers = useMemo<LocalLauncher[]>(
+    () => [
+      ...shells.map(
+        (shell): LocalLauncher => ({
+          key: `shell:${shell.id}`,
+          ref: { kind: "shell", id: shell.id },
+          name: shell.name,
+          hint: shell.kind === "wsl" ? "WSL" : null,
+          icon: <ShellIcon shell={shell} size={15} />,
+        }),
+      ),
+      ...profiles.map(
+        (profile): LocalLauncher => ({
+          key: `profile:${profile.id}`,
+          ref: { kind: "profile", id: profile.id },
+          name: profile.name,
+          hint: "Profile",
+          icon: <SquareTerminal size={15} />,
+        }),
+      ),
+    ],
+    [shells, profiles],
+  );
+  const matchingLaunchers = localLaunchers.filter((launcher) =>
+    [launcher.name, launcher.hint].some((value) => value?.toLowerCase().includes(needle)),
   );
 
   const connect = (host: (typeof hosts)[number]) =>
@@ -139,6 +178,10 @@ export function NewTabLauncher({ tabId, active }: { tabId: string; active: boole
                 if (event.key !== "Enter") return;
                 if (matchingHosts[0]) connect(matchingHosts[0]);
                 else if (isConnectionString) runQuickConnect();
+                else if (needle && matchingLaunchers[0]) {
+                  const launcher = matchingLaunchers[0];
+                  void openLocalSession(launcher.ref, launcher.name);
+                }
               }}
               placeholder="Search hosts, or type user@host to connect"
               aria-label="Search hosts, workspace templates, or a connection string"
@@ -206,6 +249,32 @@ export function NewTabLauncher({ tabId, active }: { tabId: string; active: boole
                 </span>
               </button>
             </div>
+          )}
+
+          {matchingLaunchers.length > 0 && (
+            <section className="mt-7 rounded-2xl border border-border bg-surface p-3">
+              <h2 className="flex items-center gap-2 px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-muted">
+                <SquareTerminal size={14} /> Local shells
+              </h2>
+              <div className="grid gap-1 sm:grid-cols-2">
+                {matchingLaunchers.map((launcher) => (
+                  <button
+                    key={launcher.key}
+                    type="button"
+                    onClick={() => void openLocalSession(launcher.ref, launcher.name)}
+                    className="group flex min-w-0 items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-raised"
+                  >
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-raised text-muted group-hover:text-accent">
+                      {launcher.icon}
+                    </span>
+                    <span className="min-w-0 truncate font-medium">{launcher.name}</span>
+                    {launcher.hint && (
+                      <span className="ml-auto shrink-0 text-xs text-muted">{launcher.hint}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </section>
           )}
 
           {(matchingTemplates.length > 0 || matchingGroups.length > 0) && (

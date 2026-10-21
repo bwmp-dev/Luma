@@ -213,9 +213,9 @@ export const SNIPPETS: Snippet[] = [
 ];
 
 export const SHELLS: DetectedShell[] = [
-  { id: "bash", name: "Bash", path: "/bin/bash", args: [] },
-  { id: "zsh", name: "Zsh", path: "/bin/zsh", args: [] },
-  { id: "pwsh", name: "PowerShell", path: "/usr/bin/pwsh", args: ["-NoLogo"] },
+  { id: "bash", name: "Bash", path: "/bin/bash", args: [], kind: "native" },
+  { id: "zsh", name: "Zsh", path: "/bin/zsh", args: [], kind: "native" },
+  { id: "pwsh", name: "PowerShell", path: "/usr/bin/pwsh", args: ["-NoLogo"], kind: "native" },
 ];
 
 export const PROFILES: TerminalProfile[] = [

@@ -5,6 +5,8 @@ export type DetectedShell = {
   name: string;
   path: string;
   args: string[];
+  /** `wsl` entries are WSL distributions; their `name` is the distribution's. */
+  kind: "native" | "wsl";
 };
 
 export type TerminalProfile = {

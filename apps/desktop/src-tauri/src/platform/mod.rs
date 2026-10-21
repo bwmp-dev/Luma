@@ -3,6 +3,9 @@ use std::path::PathBuf;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use serde::Serialize;
 
+#[cfg(windows)]
+mod wsl;
+
 pub fn home_dir() -> Option<PathBuf> {
     #[cfg(windows)]
     let var = std::env::var_os("USERPROFILE");
@@ -40,6 +43,15 @@ pub struct DetectedShell {
     pub name: String,
     pub path: String,
     pub args: Vec<String>,
+    pub kind: ShellKind,
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ShellKind {
+    Native,
+    Wsl,
 }
 
 #[cfg(windows)]
@@ -61,6 +73,7 @@ fn shell(id: &str, name: &str, path: PathBuf, args: &[&str]) -> DetectedShell {
         name: name.into(),
         path: path.to_string_lossy().into_owned(),
         args: args.iter().map(|a| a.to_string()).collect(),
+        kind: ShellKind::Native,
     }
 }
 
@@ -95,9 +108,9 @@ pub fn detect_shells() -> Vec<DetectedShell> {
         if cmd.is_file() {
             shells.push(shell("cmd", "Command Prompt", cmd, &[]));
         }
-        let wsl = system32.join("wsl.exe");
-        if wsl.is_file() {
-            shells.push(shell("wsl", "WSL", wsl, &[]));
+        let wsl_exe = system32.join("wsl.exe");
+        if wsl_exe.is_file() {
+            shells.extend(wsl_shells(&wsl_exe, wsl::distributions()));
         }
         for git_bash in [
             PathBuf::from(r"C:\Program Files\Git\bin\bash.exe"),
@@ -154,6 +167,44 @@ pub fn detect_shells() -> Vec<DetectedShell> {
     shells
 }
 
+/// One shell per distribution, started in its Linux home rather than the
+/// Windows profile directory the PTY's cwd would translate to. The default
+/// distribution keeps the id `wsl` so a saved default-shell setting follows
+/// whichever distribution WSL itself treats as default. With none found, the
+/// bare `wsl.exe` entry remains so WSL's own install guidance is reachable.
+#[cfg(windows)]
+fn wsl_shells(
+    wsl_exe: &std::path::Path,
+    distributions: Vec<wsl::Distribution>,
+) -> Vec<DetectedShell> {
+    if distributions.is_empty() {
+        return vec![DetectedShell {
+            kind: ShellKind::Wsl,
+            ..shell("wsl", "WSL", wsl_exe.to_path_buf(), &[])
+        }];
+    }
+    distributions
+        .into_iter()
+        .map(|distribution| {
+            let id = if distribution.is_default {
+                "wsl".to_string()
+            } else {
+                format!("wsl-{}", distribution.name)
+            };
+            DetectedShell {
+                id,
+                kind: ShellKind::Wsl,
+                ..shell(
+                    "",
+                    &distribution.name,
+                    wsl_exe.to_path_buf(),
+                    &["-d", &distribution.name, "--cd", "~"],
+                )
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -179,6 +230,35 @@ mod tests {
             "/home/alice/file.txt"
         };
         assert_eq!(picker_path(path), Some(PathBuf::from(path)));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn each_wsl_distribution_is_its_own_shell() {
+        let exe = std::path::Path::new(r"C:\Windows\System32\wsl.exe");
+        let shells = wsl_shells(
+            exe,
+            vec![
+                wsl::Distribution {
+                    name: "Ubuntu".into(),
+                    is_default: true,
+                },
+                wsl::Distribution {
+                    name: "kali-linux".into(),
+                    is_default: false,
+                },
+            ],
+        );
+        let ids: Vec<_> = shells.iter().map(|s| s.id.as_str()).collect();
+        assert_eq!(ids, ["wsl", "wsl-kali-linux"]);
+        assert_eq!(shells[1].name, "kali-linux");
+        assert_eq!(shells[1].args, ["-d", "kali-linux", "--cd", "~"]);
+        assert!(shells.iter().all(|s| s.kind == ShellKind::Wsl));
+
+        let fallback = wsl_shells(exe, Vec::new());
+        assert_eq!(fallback.len(), 1);
+        assert_eq!(fallback[0].id, "wsl");
+        assert!(fallback[0].args.is_empty());
     }
 
     #[test]
