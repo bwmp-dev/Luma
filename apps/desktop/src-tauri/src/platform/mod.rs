@@ -51,6 +51,7 @@ pub struct DetectedShell {
 #[serde(rename_all = "lowercase")]
 pub enum ShellKind {
     Native,
+    #[cfg(windows)]
     Wsl,
 }
 
