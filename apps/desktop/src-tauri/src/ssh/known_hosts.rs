@@ -74,7 +74,7 @@ struct PendingScan {
     port: u16,
     known_hosts_file: PathBuf,
     keys: Vec<HostKey>,
-    created_at: Instant,
+    expires_at: Instant,
 }
 
 #[derive(Debug, Default)]
@@ -270,7 +270,7 @@ pub async fn status(
                 port: scanned.port,
                 known_hosts_file: known_hosts_file.to_path_buf(),
                 keys: scanned.keys.clone(),
-                created_at: Instant::now(),
+                expires_at: Instant::now() + PENDING_SCAN_TTL,
             },
         );
     }
@@ -450,7 +450,7 @@ fn cached_pending_scan(
 }
 
 fn prune_expired_scans(scans: &mut HashMap<String, PendingScan>) {
-    scans.retain(|_, scan| scan.created_at.elapsed() <= PENDING_SCAN_TTL);
+    scans.retain(|_, scan| scan.expires_at > Instant::now());
 }
 
 #[derive(Debug)]
@@ -1010,7 +1010,7 @@ mod tests {
                 port: host.port,
                 known_hosts_file: path.clone(),
                 keys: vec![new.clone()],
-                created_at: Instant::now(),
+                expires_at: Instant::now() + PENDING_SCAN_TTL,
             },
         );
 
@@ -1061,11 +1061,13 @@ mod tests {
                 port: host.port,
                 known_hosts_file: path.clone(),
                 keys: vec![new.clone()],
-                created_at: Instant::now(),
+                expires_at: Instant::now() + PENDING_SCAN_TTL,
             };
             let mut confirmation = expected.clone();
             match case {
-                "expired" => pending.created_at -= PENDING_SCAN_TTL + Duration::from_secs(1),
+                // Backdating the scan instead would underflow on a Windows machine
+                // booted less than a TTL ago, where `Instant` counts from boot.
+                "expired" => pending.expires_at = Instant::now(),
                 "target" => pending.root_hostname = "another.example.com".into(),
                 "scan" => pending.keys = vec![key("ssh-ed25519", b"another new key")],
                 "known" => confirmation.known_keys.clear(),
