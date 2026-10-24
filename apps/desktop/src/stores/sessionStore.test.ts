@@ -186,7 +186,7 @@ describe("SSH host-key preflight decisions", () => {
     expect(useSessionStore.getState().sessions.some((s) => s.id === pending.id)).toBe(false);
   });
 
-  it("changed host key is a blocking error and never spawns", async () => {
+  it("a changed host key waits for confirmation and cancellation never replaces or spawns", async () => {
     setInvoke((cmd) => {
       if (cmd === "ssh_host_key_status") {
         return {
@@ -199,13 +199,129 @@ describe("SSH host-key preflight decisions", () => {
       throw new Error(`unexpected ${cmd}`);
     });
 
-    await useSessionStore.getState().openSshSession("host-1", "prod", "prod.example.com");
+    const done = useSessionStore.getState().openSshSession("host-1", "prod", "prod.example.com");
+    await waitFor(
+      () => latestSession()?.errorCategory === "host-key-changed",
+      "SSH session reaches the changed-key warning",
+    );
     const session = latestSession();
     expect(session.status).toBe("error");
     expect(session.errorCategory).toBe("host-key-changed");
     expect(session.hostKeyScanned?.[0].fingerprint).toBe("SHA256:new");
     expect(session.hostKeyKnown?.[0].fingerprint).toBe("SHA256:old");
     expect(invoke).not.toHaveBeenCalledWith("ssh_spawn", expect.anything());
+    useSessionStore.getState().closeSession(session.id);
+    await done;
+    expect(invoke).not.toHaveBeenCalledWith("ssh_host_key_replace", expect.anything());
+    expect(invoke).not.toHaveBeenCalledWith("ssh_spawn", expect.anything());
+  });
+
+  it("replaces the confirmed fingerprints and resumes the original SSH launch", async () => {
+    const changed = {
+      status: "changed",
+      scannedKeys: [{ keyType: "ssh-ed25519", fingerprint: "SHA256:new" }],
+      knownKeys: [{ keyType: "ssh-ed25519", fingerprint: "SHA256:old" }],
+    };
+    let replaced = false;
+    setInvoke((cmd) => {
+      if (cmd === "ssh_host_key_status") {
+        return replaced ? { ...changed, status: "known" } : changed;
+      }
+      if (cmd === "ssh_host_key_replace") {
+        replaced = true;
+        return { ...changed, status: "known" };
+      }
+      if (cmd === "ssh_spawn") return { sessionId: "replaced-backend", title: "prod" };
+      throw new Error(`unexpected ${cmd}`);
+    });
+    const done = useSessionStore.getState().openSshSession("host-1", "prod", "prod.example.com");
+    await waitFor(
+      () => latestSession()?.errorCategory === "host-key-changed",
+      "changed-key warning",
+    );
+    useSessionStore.getState().replaceHostKey(latestSession().id);
+    await done;
+
+    expect(invoke).toHaveBeenCalledWith("ssh_host_key_replace", {
+      request: { hostId: "host-1", expected: changed },
+    });
+    expect(invoke).toHaveBeenCalledWith("ssh_spawn", expect.anything());
+    expect(latestSession().errorCategory).toBeUndefined();
+    expect(latestSession().hostKeyScanned).toBeUndefined();
+  });
+
+  it("requires another confirmation when replacement needs a fresh scan", async () => {
+    const fingerprint = (value: string) => [{ keyType: "ssh-ed25519", fingerprint: value }];
+    let scans = 0;
+    let replacements = 0;
+    setInvoke((cmd) => {
+      if (cmd === "ssh_host_key_status") {
+        scans += 1;
+        return {
+          status: replacements === 2 ? "known" : "changed",
+          scannedKeys: fingerprint(scans === 1 ? "SHA256:first" : "SHA256:rescanned"),
+          knownKeys: fingerprint("SHA256:old"),
+        };
+      }
+      if (cmd === "ssh_host_key_replace") {
+        replacements += 1;
+        if (replacements === 1) throw { category: "host-key-scan-required", message: "Expired" };
+        return { status: "known", scannedKeys: [], knownKeys: [] };
+      }
+      if (cmd === "ssh_spawn") return { sessionId: "rescanned-backend", title: "prod" };
+      throw new Error(`unexpected ${cmd}`);
+    });
+    const done = useSessionStore.getState().openSshSession("host-1", "prod", "prod.example.com");
+    await waitFor(() => latestSession()?.errorCategory === "host-key-changed", "first warning");
+    useSessionStore.getState().replaceHostKey(latestSession().id);
+    await waitFor(
+      () => latestSession()?.hostKeyScanned?.[0].fingerprint === "SHA256:rescanned",
+      "fresh fingerprint needs confirmation",
+    );
+    expect(replacements).toBe(1);
+    expect(latestSession().connectionIssue).toContain("Verify the fingerprints");
+    expect(invoke).not.toHaveBeenCalledWith("ssh_spawn", expect.anything());
+    useSessionStore.getState().replaceHostKey(latestSession().id);
+    await done;
+    expect(invoke).toHaveBeenLastCalledWith("ssh_spawn", expect.anything());
+    const request = invoke.mock.calls.filter(([cmd]) => cmd === "ssh_host_key_replace")[1][1];
+    expect(request).toMatchObject({
+      request: { expected: { scannedKeys: fingerprint("SHA256:rescanned") } },
+    });
+  });
+
+  it("can retry a failed replacement before a terminal has been created", async () => {
+    let replacements = 0;
+    setInvoke((cmd) => {
+      if (cmd === "ssh_host_key_status") {
+        return {
+          status: replacements === 2 ? "known" : "changed",
+          scannedKeys: [{ keyType: "ssh-ed25519", fingerprint: "SHA256:new" }],
+          knownKeys: [{ keyType: "ssh-ed25519", fingerprint: "SHA256:old" }],
+        };
+      }
+      if (cmd === "ssh_host_key_replace") {
+        replacements += 1;
+        if (replacements === 1) throw { category: "io", message: "Could not save the key" };
+        return { status: "known", scannedKeys: [], knownKeys: [] };
+      }
+      if (cmd === "ssh_spawn") return { sessionId: "retry-replacement", title: "prod" };
+      throw new Error(`unexpected ${cmd}`);
+    });
+    const first = useSessionStore.getState().openSshSession("host-1", "prod", "prod.example.com");
+    await waitFor(() => latestSession()?.errorCategory === "host-key-changed", "first warning");
+    const id = latestSession().id;
+    useSessionStore.getState().replaceHostKey(id);
+    await first;
+    expect(latestSession().errorCategory).toBe("io");
+    expect(terminalManager.isKnown(id)).toBe(false);
+
+    const retry = useSessionStore.getState().restartSession(id);
+    await waitFor(() => latestSession()?.errorCategory === "host-key-changed", "retry warning");
+    useSessionStore.getState().replaceHostKey(id);
+    await retry;
+    expect(invoke).toHaveBeenCalledWith("ssh_spawn", expect.anything());
+    expect(latestSession().errorCategory).toBeUndefined();
   });
 });
 

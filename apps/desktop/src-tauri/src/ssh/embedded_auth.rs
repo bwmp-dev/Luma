@@ -115,6 +115,11 @@ impl AuthDriver {
                 ));
                 Ok(())
             }
+            // Still running the first command's connection, so not idle.
+            Some(Control::Exec(_, accepted)) => {
+                let _ = accepted.send(false);
+                Ok(())
+            }
             Some(Control::Disconnect) | None => Err(AuthAbort::Disconnect),
         }
     }

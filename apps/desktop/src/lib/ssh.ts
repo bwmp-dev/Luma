@@ -148,6 +148,15 @@ export function sshHostKeyTrust(hostId: string): Promise<SshHostKeyStatus> {
   });
 }
 
+export function sshHostKeyReplace(
+  hostId: string,
+  expected: SshHostKeyStatus,
+): Promise<SshHostKeyStatus> {
+  return invoke<SshHostKeyStatus>("ssh_host_key_replace", {
+    request: { hostId, expected },
+  });
+}
+
 /** Round-trip latency of an embedded SSH session, measured in-band.
  * `sessionId` is the backend session id returned by ssh_spawn. */
 export function sshPing(sessionId: string): Promise<{ latencyMs: number }> {

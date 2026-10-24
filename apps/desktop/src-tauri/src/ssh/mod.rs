@@ -35,12 +35,12 @@ pub use config::{
 pub use embedded::EmbeddedSshManager;
 pub(crate) use embedded::{
     authenticated_handle, authenticated_handle_with_forwarding,
-    connect_error as embedded_connect_error, AuthenticatedConnection, ForwardedTcpip,
+    connect_error as embedded_connect_error, AuthenticatedConnection, ExecReuse, ForwardedTcpip,
 };
 pub use known_hosts::{
     file_path as known_hosts_file_path, list as known_hosts_list, remove as known_hosts_remove,
-    status as host_key_status, trust as trust_host_key, validate_host_id, KnownHostsEntry,
-    SshHostKeyStatus,
+    replace as replace_host_key, status as host_key_status, trust as trust_host_key,
+    validate_host_id, KnownHostsEntry, SshHostKeyStatus,
 };
 pub(crate) use remote_os::normalize_uname;
 pub use remote_os::SshRemoteOs;
@@ -59,6 +59,10 @@ const MAX_PROXY_JUMP_DEPTH: usize = 8;
 pub(crate) enum SshEvent<'a> {
     Data(&'a [u8]),
     Control(SshControl),
+    /// A reusable session's exec channel is open; its output follows.
+    CommandStarted,
+    /// A reusable session's exec channel closed. The connection stays up.
+    CommandFinished(SshExit),
 }
 
 /// A fact about the session's own state, reported out of band.

@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use base64::engine::general_purpose::{STANDARD, STANDARD_NO_PAD};
 use base64::Engine as _;
 use russh::client;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::{Row, SqlitePool};
 use tokio::time::timeout;
@@ -26,7 +26,7 @@ static PENDING_SCANS: LazyLock<Mutex<HashMap<String, PendingScan>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 static KNOWN_HOSTS_FILE_LOCK: Mutex<()> = Mutex::new(());
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum HostKeyStatusKind {
     Known,
@@ -34,14 +34,14 @@ pub enum HostKeyStatusKind {
     Changed,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HostKeyFingerprint {
     pub key_type: String,
     pub fingerprint: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SshHostKeyStatus {
     pub status: HostKeyStatusKind,
@@ -283,6 +283,127 @@ pub async fn status(
 }
 
 pub fn trust(host_id: &str, host: &Host, known_hosts_file: &Path) -> Result<SshHostKeyStatus> {
+    let pending = retained_scan(host_id, host, known_hosts_file)?;
+    let result = trust_scanned_keys(
+        known_hosts_file,
+        &pending.hostname,
+        pending.port,
+        &pending.keys,
+    );
+    if result.is_ok()
+        || matches!(
+            &result,
+            Err(LumaError::SshConnection {
+                category: "host-key-changed",
+                ..
+            })
+        )
+    {
+        PENDING_SCANS.lock().unwrap().remove(host_id);
+    }
+    result
+}
+
+pub fn replace(
+    host_id: &str,
+    host: &Host,
+    known_hosts_file: &Path,
+    expected: &SshHostKeyStatus,
+) -> Result<SshHostKeyStatus> {
+    let pending = retained_scan(host_id, host, known_hosts_file)?;
+    let _guard = KNOWN_HOSTS_FILE_LOCK.lock().unwrap();
+    let target = known_host_target(&pending.hostname, pending.port);
+    let entries = read_entries(known_hosts_file, &target)?;
+    if expected.status != HostKeyStatusKind::Changed
+        || pending.keys.is_empty()
+        || fingerprints(&pending.keys) != expected.scanned_keys
+        || fingerprints(&entries.keys) != expected.known_keys
+        || classify_entries(&entries, &pending.keys) != HostKeyStatusKind::Changed
+    {
+        PENDING_SCANS.lock().unwrap().remove(host_id);
+        return Err(scan_required_error());
+    }
+
+    let contents = fs::read_to_string(known_hosts_file)?;
+    let mut updated = String::with_capacity(contents.len());
+    for line in contents.split_inclusive('\n') {
+        let mut fields = line.split_whitespace();
+        let Some(first) = fields.next() else {
+            updated.push_str(line);
+            continue;
+        };
+        if first.starts_with('#') {
+            updated.push_str(line);
+            continue;
+        }
+        let hosts = if first.starts_with('@') {
+            fields.next().unwrap_or("")
+        } else {
+            first
+        };
+        if !host_list_contains(hosts, &target) {
+            updated.push_str(line);
+            continue;
+        }
+        let remaining = hosts
+            .split(',')
+            .filter(|host| *host != target)
+            .collect::<Vec<_>>()
+            .join(",");
+        if !remaining.is_empty() {
+            let start = line.len() - line.trim_start().len();
+            let start = if first.starts_with('@') {
+                line.len() - line[start + first.len()..].trim_start().len()
+            } else {
+                start
+            };
+            updated.push_str(&line[..start]);
+            updated.push_str(&remaining);
+            updated.push_str(&line[start + hosts.len()..]);
+        }
+    }
+    if !updated.is_empty() && !updated.ends_with('\n') {
+        updated.push('\n');
+    }
+    for key in &pending.keys {
+        updated.push_str(&format!("{target} {} {}\n", key.key_type, key.encoded_key));
+    }
+    write_replaced_keys(known_hosts_file, updated.as_bytes())?;
+    PENDING_SCANS.lock().unwrap().remove(host_id);
+    Ok(status_response(
+        HostKeyStatusKind::Known,
+        &pending.keys,
+        &pending.keys,
+    ))
+}
+
+fn write_replaced_keys(path: &Path, contents: &[u8]) -> Result<()> {
+    let temporary = path.with_extension(format!("tmp-{}", uuid::Uuid::new_v4()));
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(&temporary)?;
+    let result = (|| -> io::Result<()> {
+        file.set_permissions(fs::metadata(path)?.permissions())?;
+        file.write_all(contents)?;
+        file.sync_all()?;
+        drop(file);
+        fs::rename(&temporary, path)
+    })();
+    if result.is_err() {
+        if let Err(error) = fs::remove_file(&temporary) {
+            tracing::warn!(%error, "could not remove temporary known-hosts file");
+        }
+    }
+    result?;
+    Ok(())
+}
+
+fn retained_scan(host_id: &str, host: &Host, known_hosts_file: &Path) -> Result<PendingScan> {
     validate_host_id(host_id)?;
     hosts::validate_safe_hostname(host.hostname.trim())?;
     let root_hostname = normalized_hostname(&host.hostname);
@@ -302,24 +423,7 @@ pub fn trust(host_id: &str, host: &Host, known_hosts_file: &Path) -> Result<SshH
         return Err(scan_required_error());
     }
 
-    let result = trust_scanned_keys(
-        known_hosts_file,
-        &pending.hostname,
-        pending.port,
-        &pending.keys,
-    );
-    if result.is_ok()
-        || matches!(
-            &result,
-            Err(LumaError::SshConnection {
-                category: "host-key-changed",
-                ..
-            })
-        )
-    {
-        PENDING_SCANS.lock().unwrap().remove(host_id);
-    }
-    result
+    Ok(pending)
 }
 
 fn scan_required_error() -> LumaError {
@@ -867,6 +971,118 @@ mod tests {
             .all(|line| line.starts_with("[server.example.com]:2222 ")));
 
         let _ = fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn replacing_confirmed_keys_preserves_aliases_other_ports_and_comments() {
+        let path = test_path("replace");
+        let pool = crate::storage::init_in_memory().await.unwrap();
+        let host = hosts::create(
+            &pool,
+            serde_json::from_value(serde_json::json!({
+                "name": "Server", "hostname": "server.example.com", "port": 2222
+            }))
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+        let old = key("ssh-ed25519", b"old host key");
+        let rsa = key("ssh-rsa", b"old RSA key");
+        let new = key("ssh-ed25519", b"new host key");
+        let target = known_host_target(&host.hostname, host.port);
+        let unrelated = format!("server.example.com ssh-ed25519 {}\r\n", old.encoded_key);
+        let fixture = format!(
+            "# retained\r\n  {target},alias.example.com ssh-ed25519 {} shared\r\n{target} ssh-rsa {}\n{unrelated}# final comment",
+            old.encoded_key, rsa.encoded_key
+        );
+        fs::write(&path, &fixture).unwrap();
+        let expected = status_response(
+            HostKeyStatusKind::Changed,
+            std::slice::from_ref(&new),
+            &[old.clone(), rsa],
+        );
+        PENDING_SCANS.lock().unwrap().insert(
+            host.id.clone(),
+            PendingScan {
+                root_hostname: host.hostname.clone(),
+                root_port: host.port,
+                hostname: host.hostname.clone(),
+                port: host.port,
+                known_hosts_file: path.clone(),
+                keys: vec![new.clone()],
+                created_at: Instant::now(),
+            },
+        );
+
+        let result = replace(&host.id, &host, &path, &expected).unwrap();
+        assert_eq!(result.status, HostKeyStatusKind::Known);
+        assert_eq!(
+            fs::read_to_string(&path).unwrap(),
+            format!(
+                "# retained\r\n  alias.example.com ssh-ed25519 {} shared\r\n{unrelated}# final comment\n{target} ssh-ed25519 {}\n",
+                old.encoded_key, new.encoded_key
+            )
+        );
+        assert_eq!(
+            classify_entries(&read_entries(&path, &target).unwrap(), &[new]),
+            HostKeyStatusKind::Known
+        );
+        assert!(!PENDING_SCANS.lock().unwrap().contains_key(&host.id));
+        fs::remove_file(path).unwrap();
+    }
+
+    #[tokio::test]
+    async fn replacement_rejects_stale_or_different_confirmations_without_writing() {
+        let path = test_path("replace-stale");
+        let pool = crate::storage::init_in_memory().await.unwrap();
+        let host = hosts::create(
+            &pool,
+            serde_json::from_value(serde_json::json!({
+                "name": "Server", "hostname": "server.example.com"
+            }))
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+        let old = key("ssh-ed25519", b"old host key");
+        let new = key("ssh-ed25519", b"new host key");
+        let fixture = format!("{} ssh-ed25519 {}\n", host.hostname, old.encoded_key);
+        fs::write(&path, &fixture).unwrap();
+        let expected = status_response(
+            HostKeyStatusKind::Changed,
+            std::slice::from_ref(&new),
+            &[old],
+        );
+        for case in ["missing", "expired", "target", "scan", "known", "file"] {
+            let mut pending = PendingScan {
+                root_hostname: host.hostname.clone(),
+                root_port: host.port,
+                hostname: host.hostname.clone(),
+                port: host.port,
+                known_hosts_file: path.clone(),
+                keys: vec![new.clone()],
+                created_at: Instant::now(),
+            };
+            let mut confirmation = expected.clone();
+            match case {
+                "expired" => pending.created_at -= PENDING_SCAN_TTL + Duration::from_secs(1),
+                "target" => pending.root_hostname = "another.example.com".into(),
+                "scan" => pending.keys = vec![key("ssh-ed25519", b"another new key")],
+                "known" => confirmation.known_keys.clear(),
+                "file" => pending.known_hosts_file = test_path("another-file"),
+                _ => {}
+            }
+            if case != "missing" {
+                PENDING_SCANS
+                    .lock()
+                    .unwrap()
+                    .insert(host.id.clone(), pending);
+            }
+            let error = replace(&host.id, &host, &path, &confirmation).unwrap_err();
+            assert_eq!(error.category(), "host-key-scan-required", "{case}");
+            assert_eq!(fs::read_to_string(&path).unwrap(), fixture, "{case}");
+        }
+        fs::remove_file(path).unwrap();
     }
 
     #[test]

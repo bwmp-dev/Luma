@@ -8,7 +8,12 @@ import type {
 } from "../types";
 import type { ShellRef } from "../lib/terminal";
 import type { SerialConfig } from "../lib/serial";
-import { sshHostKeyStatus, sshHostKeyTrust, type SshHostKeyStatus } from "../lib/ssh";
+import {
+  sshHostKeyStatus,
+  sshHostKeyTrust,
+  sshHostKeyReplace,
+  type SshHostKeyStatus,
+} from "../lib/ssh";
 import { hostEffectiveConfig, parseLumaError, type TransportType } from "../lib/hosts";
 import {
   withMultiplexerTitle,
@@ -89,6 +94,7 @@ type SessionState = {
    * Resolves the awaiting preflight so it trusts the scan and proceeds to spawn.
    * No-op if the session is not currently awaiting a host-key decision. */
   trustHostKey: (id: string) => void;
+  replaceHostKey: (id: string) => void;
   /** Close the pane hosting this session, collapsing its split (and its tab
    * when it was the last pane). */
   closeSession: (id: string) => void;
@@ -310,12 +316,12 @@ function handleSessionExit(
 /*
  * SSH host-key preflight. Before spawning an SSH session we ask the backend
  * whether the host's current keys are known/unknown/changed (see src/lib/ssh.ts).
- * An `unknown` host must be explicitly accepted by the user, so the preflight
- * awaits a decision that the UI resolves via `trustHostKey` (accept) or
+ * An unknown or changed host must be explicitly accepted by the user, so the
+ * preflight awaits a decision that the UI resolves via trust/replace or
  * `closeSession`/`closeTab` (cancel). Decisions live in a plain module-level map
  * — this is control flow, never terminal bytes, and never React state.
  */
-type HostKeyDecision = "trust" | "cancel";
+type HostKeyDecision = "trust" | "replace" | "cancel";
 const hostKeyWaiters = new Map<string, (decision: HostKeyDecision) => void>();
 
 function waitForHostKeyDecision(id: string): Promise<HostKeyDecision> {
@@ -348,7 +354,6 @@ function applyHostKeyChanged(set: SetFn, id: string, status: SshHostKeyStatus): 
       errorCategory: "host-key-changed",
       errorMessage: undefined,
       connectionPrompt: undefined,
-      connectionIssue: undefined,
       hostKeyScanned: status.scannedKeys,
       hostKeyKnown: status.knownKeys,
     }),
@@ -377,7 +382,7 @@ function applyPreflightError(set: SetFn, id: string, error: unknown): void {
  * should proceed to spawn. Loops so that a `host-key-scan-required` trust
  * failure (expired 120s retention, or host/port changed) re-scans and re-shows
  * the NEW fingerprints. Never auto-accepts: an `unknown` host always waits for
- * an explicit user decision, and `changed` is always blocking.
+ * an explicit user decision, and a changed key requires explicit replacement.
  */
 async function runHostKeyPreflight(
   set: SetFn,
@@ -398,6 +403,8 @@ async function runHostKeyPreflight(
         errorCategory: undefined,
         errorMessage: undefined,
         preflightError: undefined,
+        hostKeyScanned: undefined,
+        hostKeyKnown: undefined,
       }),
     }));
     issue = undefined;
@@ -414,30 +421,36 @@ async function runHostKeyPreflight(
     if (status.status === "known") return true;
     if (status.status === "changed") {
       applyHostKeyChanged(set, id, status);
-      return false;
+    } else {
+      set((state) => ({
+        sessions: patchSession(state.sessions, id, {
+          connectionStage: "host-key",
+          connectionPrompt: { type: "host-key", keys: status.scannedKeys },
+        }),
+      }));
     }
-
-    // unknown: show every scanned key and wait for an explicit decision.
-    set((state) => ({
-      sessions: patchSession(state.sessions, id, {
-        connectionStage: "host-key",
-        connectionPrompt: { type: "host-key", keys: status.scannedKeys },
-      }),
-    }));
     const decision = await waitForHostKeyDecision(id);
     if (decision === "cancel" || !sessionStillOpen(get, id)) return false;
+    if ((status.status === "changed") !== (decision === "replace")) continue;
 
     // Trust and continue: persist the retained scan, then spawn.
     set((state) => ({
       sessions: patchSession(state.sessions, id, {
+        status: "connecting",
+        errorCategory: undefined,
+        errorMessage: undefined,
         connectionStage: "host-key",
         connectionPrompt: undefined,
         connectionIssue: undefined,
       }),
     }));
     try {
-      const trusted = await sshHostKeyTrust(hostId);
+      const trusted =
+        decision === "replace"
+          ? await sshHostKeyReplace(hostId, status)
+          : await sshHostKeyTrust(hostId);
       if (!sessionStillOpen(get, id)) return false;
+      if (decision === "replace") continue;
       if (trusted.status === "known") return true;
       // Defensive: any non-known success means re-evaluate from scratch.
       continue;
@@ -446,7 +459,7 @@ async function runHostKeyPreflight(
       if (category === "host-key-scan-required") {
         // Retained scan expired or the target moved — re-scan and re-prompt.
         issue =
-          "Luma re-scanned the server because the earlier key scan expired. Verify the fingerprints shown below before continuing.";
+          "The key scan expired or the saved fingerprint changed. Verify the fingerprints shown below before continuing.";
         continue;
       }
       if (category === "host-key-changed") {
@@ -884,6 +897,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   restartSession: async (id, options = {}) => {
+    resolveHostKeyDecision(id, "cancel");
     const reconnect = options.reconnect === true;
     // A restart mints a new backendId, so any prior logging session is gone.
     useSessionLogStore.getState().markInactive(id);
@@ -916,6 +930,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // failing via the exit channel.
     const target = get().sessions.find((session) => session.id === id);
     if (target?.type === "ssh" && target.hostId) {
+      // A preflight failure can happen before the manager has created a terminal.
+      if (!terminalManager.isKnown(id) && target.restore) {
+        const { descriptor } = sessionFromRestore(id, target.restore);
+        await launch(set, get, id, descriptor, target.title);
+        return;
+      }
       const proceed = await runHostKeyPreflight(set, get, id, target.hostId);
       if (!proceed || !sessionStillOpen(get, id)) return;
     }
@@ -983,6 +1003,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   trustHostKey: (id) => resolveHostKeyDecision(id, "trust"),
+  replaceHostKey: (id) => resolveHostKeyDecision(id, "replace"),
 
   closeSession: (id) => {
     // Cancel an in-flight host-key preflight so its awaiting launch aborts

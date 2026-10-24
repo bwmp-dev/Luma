@@ -29,6 +29,7 @@ pub(crate) const INVALID_PARAMS: i64 = -32602;
 
 pub(crate) const TOOL_LIST_TARGETS: &str = "luma_list_targets";
 pub(crate) const TOOL_RUN_COMMAND: &str = "luma_run_command";
+pub(crate) const TOOL_CLOSE_SESSION: &str = "luma_close_session";
 pub(crate) const TOOL_PANE_SEND: &str = "luma_pane_send";
 pub(crate) const TOOL_PANE_READ: &str = "luma_pane_read";
 
@@ -198,11 +199,17 @@ fn tool_definitions() -> Value {
         {
             "name": TOOL_RUN_COMMAND,
             "title": "Run a command over SSH",
-            "description": "Run one command on a granted host and return its output. Runs through \
-    Luma's stored credentials in a visible interactive terminal tab. The command is sent unchanged \
-    through a PTY-backed SSH exec channel, so the user can watch it and provide input. Each call is \
-    independent. The terminal merges stdout and stderr, strips escape sequences from the returned \
-    output, and does not support full-screen applications such as vim or top.",
+            "description": "Run one command on a granted host and return its output and exit code. \
+    Runs through Luma's stored credentials in a visible interactive terminal tab that you share \
+    with the user: the command is typed into a real shell there, so the user can watch it, answer \
+    prompts such as sudo passwords, and type their own commands between yours. The tab stays open \
+    and later commands for the same host reuse it, so working directory and environment carry \
+    over between commands, including changes the user makes. A second tab opens only while the \
+    first is busy. On Windows hosts each command instead runs on its own exec channel and shell \
+    state does not carry over. Call luma_close_session when you are done with the host. The \
+    terminal merges stdout and stderr, strips escape sequences from the returned output, and does \
+    not support full-screen applications such as vim or top, or a command that reads its own \
+    standard input to the end (a bare cat).",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -217,6 +224,21 @@ fn tool_definitions() -> Value {
                     },
                 },
                 "required": ["hostId", "command"],
+                "additionalProperties": false,
+            },
+        },
+        {
+            "name": TOOL_CLOSE_SESSION,
+            "title": "Close a host's command tab",
+            "description": "Disconnect the terminal tabs luma_run_command opened for you on a host, \
+    stopping any command still running in them. Call this once you have finished working on the \
+    host, so the user is not left with your open shell.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "hostId": { "type": "string", "description": "Host id from luma_list_targets." },
+                },
+                "required": ["hostId"],
                 "additionalProperties": false,
             },
         },
@@ -359,6 +381,7 @@ mod tests {
             vec![
                 TOOL_LIST_TARGETS,
                 TOOL_RUN_COMMAND,
+                TOOL_CLOSE_SESSION,
                 TOOL_PANE_SEND,
                 TOOL_PANE_READ
             ]
@@ -383,7 +406,7 @@ mod tests {
     }
 
     #[test]
-    fn run_command_describes_the_interactive_exec_channel_it_actually_uses() {
+    fn run_command_describes_the_shared_shell_it_actually_uses() {
         let listed = respond(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#);
         let tools = listed["result"]["tools"].as_array().unwrap();
         let run = tools
@@ -391,10 +414,12 @@ mod tests {
             .find(|tool| tool["name"] == TOOL_RUN_COMMAND)
             .unwrap();
         let description = run["description"].as_str().unwrap();
-        assert!(description.contains("exec channel"));
-        assert!(description.contains("sent unchanged"));
         assert!(description.contains("interactive terminal tab"));
-        assert!(description.contains("independent"));
+        assert!(description.contains("real shell"));
+        assert!(description.contains("carry over"));
+        assert!(description.contains("Windows"));
+        assert!(description.contains("reuse"));
+        assert!(description.contains(TOOL_CLOSE_SESSION));
         assert!(description.contains("merges stdout and stderr"));
         assert!(!description.contains("__luma"));
     }

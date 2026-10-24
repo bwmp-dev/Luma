@@ -13,6 +13,7 @@
 pub(crate) mod approval;
 mod grants;
 mod protocol;
+mod sentinel;
 mod server;
 pub(crate) mod sessions;
 pub mod stdio;
@@ -235,6 +236,7 @@ impl McpState {
 
     pub(crate) fn forget_grant(&self, grant_id: &str) {
         self.shared.semaphores.lock().unwrap().remove(grant_id);
+        self.shared.sessions.forget_grant(grant_id);
     }
 
     fn port(&self) -> Option<u16> {

@@ -92,6 +92,7 @@ export function PaneView({
   const hostRef = useRef<HTMLDivElement>(null);
   const restartSession = useSessionStore((s) => s.restartSession);
   const closeSession = useSessionStore((s) => s.closeSession);
+  const replaceHostKey = useSessionStore((s) => s.replaceHostKey);
   const retryReconnectNow = useSessionStore((s) => s.retryReconnectNow);
   const stopReconnect = useSessionStore((s) => s.stopReconnect);
   const splitActivePane = useSessionStore((s) => s.splitActivePane);
@@ -702,7 +703,12 @@ export function PaneView({
               message={describeSshError(session.errorCategory, session.errorMessage)}
               scannedKeys={session.hostKeyScanned}
               knownKeys={session.hostKeyKnown}
+              issue={session.connectionIssue}
               onClose={() => closeSession(session.id)}
+              onReplace={
+                session.hostKeyScanned?.length ? () => replaceHostKey(session.id) : undefined
+              }
+              onRetry={session.agentCommand ? undefined : () => void restartSession(session.id)}
               onOpenKnownHosts={() => useUiStore.getState().openKnownHosts()}
             />
           )}

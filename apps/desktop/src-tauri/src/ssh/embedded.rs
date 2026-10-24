@@ -30,7 +30,19 @@ pub(super) enum Control {
     Resize(u16, u16),
     Ping(oneshot::Sender<std::result::Result<u64, PingFailure>>),
     EnableAgentForwarding(oneshot::Sender<std::result::Result<(), String>>),
+    /// Run a command on a reusable session's connection. Answered `false` when
+    /// the session is not reusable or a command is still running.
+    Exec(String, oneshot::Sender<bool>),
     Disconnect,
+}
+
+/// Keeps a session whose startup command runs as an exec open once that command
+/// exits, so later commands run as new exec channels on the same connection
+/// instead of each paying for a fresh connect and authentication.
+#[derive(Clone, Copy)]
+pub(crate) struct ExecReuse {
+    /// How long the connection stays up with no command running.
+    pub(crate) idle_timeout: Duration,
 }
 
 /// A live session's control channel plus whether it has reached a usable shell.
@@ -198,9 +210,15 @@ impl EmbeddedSshManager {
         rows: u16,
         on_event: SessionCallback,
         on_exit: ExitCallback,
+        reuse: Option<ExecReuse>,
     ) -> Result<String> {
         if config.username.is_none() {
             return Err(LumaError::InvalidInput("SSH username is required".into()));
+        }
+        if reuse.is_some() && config.startup_command.is_none() {
+            return Err(LumaError::InvalidInput(
+                "a reusable SSH session needs a command to run".into(),
+            ));
         }
         let sink = Arc::new(Mutex::new(on_event));
         let route = route_configs(&config);
@@ -310,7 +328,15 @@ impl EmbeddedSshManager {
             let handle = Arc::clone(connection.handle());
             let agent_forwarding_enabled = Arc::clone(&config.agent_forwarding_enabled);
             let _connection = connection;
-            let mut channel = match open_shell_channel(&handle, &config, cols, rows, false).await {
+            let channel = match open_shell_channel(
+                &handle,
+                config.startup_command.as_deref(),
+                cols,
+                rows,
+                false,
+            )
+            .await
+            {
                 Ok(channel) => channel,
                 Err(error) => {
                     let category = error.category().to_string();
@@ -334,6 +360,14 @@ impl EmbeddedSshManager {
             // Only now is a write guaranteed to reach a shell rather than the
             // auth prompt or the `exec` of a startup command.
             authenticated.store(true, Ordering::Release);
+            // Nothing is read from the channel before the loop below, so this
+            // still lands ahead of the command's first output.
+            if reuse.is_some() {
+                (sink.lock().unwrap())(SshEvent::CommandStarted);
+            }
+            // `None` only on a reusable session, between commands.
+            let mut channel = Some(channel);
+            let mut idle_deadline: Option<tokio::time::Instant> = None;
 
             let remote_os_handle = Arc::clone(&handle);
             let remote_os_sink = Arc::clone(&sink);
@@ -354,15 +388,18 @@ impl EmbeddedSshManager {
                 tokio::select! {
                     control = control_rx.recv() => match control {
                         Some(Control::Write(data)) => {
-                            if let Err(error) = channel.data_bytes(data).await {
+                            let Some(open) = &channel else { continue };
+                            if let Err(error) = open.data_bytes(data).await {
                                 failure = Some(error.to_string());
                                 break;
                             }
                         }
                         Some(Control::Resize(cols, rows)) => {
-                            if let Err(error) = channel.window_change(u32::from(cols), u32::from(rows), 0, 0).await {
-                                failure = Some(error.to_string());
-                                break;
+                            if let Some(open) = &channel {
+                                if let Err(error) = open.window_change(u32::from(cols), u32::from(rows), 0, 0).await {
+                                    failure = Some(error.to_string());
+                                    break;
+                                }
                             }
                             current_cols = cols;
                             current_rows = rows;
@@ -395,6 +432,14 @@ impl EmbeddedSshManager {
                                 let _ = reply.send(Ok(()));
                                 continue;
                             }
+                            // Reopening the channel with forwarding would run
+                            // the session's command a second time.
+                            if reuse.is_some() {
+                                let _ = reply.send(Err(
+                                    "SSH agent forwarding is unavailable in an agent command tab".into(),
+                                ));
+                                continue;
+                            }
                             let available = super::agent::connect_client().await;
                             if let Err(error) = available {
                                 let _ = reply.send(Err(error.to_string()));
@@ -403,7 +448,7 @@ impl EmbeddedSshManager {
                             agent_forwarding_enabled.store(true, Ordering::Release);
                             match open_shell_channel(
                                 &handle,
-                                &config,
+                                config.startup_command.as_deref(),
                                 current_cols,
                                 current_rows,
                                 true,
@@ -411,9 +456,10 @@ impl EmbeddedSshManager {
                             .await
                             {
                                 Ok(forwarded_channel) => {
-                                    let _ = channel.eof().await;
-                                    let _ = channel.close().await;
-                                    channel = forwarded_channel;
+                                    if let Some(previous) = channel.replace(forwarded_channel) {
+                                        let _ = previous.eof().await;
+                                        let _ = previous.close().await;
+                                    }
                                     exit_code = None;
                                     channel_disappeared = false;
                                     tracing::warn!(host = %config.hostname, "SSH agent forwarding enabled for session");
@@ -427,26 +473,76 @@ impl EmbeddedSshManager {
                                 }
                             }
                         }
+                        Some(Control::Exec(command, accepted)) => {
+                            if reuse.is_none() || channel.is_some() {
+                                let _ = accepted.send(false);
+                                continue;
+                            }
+                            match open_shell_channel(
+                                &handle,
+                                Some(&command),
+                                current_cols,
+                                current_rows,
+                                false,
+                            )
+                            .await
+                            {
+                                Ok(opened) => {
+                                    channel = Some(opened);
+                                    idle_deadline = None;
+                                    (sink.lock().unwrap())(SshEvent::CommandStarted);
+                                    let _ = accepted.send(true);
+                                }
+                                Err(error) => {
+                                    let _ = accepted.send(false);
+                                    if handle.is_closed() {
+                                        failure = Some(error.to_string());
+                                        break;
+                                    }
+                                }
+                            }
+                        }
                         Some(Control::Disconnect) | None => {
-                            let _ = channel.eof().await;
-                            let _ = channel.close().await;
+                            if let Some(open) = &channel {
+                                let _ = open.eof().await;
+                                let _ = open.close().await;
+                            }
                             break;
                         }
                     },
-                    message = channel.wait() => match message {
+                    message = next_channel_message(&mut channel) => match message {
                         Some(ChannelMsg::Data { data }) | Some(ChannelMsg::ExtendedData { data, .. }) => {
                             #[cfg(not(any(target_os = "android", target_os = "ios")))]
                             logs.write(&task_id, &data);
                             (sink.lock().unwrap())(SshEvent::Data(&data));
                         }
                         Some(ChannelMsg::ExitStatus { exit_status }) => exit_code = Some(exit_status),
-                        Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) => break,
-                        None => {
-                            channel_disappeared = true;
-                            break;
+                        Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => {
+                            let disappeared = message.is_none();
+                            match reuse {
+                                // A reusable session outlives its command
+                                // unless the connection itself went with it.
+                                Some(reuse) if !(disappeared && handle.is_closed()) => {
+                                    if let Some(finished) = channel.take() {
+                                        let _ = finished.close().await;
+                                    }
+                                    idle_deadline =
+                                        Some(tokio::time::Instant::now() + reuse.idle_timeout);
+                                    (sink.lock().unwrap())(SshEvent::CommandFinished(SshExit {
+                                        code: exit_code.take(),
+                                        error_category: None,
+                                        error_message: None,
+                                    }));
+                                }
+                                _ => {
+                                    channel_disappeared = disappeared;
+                                    break;
+                                }
+                            }
                         }
                         _ => {}
-                    }
+                    },
+                    () = sleep_until(idle_deadline) => break,
                 }
             }
             let (error_category, error_message) = if let Some(message) = failure {
@@ -565,6 +661,22 @@ impl EmbeddedSshManager {
         self.send(session_id, Control::Disconnect)
     }
 
+    /// Run `command` on a session opened with [`ExecReuse`]. `false` when the
+    /// session is gone, not reusable, or still running its previous command.
+    pub(crate) async fn exec(&self, session_id: &str, command: &str) -> bool {
+        let Some(sender) = self.control_sender(session_id) else {
+            return false;
+        };
+        let (accepted, response) = oneshot::channel();
+        if sender
+            .send(Control::Exec(command.to_string(), accepted))
+            .is_err()
+        {
+            return false;
+        }
+        response.await.unwrap_or(false)
+    }
+
     pub async fn enable_agent_forwarding(&self, session_id: &str) -> Result<bool> {
         let Some(sender) = self.control_sender(session_id) else {
             return Ok(false);
@@ -635,9 +747,25 @@ fn finish_session(
     on_exit(exit);
 }
 
+async fn next_channel_message(
+    channel: &mut Option<russh::Channel<client::Msg>>,
+) -> Option<ChannelMsg> {
+    match channel {
+        Some(channel) => channel.wait().await,
+        None => std::future::pending().await,
+    }
+}
+
+async fn sleep_until(deadline: Option<tokio::time::Instant>) {
+    match deadline {
+        Some(deadline) => tokio::time::sleep_until(deadline).await,
+        None => std::future::pending().await,
+    }
+}
+
 async fn open_shell_channel(
     handle: &client::Handle<Client>,
-    config: &SshConnectionConfig,
+    startup_command: Option<&str>,
     cols: u16,
     rows: u16,
     agent_forwarding: bool,
@@ -704,7 +832,7 @@ async fn open_shell_channel(
         })?;
         accepted?;
     }
-    if let Some(command) = config.startup_command.as_deref() {
+    if let Some(command) = startup_command {
         tokio::time::timeout(
             Duration::from_secs(15),
             channel.exec(true, command.as_bytes()),
@@ -1321,6 +1449,8 @@ mod tests {
                     channel,
                     b"ID=alpine\nPRETTY_NAME=\"Luma Test Server\"\n".to_vec(),
                 )?;
+            } else if let Some(text) = command.strip_prefix(b"echo ") {
+                session.data(channel, text.to_vec())?;
             }
             session.exit_status_request(channel, 0)?;
             session.eof(channel)?;
@@ -1583,6 +1713,7 @@ mod tests {
             SshEvent::Control(control) => {
                 let _ = control_tx.send(control);
             }
+            SshEvent::CommandStarted | SshEvent::CommandFinished(_) => {}
         })
     }
 
@@ -1715,7 +1846,7 @@ mod tests {
         let config = test_config(server.address, known_hosts);
         let handle = authenticated_handle(&config).await.unwrap();
 
-        let channel = open_shell_channel(&handle, &config, 80, 24, true)
+        let channel = open_shell_channel(&handle, config.startup_command.as_deref(), 80, 24, true)
             .await
             .unwrap();
         wait_for_event(&server.events, ServerEvent::AgentForwardRequested).await;
@@ -1873,6 +2004,7 @@ mod tests {
                 Box::new(move |exit| {
                     let _ = exit_tx.send(exit);
                 }),
+                None,
             )
             .await
             .unwrap();
@@ -1922,6 +2054,7 @@ mod tests {
                 Box::new(move |exit| {
                     let _ = exit_tx.send(exit);
                 }),
+                None,
             )
             .await
             .unwrap();
@@ -1965,6 +2098,7 @@ mod tests {
                 Box::new(move |exit| {
                     let _ = exit_tx.send(exit);
                 }),
+                None,
             )
             .await
             .unwrap();
@@ -2022,6 +2156,7 @@ mod tests {
                 Box::new(move |exit| {
                     let _ = exit_tx.send(exit);
                 }),
+                None,
             )
             .await
             .unwrap();
@@ -2074,6 +2209,7 @@ mod tests {
                 Box::new(move |exit| {
                     let _ = exit_tx.send(exit);
                 }),
+                None,
             )
             .await
             .unwrap();
@@ -2144,6 +2280,116 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn reusable_session_runs_later_commands_on_the_same_connection() {
+        let files = TestFiles::new();
+        let host_key = as_russh_private_key(&generate_ed25519_key());
+        let server = TestSshServer::start(0, host_key, None).await;
+        let known_hosts = files.path("known_hosts");
+        write_known_host(&known_hosts, server.address, &server.host_key);
+        let mut config = test_config(server.address, known_hosts);
+        config.startup_command = Some("echo first".into());
+        let manager = EmbeddedSshManager::default();
+        let (data_tx, mut data_rx) = mpsc::unbounded_channel();
+        // `None` for a command starting, the exit code for one finishing.
+        let (command_tx, mut command_rx) = mpsc::unbounded_channel::<Option<Option<u32>>>();
+        let (exit_tx, exit_rx) = oneshot::channel();
+
+        let session_id = manager
+            .connect(
+                config,
+                80,
+                24,
+                Box::new(move |event| match event {
+                    SshEvent::Data(bytes) => {
+                        let _ = data_tx.send(bytes.to_vec());
+                    }
+                    SshEvent::Control(_) => {}
+                    SshEvent::CommandStarted => {
+                        let _ = command_tx.send(None);
+                    }
+                    SshEvent::CommandFinished(exit) => {
+                        let _ = command_tx.send(Some(exit.code));
+                    }
+                }),
+                Box::new(move |exit| {
+                    let _ = exit_tx.send(exit);
+                }),
+                Some(ExecReuse {
+                    idle_timeout: Duration::from_millis(500),
+                }),
+            )
+            .await
+            .unwrap();
+
+        async fn next_command(
+            receiver: &mut mpsc::UnboundedReceiver<Option<Option<u32>>>,
+        ) -> Option<Option<u32>> {
+            tokio::time::timeout(Duration::from_secs(2), receiver.recv())
+                .await
+                .expect("timed out waiting for a command event")
+                .expect("command event channel closed")
+        }
+
+        assert_eq!(next_command(&mut command_rx).await, None);
+        wait_for_output(&mut data_rx, b"first").await;
+        assert_eq!(next_command(&mut command_rx).await, Some(Some(0)));
+        assert!(manager.contains(&session_id));
+
+        assert!(manager.exec(&session_id, "echo second").await);
+        assert_eq!(next_command(&mut command_rx).await, None);
+        wait_for_output(&mut data_rx, b"second").await;
+        assert_eq!(next_command(&mut command_rx).await, Some(Some(0)));
+        assert!(manager.contains(&session_id));
+
+        let exit = tokio::time::timeout(Duration::from_secs(3), exit_rx)
+            .await
+            .expect("an idle reusable session should close itself")
+            .unwrap();
+        assert_eq!(
+            exit,
+            SshExit {
+                code: None,
+                error_category: None,
+                error_message: None,
+            }
+        );
+        assert!(!manager.contains(&session_id));
+        assert!(!manager.exec(&session_id, "echo third").await);
+
+        server.stop().await;
+    }
+
+    #[tokio::test]
+    async fn exec_is_refused_by_a_session_that_is_not_reusable() {
+        let files = TestFiles::new();
+        let host_key = as_russh_private_key(&generate_ed25519_key());
+        let server = TestSshServer::start(0, host_key, None).await;
+        let known_hosts = files.path("known_hosts");
+        write_known_host(&known_hosts, server.address, &server.host_key);
+        let config = test_config(server.address, known_hosts);
+        let manager = EmbeddedSshManager::default();
+        let (data_tx, _data_rx) = mpsc::unbounded_channel();
+        let (control_tx, _control_rx) = mpsc::unbounded_channel();
+
+        let session_id = manager
+            .connect(
+                config,
+                80,
+                24,
+                test_sink(data_tx, control_tx),
+                Box::new(|_| {}),
+                None,
+            )
+            .await
+            .unwrap();
+        wait_for_event(&server.events, ServerEvent::ShellRequested).await;
+
+        assert!(!manager.exec(&session_id, "echo nope").await);
+        assert!(manager.disconnect(&session_id).unwrap());
+        server.stop().await;
+    }
+
+    #[tokio::test]
     async fn interactive_session_opens_pty_echoes_resizes_and_disconnects_cleanly() {
         let files = TestFiles::new();
         let host_key = as_russh_private_key(&generate_ed25519_key());
@@ -2165,6 +2411,7 @@ mod tests {
                 Box::new(move |exit| {
                     let _ = exit_tx.send(exit);
                 }),
+                None,
             )
             .await
             .unwrap();
@@ -2215,7 +2462,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn unknown_and_changed_host_keys_enter_confirmation_and_rejection_flows() {
+    async fn unknown_and_changed_host_keys_require_confirmation_before_connecting() {
         let files = TestFiles::new();
         let original_host_key = as_russh_private_key(&generate_ed25519_key());
         let original_server = TestSshServer::start(0, original_host_key, None).await;
@@ -2248,13 +2495,19 @@ mod tests {
         let changed_host_key = as_russh_private_key(&generate_ed25519_key());
         let changed_server = TestSshServer::start(port, changed_host_key, None).await;
         let changed_config = test_config(changed_server.address, known_hosts.clone());
-        let changed = crate::ssh::known_hosts::status(
-            &format!("changed-{}", uuid::Uuid::new_v4()),
-            &changed_config,
-            &known_hosts,
+        let pool = crate::storage::init_in_memory().await.unwrap();
+        let host = crate::storage::hosts::create(
+            &pool,
+            serde_json::from_value(serde_json::json!({
+                "name": "Changed server", "hostname": changed_config.hostname, "port": port
+            }))
+            .unwrap(),
         )
         .await
         .unwrap();
+        let changed = crate::ssh::known_hosts::status(&host.id, &changed_config, &known_hosts)
+            .await
+            .unwrap();
         assert_eq!(
             changed.status,
             crate::ssh::known_hosts::HostKeyStatusKind::Changed
@@ -2264,6 +2517,10 @@ mod tests {
 
         let error = expect_connect_error(authenticated_handle(&changed_config).await);
         assert_eq!(error.category(), "host-key-changed");
+
+        crate::ssh::known_hosts::replace(&host.id, &host, &known_hosts, &changed).unwrap();
+        let handle = authenticated_handle(&changed_config).await.unwrap();
+        disconnect_handle(&handle).await;
 
         changed_server.stop().await;
     }

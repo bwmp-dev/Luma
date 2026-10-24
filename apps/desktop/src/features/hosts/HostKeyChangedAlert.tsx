@@ -1,19 +1,16 @@
+import { useEffect, useId, useRef } from "react";
 import { ShieldAlert, ShieldCheck, X } from "lucide-react";
 import type { HostKeyFingerprint } from "../../lib/ssh";
 
-/*
- * Blocking, full-pane warning shown when SSH reports host-key-changed. This is
- * a security-critical state: the remote host key no longer matches the known
- * record, which can indicate a man-in-the-middle. We deliberately do NOT offer
- * an auto-accept — the user must verify the server out-of-band and update their
- * known_hosts manually before reconnecting.
- */
 export function HostKeyChangedAlert({
   hostTitle,
   message,
   scannedKeys,
   knownKeys,
+  issue,
   onClose,
+  onReplace,
+  onRetry,
   onOpenKnownHosts,
 }: {
   hostTitle: string;
@@ -22,26 +19,44 @@ export function HostKeyChangedAlert({
   scannedKeys?: HostKeyFingerprint[];
   /** Previously trusted keys, shown alongside for out-of-band comparison. */
   knownKeys?: HostKeyFingerprint[];
+  issue?: string;
   onClose: () => void;
+  onReplace?: () => void;
+  onRetry?: () => void;
   /** Open the known-hosts manager so the user can remove the stale entry. */
   onOpenKnownHosts?: () => void;
 }) {
+  const titleId = useId();
+  const descriptionId = useId();
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => cancelRef.current?.focus({ preventScroll: true }), []);
   const hasComparison = (scannedKeys?.length ?? 0) > 0 || (knownKeys?.length ?? 0) > 0;
   return (
     <div
       role="alertdialog"
       aria-modal="true"
-      aria-labelledby="host-key-changed-title"
-      className="absolute inset-0 z-20 flex items-center justify-center bg-background/95 p-6 backdrop-blur"
+      aria-labelledby={titleId}
+      aria-describedby={descriptionId}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          onClose();
+        }
+      }}
+      className="absolute inset-0 z-20 flex items-start justify-center overflow-y-auto bg-background/95 p-3 backdrop-blur sm:p-6"
     >
-      <div className="w-full max-w-md rounded-xl border border-danger/50 bg-surface p-5 shadow-glow">
+      <div className="my-auto w-full max-w-md rounded-xl border border-danger/50 bg-surface p-5 shadow-glow">
         <div className="flex items-center gap-2 text-danger">
           <ShieldAlert size={20} className="shrink-0" />
-          <h2 id="host-key-changed-title" className="text-sm font-semibold">
+          <h2 id={titleId} className="text-sm font-semibold">
             Host key changed for {hostTitle}
           </h2>
         </div>
-        <p className="mt-3 text-sm text-muted">{message}</p>
+        <p id={descriptionId} className="mt-3 text-sm text-muted">
+          {message}
+        </p>
+        {issue && <p className="mt-3 text-sm text-danger">{issue}</p>}
         {hasComparison && (
           <div className="mt-3 space-y-3 rounded-lg border border-border bg-background p-3">
             <FingerprintList label="Previously trusted" keys={knownKeys} tone="muted" />
@@ -54,7 +69,7 @@ export function HostKeyChangedAlert({
             fingerprint through a trusted channel.
           </li>
           <li>
-            Then remove the stale entry from your <code>known_hosts</code> file before reconnecting.
+            Replacing the saved key forgets the old fingerprint and continues this connection.
           </li>
           <li>If you did not expect this, do not connect — the connection may be intercepted.</li>
         </ul>
@@ -70,11 +85,32 @@ export function HostKeyChangedAlert({
           )}
           <button
             type="button"
+            ref={cancelRef}
             onClick={onClose}
             className="flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm text-foreground hover:border-accent hover:text-accent"
           >
-            <X size={14} /> Dismiss
+            <X size={14} /> Cancel
           </button>
+          {onReplace ? (
+            <button
+              type="button"
+              disabled={!scannedKeys?.length}
+              onClick={onReplace}
+              className="flex items-center gap-1.5 rounded-md bg-danger px-3 py-1.5 text-sm font-medium text-white hover:brightness-110 disabled:opacity-40"
+            >
+              <ShieldCheck size={14} /> Replace key and connect
+            </button>
+          ) : (
+            onRetry && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground"
+              >
+                Check fingerprint again
+              </button>
+            )
+          )}
         </div>
       </div>
     </div>

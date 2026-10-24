@@ -1,4 +1,4 @@
-//! The four MCP tools.
+//! The five MCP tools.
 //!
 //! Every tool re-derives what the grant may reach from the grant itself. Ids
 //! arriving over the wire are validated and checked for membership, never
@@ -16,7 +16,7 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Manager};
 
 use crate::keystore::{self, KeystoreState};
-use crate::mcp::sessions::SessionOutcome;
+use crate::mcp::sessions::{SessionOutcome, TabMode};
 use crate::mcp::taps::PaneKind;
 use crate::mcp::{protocol, ActivityEntry, CommandOutcome, McpShared, MAX_COMMAND_OUTPUT_BYTES};
 use crate::ssh::exec::{self, ExecMessages, ExecRequest, ExecStream};
@@ -54,6 +54,7 @@ pub(crate) async fn call(
     let outcome = match name {
         protocol::TOOL_LIST_TARGETS => list_targets(app, shared, grant).await,
         protocol::TOOL_RUN_COMMAND => run_command(app, shared, grant, &arguments).await,
+        protocol::TOOL_CLOSE_SESSION => close_session(app, shared, grant, &arguments),
         protocol::TOOL_PANE_SEND => pane_send(app, shared, grant, &arguments).await,
         protocol::TOOL_PANE_READ => pane_read(shared, grant, &arguments).await,
         other => Err(format!("unknown tool: {other}")),
@@ -205,10 +206,18 @@ Ask the user to unlock Luma, then retry."
         .await
         .map_err(|error| error.to_string())?;
 
-    let host_name = hosts::get(&state.pool, &host_id)
-        .await
-        .ok()
-        .flatten()
+    let host = hosts::get(&state.pool, &host_id).await.ok().flatten();
+    // A host never connected to before is assumed POSIX; if it turns out to be
+    // Windows, its tab hands the command back and it runs headless instead.
+    let mode = if host
+        .as_ref()
+        .is_some_and(|host| host.os_id.as_deref() == Some("windows"))
+    {
+        TabMode::Exec
+    } else {
+        TabMode::Shell
+    };
+    let host_name = host
         .map(|host| host.name)
         .unwrap_or_else(|| host_id.clone());
 
@@ -247,6 +256,7 @@ Ask the user to unlock Luma, then retry."
             &grant.label,
             &host_id,
             &host_name,
+            mode,
             &command,
             timeout,
         )
@@ -308,6 +318,25 @@ Ask the user to unlock Luma, then retry."
         "sessionId": session_id,
         "interactive": via == "tab",
     }))
+}
+
+fn close_session(
+    app: &AppHandle,
+    shared: &Arc<McpShared>,
+    grant: &McpGrant,
+    arguments: &Value,
+) -> ToolResult {
+    let host_id = required_str(arguments, "hostId")?;
+    authorize_host(grant, &host_id)?;
+    let embedded = app.state::<EmbeddedSshManager>();
+    let mut closed = 0;
+    for session_id in shared.sessions.close_tabs(&grant.id, &host_id) {
+        // An error here only means the session ended on its own meanwhile.
+        if matches!(embedded.disconnect(&session_id), Ok(true)) {
+            closed += 1;
+        }
+    }
+    Ok(json!({ "closedTabs": closed }))
 }
 
 /// What a command produced, however it was run.
