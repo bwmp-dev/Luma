@@ -527,8 +527,8 @@ function CopyHunkButton({ hunk }: { hunk: DiffHunk }) {
 
 /** Tint classes for an add / remove / context line's background and text. */
 function lineTint(kind: DiffLine["kind"]): string {
-  if (kind === "add") return "bg-green-500/10 text-green-300";
-  if (kind === "remove") return "bg-red-500/10 text-red-300";
+  if (kind === "add") return "bg-green-500/10 text-diff-add";
+  if (kind === "remove") return "bg-red-500/10 text-diff-remove";
   return "text-foreground";
 }
 
@@ -538,7 +538,7 @@ function lineMarker(kind: DiffLine["kind"]): string {
   return " ";
 }
 
-function UnifiedHunk({ hunk }: { hunk: DiffHunk }) {
+export function UnifiedHunk({ hunk }: { hunk: DiffHunk }) {
   return (
     <div className="font-mono text-[11px] leading-5">
       {hunk.lines.map((line, index) => (

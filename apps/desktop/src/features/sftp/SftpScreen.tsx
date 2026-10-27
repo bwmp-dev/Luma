@@ -19,6 +19,8 @@ import { EndpointSelector } from "./EndpointSelector";
 import { HostPicker } from "./HostPicker";
 import { FilePane } from "./FilePane";
 import { TransferQueue } from "./TransferQueue";
+import { RemoteEdits } from "./RemoteEdits";
+import { useRemoteEditStore } from "../../stores/remoteEditStore";
 
 /*
  * The dual-pane SFTP browser. Both panes are independent endpoints — this
@@ -67,6 +69,7 @@ export function SftpScreen() {
   const reconnect = useSftpStore((s) => s.reconnect);
   const transfer = useSftpStore((s) => s.transfer);
   const connecting = useSftpStore((s) => s.connecting);
+  const editRemoteFile = useRemoteEditStore((s) => s.edit);
 
   const [pendingOverwrite, setPendingOverwrite] = useState<PendingOverwrite | null>(null);
   const [pendingDisconnect, setPendingDisconnect] = useState<PendingDisconnect | null>(null);
@@ -149,6 +152,9 @@ export function SftpScreen() {
     const hostId = sessions[endpoint.sessionId]?.hostId;
     return hostList.find((candidate) => candidate.id === hostId) ?? null;
   };
+
+  const hostName = (hostId: string): string =>
+    hostList.find((candidate) => candidate.id === hostId)?.name ?? "Remote host";
 
   const labelFor = (endpoint: PaneEndpoint): string => {
     if (endpoint.kind === "local") return "This computer";
@@ -280,6 +286,15 @@ export function SftpScreen() {
           canTransfer={other.kind !== "none"}
           transferDisabledReason={`Choose an endpoint in the ${side === "left" ? "right" : "left"} pane first`}
           onRequestTransfer={requestTransfer}
+          onEditFile={
+            endpoint.kind === "remote"
+              ? (entry, chooseEditor) =>
+                  void editRemoteFile(
+                    { sessionId: endpoint.sessionId, path: entry.path, fileName: entry.name },
+                    chooseEditor,
+                  )
+              : undefined
+          }
         />
       </div>
     );
@@ -293,6 +308,7 @@ export function SftpScreen() {
         {renderPane("right")}
       </div>
 
+      <RemoteEdits hostName={hostName} />
       <TransferQueue />
 
       <ConfirmDialog

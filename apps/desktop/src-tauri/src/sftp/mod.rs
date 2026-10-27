@@ -1,4 +1,8 @@
 mod attach;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+mod edit;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub mod editors;
 mod local;
 mod transfer;
 
@@ -18,6 +22,8 @@ use crate::keystore::KeystoreState;
 use crate::ssh::{authenticated_handle, connection_config, AuthenticatedConnection};
 
 pub use attach::upload_attachment;
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub use edit::{AppEditHost, ConflictReview, RemoteEditInfo, RemoteEditManager, Resolution};
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub use local::{local_delete, local_drives, local_list, local_mkdir, local_rename};
 pub use transfer::{
@@ -211,6 +217,16 @@ impl SftpManager {
     /// An already-open SFTP session for this host, if the user has one.
     pub fn session_for_host(&self, host_id: &str) -> Option<String> {
         self.sessions.lock().unwrap().session_id_for_host(host_id)
+    }
+
+    /// A connected client for the host, with its session id, picked the same
+    /// way as `session_for_host`.
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    pub fn client_for_host(&self, host_id: &str) -> Option<(String, Arc<SftpSession>)> {
+        let sessions = self.sessions.lock().unwrap();
+        let session_id = sessions.session_id_for_host(host_id)?;
+        let client = Arc::clone(&sessions.get(&session_id)?.client);
+        Some((session_id, client))
     }
 
     /// The session's home directory. Doubles as a liveness check on a session

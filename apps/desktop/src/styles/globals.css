@@ -28,6 +28,10 @@
   --accent-foreground: #ffffff;
   --glow: rgba(124, 108, 242, 0.24);
   --danger: #f87171;
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --diff-add: #86efac;
+  --diff-remove: #fca5a5;
 }
 
 :root[data-theme="light"] {
@@ -41,6 +45,10 @@
   --accent-foreground: #ffffff;
   --glow: rgba(14, 126, 168, 0.18);
   --danger: #dc2626;
+  --success: #166534;
+  --warning: #92400e;
+  --diff-add: #166534;
+  --diff-remove: #b91c1c;
 }
 
 @theme inline {
@@ -53,6 +61,10 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-danger: var(--danger);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-diff-add: var(--diff-add);
+  --color-diff-remove: var(--diff-remove);
   --shadow-glow: 0 0 24px 0 var(--glow);
   --font-sans: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
   --font-mono: "Cascadia Code", "JetBrains Mono", "SF Mono", Consolas, monospace;

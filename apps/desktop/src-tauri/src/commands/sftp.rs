@@ -328,3 +328,150 @@ pub async fn sftp_discard_save_placeholder(
     tokio::fs::remove_file(&placeholder).await?;
     Ok(())
 }
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub use remote_edit::*;
+
+/// Remote file editing. The frontend names an editor only by the id
+/// `remote_edit_editors` returned; the executable and its arguments never come
+/// from it.
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+mod remote_edit {
+    use serde::Serialize;
+    use tauri::State;
+
+    use crate::errors::{LumaError, Result};
+    use crate::sftp::editors::{self, DetectedEditor, EditorInfo};
+    use crate::sftp::{ConflictReview, RemoteEditInfo, RemoteEditManager, Resolution, SftpManager};
+    use crate::storage::settings;
+    use crate::AppState;
+
+    const EDITOR_SETTING_KEY: &str = "sftp.editor";
+
+    #[derive(Debug, Clone, Serialize)]
+    #[serde(rename_all = "camelCase")]
+    pub struct RemoteEditorsResponse {
+        pub editors: Vec<EditorInfo>,
+        /// The remembered editor, only while it is still installed.
+        pub preferred_id: Option<String>,
+    }
+
+    fn editor(editor_id: &str) -> Result<DetectedEditor> {
+        editors::find(editor_id)
+            .ok_or_else(|| LumaError::InvalidInput("that editor is not installed".into()))
+    }
+
+    #[tauri::command]
+    pub async fn remote_edit_editors(state: State<'_, AppState>) -> Result<RemoteEditorsResponse> {
+        let editors = tauri::async_runtime::spawn_blocking(editors::detect)
+            .await
+            .map_err(|error| {
+                LumaError::InvalidInput(format!("editor detection failed: {error}"))
+            })?;
+        let stored = settings::all(&state.pool).await?;
+        let preferred_id = stored
+            .get(EDITOR_SETTING_KEY)
+            .and_then(serde_json::Value::as_str)
+            .filter(|id| editors.iter().any(|editor| editor.id == *id))
+            .map(str::to_owned);
+        Ok(RemoteEditorsResponse {
+            editors: editors.iter().map(DetectedEditor::info).collect(),
+            preferred_id,
+        })
+    }
+
+    #[tauri::command]
+    pub async fn remote_edit_open(
+        state: State<'_, AppState>,
+        manager: State<'_, SftpManager>,
+        edits: State<'_, RemoteEditManager>,
+        session_id: String,
+        path: String,
+        editor_id: String,
+        remember_editor: bool,
+    ) -> Result<RemoteEditInfo> {
+        let editor = editor(&editor_id)?;
+        let host_id = manager.host_id(&session_id)?;
+        let client = manager.client(&session_id)?;
+        let info = edits
+            .open(&host_id, &client, &path, editor.id, |file| {
+                editor.launch(file)
+            })
+            .await?;
+        if remember_editor {
+            settings::set(
+                &state.pool,
+                EDITOR_SETTING_KEY,
+                &serde_json::Value::String(editor.id.into()),
+            )
+            .await?;
+        }
+        Ok(info)
+    }
+
+    #[tauri::command]
+    pub async fn remote_edit_list(
+        edits: State<'_, RemoteEditManager>,
+    ) -> Result<Vec<RemoteEditInfo>> {
+        Ok(edits.list().await)
+    }
+
+    #[tauri::command]
+    pub async fn remote_edit_reopen(
+        edits: State<'_, RemoteEditManager>,
+        edit_id: String,
+        editor_id: String,
+    ) -> Result<RemoteEditInfo> {
+        let editor = editor(&editor_id)?;
+        edits
+            .reopen(&edit_id, editor.id, |file| editor.launch(file))
+            .await
+    }
+
+    #[tauri::command]
+    pub async fn remote_edit_review(
+        edits: State<'_, RemoteEditManager>,
+        edit_id: String,
+    ) -> Result<ConflictReview> {
+        edits.review(&edit_id).await
+    }
+
+    #[tauri::command]
+    pub async fn remote_edit_resolve(
+        edits: State<'_, RemoteEditManager>,
+        edit_id: String,
+        resolution: Resolution,
+    ) -> Result<()> {
+        edits.resolve(&edit_id, resolution).await
+    }
+
+    #[tauri::command]
+    pub async fn remote_edit_upload(
+        edits: State<'_, RemoteEditManager>,
+        edit_id: String,
+    ) -> Result<()> {
+        edits.upload(&edit_id).await
+    }
+
+    #[tauri::command]
+    pub async fn remote_edit_close(
+        edits: State<'_, RemoteEditManager>,
+        edit_id: String,
+        discard: bool,
+    ) -> Result<()> {
+        edits.close(&edit_id, discard).await
+    }
+
+    /// Show the working copy, or the backup "use remote" made, in the system
+    /// file manager. Selects the file without opening it.
+    #[tauri::command]
+    pub async fn remote_edit_reveal(
+        edits: State<'_, RemoteEditManager>,
+        edit_id: String,
+        backup: bool,
+    ) -> Result<()> {
+        let path = edits.local_path(&edit_id, backup).await?;
+        tauri_plugin_opener::reveal_item_in_dir(path)
+            .map_err(|error| LumaError::InvalidInput(format!("couldn't show the file: {error}")))
+    }
+}

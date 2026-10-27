@@ -12,6 +12,7 @@ import {
   Copy,
   CornerLeftUp,
   File as FileIcon,
+  FilePen,
   FileText,
   Folder,
   FolderPlus,
@@ -98,6 +99,9 @@ type FilePaneProps = {
   /** Why the transfer button is disabled, shown as its tooltip. */
   transferDisabledReason?: string;
   onRequestTransfer: (sourceSide: PaneSide, entries: SftpEntry[], targetDir: string) => void;
+  /** Open a remote file in an external editor; `chooseEditor` asks which one
+   * even when an editor is remembered. Remote panes only. */
+  onEditFile?: (entry: SftpEntry, chooseEditor: boolean) => void;
   headerExtra?: React.ReactNode;
 };
 
@@ -122,6 +126,7 @@ export function FilePane({
   canTransfer,
   transferDisabledReason,
   onRequestTransfer,
+  onEditFile,
   headerExtra,
 }: FilePaneProps) {
   const queryClient = useQueryClient();
@@ -824,6 +829,18 @@ export function FilePane({
                     icon: <Folder size={14} />,
                     onSelect: () => openEntry(entry),
                   });
+                }
+                // A symlink may point at a file; the backend resolves it and
+                // refuses anything that is not a regular text file.
+                if (onEditFile && (entry.kind === "file" || entry.kind === "symlink")) {
+                  rowActions.push(
+                    {
+                      label: "Edit",
+                      icon: <FilePen size={14} />,
+                      onSelect: () => onEditFile(entry, false),
+                    },
+                    { label: "Edit with…", onSelect: () => onEditFile(entry, true) },
+                  );
                 }
                 rowActions.push({
                   label: "Rename",

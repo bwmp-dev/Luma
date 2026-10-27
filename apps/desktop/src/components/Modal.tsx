@@ -2,6 +2,8 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { cn } from "../lib/utils";
 
+const MAX_WIDTH = { sm: "max-w-sm", md: "max-w-lg", lg: "max-w-2xl", xl: "max-w-4xl" };
+
 /*
  * Themed modal built on Radix Dialog. Radix handles focus trapping, restore,
  * Escape-to-close, scroll locking, and the required aria wiring.
@@ -21,9 +23,9 @@ export function Modal({
   description?: string;
   children: React.ReactNode;
   footer?: React.ReactNode;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
 }) {
-  const maxWidth = size === "sm" ? "max-w-sm" : size === "lg" ? "max-w-2xl" : "max-w-lg";
+  const maxWidth = MAX_WIDTH[size];
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>

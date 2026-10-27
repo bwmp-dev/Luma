@@ -161,6 +161,11 @@ pub fn run() {
         // russh session, so mobile forwards work too (see platform.rs).
         app.manage(TunnelManager::default());
         app.manage(SftpManager::default());
+        #[cfg(not(any(target_os = "android", target_os = "ios")))]
+        app.manage(sftp::RemoteEditManager::new(
+            app.state::<AppState>().app_data_dir.join("remote-edits"),
+            std::sync::Arc::new(sftp::AppEditHost(app.handle().clone())),
+        ));
         app.manage(ServerStatsManager::default());
         // Repository views reuse one cached SSH session per host too: a
         // status fetch is normally followed by several diff fetches.
@@ -320,6 +325,15 @@ pub fn run() {
         commands::sftp_forget_transfers,
         commands::sftp_retry,
         commands::terminal_attach_upload,
+        commands::remote_edit_editors,
+        commands::remote_edit_open,
+        commands::remote_edit_list,
+        commands::remote_edit_reopen,
+        commands::remote_edit_review,
+        commands::remote_edit_resolve,
+        commands::remote_edit_upload,
+        commands::remote_edit_close,
+        commands::remote_edit_reveal,
         commands::server_stats_fetch,
         commands::server_stats_close,
         commands::voice_history_add,
@@ -553,6 +567,8 @@ pub fn run() {
             #[cfg(not(any(target_os = "android", target_os = "ios")))]
             app_handle.state::<SerialManager>().kill_all();
             app_handle.state::<SftpManager>().kill_all();
+            #[cfg(not(any(target_os = "android", target_os = "ios")))]
+            app_handle.state::<sftp::RemoteEditManager>().shutdown();
             app_handle.state::<ServerStatsManager>().kill_all();
             app_handle.state::<RepositoryManager>().kill_all();
             app_handle.state::<DockerManager>().kill_all();

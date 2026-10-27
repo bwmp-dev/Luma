@@ -42,6 +42,28 @@ function inVault<T extends { vaultId: string }>(rows: T[], args: InvokeArgs): T[
   return vaultId ? rows.filter((row) => row.vaultId === vaultId) : rows;
 }
 
+/** A just-opened edit for the file the browser asked for. */
+function showcaseEdit(args: InvokeArgs) {
+  const remotePath = (args.path as string) ?? `${SFTP_INITIAL_PATH}/nginx.conf`;
+  const fileName = remotePath.split("/").pop() ?? remotePath;
+  return {
+    editId: (args.editId as string) ?? `edit-${remotePath}`,
+    hostId: HOSTS[0].id,
+    remotePath,
+    fileName,
+    localPath: `/tmp/luma/remote-edits/${fileName}`,
+    editorId: (args.editorId as string) ?? "vscode",
+    encoding: "utf8",
+    status: "synced",
+    conflict: null,
+    message: null,
+    unsynced: false,
+    connected: true,
+    lastUploadedAt: null,
+    backupPath: null,
+  };
+}
+
 const AUTH_FINALIZE_MS = 750;
 const CONTENT_DELAY_MS = AUTH_FINALIZE_MS + 350;
 
@@ -239,6 +261,34 @@ export function createInvokeHandler(
 
       case "sftp_mobile_download_dir":
         return "/var/mobile/Containers/Data/Application/Luma/Documents";
+
+      // Remote editing. No edits are open at boot, so the stock captures are
+      // unchanged; opening a file from the browser adds one.
+      case "remote_edit_editors":
+        return {
+          editors: [
+            { id: "vscode", name: "Visual Studio Code" },
+            { id: "notepad", name: "Notepad" },
+          ],
+          preferredId: null,
+        };
+      case "remote_edit_list":
+        return [];
+      case "remote_edit_open":
+      case "remote_edit_reopen":
+        return showcaseEdit(args);
+      case "remote_edit_review":
+        return {
+          remoteText: "server {\n  listen 80;\n  server_name example.com;\n}\n",
+          localText: "server {\n  listen 443 ssl;\n  server_name example.com;\n}\n",
+          remoteDeleted: false,
+          unavailable: null,
+        };
+      case "remote_edit_resolve":
+      case "remote_edit_upload":
+      case "remote_edit_close":
+      case "remote_edit_reveal":
+        return null;
 
       // Signed in, so the Account screen shows the real signed-in surface —
       // including the delete control, which is what the store review shots and
