@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { useSessionStore } from "./sessionStore";
 import { useUiStore } from "./uiStore";
 
 describe("new tab launchers", () => {
   beforeEach(() => {
+    useSessionStore.setState({ sessions: [], tabs: [], activeSessionId: null, activeTabId: null });
     useUiStore.setState({
       mainView: "hosts",
       newTabIds: [],
@@ -40,5 +42,12 @@ describe("new tab launchers", () => {
 
     expect(useUiStore.getState().newTabIds).toEqual([launcherId]);
     expect(useUiStore.getState().activeNewTabId).toBeNull();
+  });
+
+  it("returns to hosts when the last launcher is closed", () => {
+    useUiStore.getState().openNewTab();
+    useSessionStore.getState().closeActivePane();
+    expect(useUiStore.getState().newTabIds).toEqual([]);
+    expect(useUiStore.getState().mainView).toBe("hosts");
   });
 });

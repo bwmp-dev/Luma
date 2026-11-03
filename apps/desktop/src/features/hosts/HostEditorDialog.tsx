@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { KeyRound } from "lucide-react";
-import { Modal } from "../../components/Modal";
+import { InspectorShell } from "../../components/InspectorShell";
 import {
   createHost,
   groupInheritedDefaults,
@@ -247,6 +247,23 @@ export function HostEditorDialog({
    * one puts it in front of everyone who has joined. */
   vaultName?: string;
 }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const previousFocus = document.activeElement;
+    panelRef.current?.querySelector<HTMLInputElement>("input")?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !document.querySelector('[role="dialog"]')) {
+        event.preventDefault();
+        onOpenChange(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
+    };
+  }, [open, onOpenChange]);
   const invalidate = useInvalidateHosts();
   const [state, setState] = useState<FormState>(() => initialState(host, initialGroupId));
   const [showErrors, setShowErrors] = useState(false);
@@ -346,281 +363,283 @@ export function HostEditorDialog({
   // Surface backend invalid-input under the most likely field, else globally.
   const err = (field: keyof FieldErrors) => (showErrors ? errors[field] : undefined);
 
+  if (!open) return null;
+
   return (
-    <Modal
-      open={open}
-      onOpenChange={onOpenChange}
-      title={host ? "Edit host" : "New host"}
-      description={
-        vaultName
-          ? `${host ? host.name : "Save an SSH connection for quick access."} · ${vaultName}`
-          : host
-            ? host.name
-            : "Save an SSH connection for quick access."
-      }
-      size="lg"
-      footer={
-        <>
-          <button
-            type="button"
-            onClick={() => onOpenChange(false)}
-            className="rounded-md border border-border px-3 py-1.5 text-sm text-muted hover:text-foreground"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={save.isPending || (showErrors && hasErrors)}
-            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground disabled:opacity-50"
-          >
-            {host ? "Save changes" : "Create host"}
-          </button>
-        </>
-      }
-    >
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <SelectField
-            label="Identity (optional)"
-            value={state.identityId}
-            onChange={(v) => patch({ identityId: v })}
-            error={err("identityId")}
-            hint={hint("identityId", Boolean(state.identityId), () => patch({ identityId: "" }))}
-          >
-            <option value="">Host-specific credentials</option>
-            {identities.map((identity) => (
-              <option key={identity.id} value={identity.id}>
-                {identity.name} ({identity.username})
-              </option>
-            ))}
-          </SelectField>
-          <TextField
-            label="Name"
-            required
-            value={state.name}
-            onChange={(v) => patch({ name: v })}
-            placeholder="Production web"
-            error={err("name")}
-          />
-          <TextField
-            label="Tags"
-            value={state.tags}
-            onChange={(v) => patch({ tags: v })}
-            placeholder="prod, web (comma separated)"
-          />
-        </div>
-
-        <div className="grid grid-cols-[1fr_7rem] gap-3">
-          <TextField
-            label="Hostname"
-            required
-            mono
-            value={state.hostname}
-            onChange={(v) => patch({ hostname: v })}
-            placeholder="server.example.com"
-            error={err("hostname")}
-          />
-          <TextField
-            label="Port"
-            type="number"
-            value={state.port}
-            onChange={(v) => patch({ port: v })}
-            placeholder="22"
-            error={err("port")}
-          />
-        </div>
-
-        <div className={`grid gap-3 ${state.identityId ? "grid-cols-1" : "grid-cols-2"}`}>
-          {!state.identityId && (
-            <TextField
-              label="Username"
-              mono
-              value={state.username}
-              onChange={(v) => patch({ username: v })}
-              placeholder={inheritedFor("username")?.value || "root"}
-              error={err("username")}
-              hint={hint("username", state.username !== "", () => patch({ username: "" }))}
-            />
-          )}
-          <SelectField
-            label="Group"
-            value={state.groupId}
-            onChange={(v) => patch({ groupId: v })}
-            error={err("groupId")}
-          >
-            <option value="">No group</option>
-            {groups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {groupLabel(g, groups)}
-              </option>
-            ))}
-          </SelectField>
-        </div>
-
-        {!state.identityId && (
-          <div className="grid grid-cols-2 gap-3">
-            <SelectField
-              label="Authentication"
-              value={state.authenticationType}
-              onChange={(v) => patch({ authenticationType: v as AuthenticationType })}
+    <div ref={panelRef} className="absolute inset-y-0 right-0 z-20 flex">
+      <InspectorShell
+        onClose={() => onOpenChange(false)}
+        title={host ? "Edit host" : "New host"}
+        subtitle={
+          vaultName
+            ? `${host ? host.name : "Save an SSH connection for quick access."} · ${vaultName}`
+            : host
+              ? host.name
+              : "Save an SSH connection for quick access."
+        }
+        footer={
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              className="rounded-md border border-border px-3 py-1.5 text-sm text-muted hover:text-foreground"
             >
-              {AUTH_OPTIONS.map((opt) => (
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={submit}
+              disabled={save.isPending || (showErrors && hasErrors)}
+              className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground disabled:opacity-50"
+            >
+              {host ? "Save changes" : "Create host"}
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 gap-3">
+            <SelectField
+              label="Identity (optional)"
+              value={state.identityId}
+              onChange={(v) => patch({ identityId: v })}
+              error={err("identityId")}
+              hint={hint("identityId", Boolean(state.identityId), () => patch({ identityId: "" }))}
+            >
+              <option value="">Host-specific credentials</option>
+              {identities.map((identity) => (
+                <option key={identity.id} value={identity.id}>
+                  {identity.name} ({identity.username})
+                </option>
+              ))}
+            </SelectField>
+            <TextField
+              label="Name"
+              required
+              value={state.name}
+              onChange={(v) => patch({ name: v })}
+              placeholder="Production web"
+              error={err("name")}
+            />
+            <TextField
+              label="Tags"
+              value={state.tags}
+              onChange={(v) => patch({ tags: v })}
+              placeholder="prod, web (comma separated)"
+            />
+          </div>
+
+          <div className="grid grid-cols-[1fr_7rem] gap-3">
+            <TextField
+              label="Hostname"
+              required
+              mono
+              value={state.hostname}
+              onChange={(v) => patch({ hostname: v })}
+              placeholder="server.example.com"
+              error={err("hostname")}
+            />
+            <TextField
+              label="Port"
+              type="number"
+              value={state.port}
+              onChange={(v) => patch({ port: v })}
+              placeholder="22"
+              error={err("port")}
+            />
+          </div>
+
+          <div className="grid gap-3">
+            {!state.identityId && (
+              <TextField
+                label="Username"
+                mono
+                value={state.username}
+                onChange={(v) => patch({ username: v })}
+                placeholder={inheritedFor("username")?.value || "root"}
+                error={err("username")}
+                hint={hint("username", state.username !== "", () => patch({ username: "" }))}
+              />
+            )}
+            <SelectField
+              label="Group"
+              value={state.groupId}
+              onChange={(v) => patch({ groupId: v })}
+              error={err("groupId")}
+            >
+              <option value="">No group</option>
+              {groups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {groupLabel(g, groups)}
+                </option>
+              ))}
+            </SelectField>
+          </div>
+
+          {!state.identityId && (
+            <div className="grid grid-cols-1 gap-3">
+              <SelectField
+                label="Authentication"
+                value={state.authenticationType}
+                onChange={(v) => patch({ authenticationType: v as AuthenticationType })}
+              >
+                {AUTH_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </SelectField>
+              {state.authenticationType === "key" && (
+                <div>
+                  <SelectField
+                    label="Key reference"
+                    required
+                    value={state.keyId}
+                    onChange={(v) => patch({ keyId: v })}
+                    error={err("keyId")}
+                  >
+                    <option value="">Select a key…</option>
+                    {keyReferences.map((k) => (
+                      <option key={k.id} value={k.id}>
+                        {k.name}
+                      </option>
+                    ))}
+                  </SelectField>
+                  <button
+                    type="button"
+                    onClick={onManageKeys}
+                    className="mt-1 flex items-center gap-1 text-xs text-accent hover:underline"
+                  >
+                    <KeyRound size={11} /> Manage keys
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!state.identityId &&
+            (state.authenticationType === "password" ||
+              state.authenticationType === "interactive") && (
+              <p className="rounded-md border border-border bg-background px-3 py-2 text-xs text-muted">
+                You will be prompted for the password in the terminal. Luma does not store SSH
+                passwords.
+              </p>
+            )}
+
+          <div className="grid grid-cols-1 gap-3">
+            <SelectField
+              label="Proxy jump (optional)"
+              value={state.proxyJumpHostId}
+              onChange={(v) => patch({ proxyJumpHostId: v })}
+              error={err("proxyJumpHostId")}
+              hint={hint("proxyJumpHostId", Boolean(state.proxyJumpHostId), () =>
+                patch({ proxyJumpHostId: "" }),
+              )}
+            >
+              <option value="">None</option>
+              {proxyOptions.map((h) => (
+                <option key={h.id} value={h.id}>
+                  {h.name}
+                </option>
+              ))}
+            </SelectField>
+            <SelectField
+              label="Transport"
+              value={state.transport}
+              onChange={(v) => patch({ transport: v as TransportType })}
+              hint={hint("transport", state.transport !== "ssh", () => patch({ transport: "ssh" }))}
+            >
+              {TRANSPORT_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>
               ))}
             </SelectField>
-            {state.authenticationType === "key" && (
-              <div>
-                <SelectField
-                  label="Key reference"
-                  required
-                  value={state.keyId}
-                  onChange={(v) => patch({ keyId: v })}
-                  error={err("keyId")}
-                >
-                  <option value="">Select a key…</option>
-                  {keyReferences.map((k) => (
-                    <option key={k.id} value={k.id}>
-                      {k.name}
-                    </option>
-                  ))}
-                </SelectField>
-                <button
-                  type="button"
-                  onClick={onManageKeys}
-                  className="mt-1 flex items-center gap-1 text-xs text-accent hover:underline"
-                >
-                  <KeyRound size={11} /> Manage keys
-                </button>
-              </div>
-            )}
           </div>
-        )}
 
-        {!state.identityId &&
-          (state.authenticationType === "password" ||
-            state.authenticationType === "interactive") && (
-            <p className="rounded-md border border-border bg-background px-3 py-2 text-xs text-muted">
-              You will be prompted for the password in the terminal. Luma does not store SSH
-              passwords.
-            </p>
+          {state.transport !== "ssh" && (
+            <div className="grid grid-cols-1 gap-3">
+              <TextField
+                label="mosh-server path (optional)"
+                mono
+                value={state.moshServerPath}
+                onChange={(v) => patch({ moshServerPath: v })}
+                placeholder={inheritedFor("moshServerPath")?.value || "mosh-server"}
+                error={err("moshServerPath")}
+                hint={hint("moshServerPath", state.moshServerPath !== "", () =>
+                  patch({ moshServerPath: "" }),
+                )}
+              />
+              <TextField
+                label="Mosh UDP port range (optional)"
+                mono
+                value={state.moshPortRange}
+                onChange={(v) => patch({ moshPortRange: v })}
+                placeholder={inheritedFor("moshPortRange")?.value || "60000-61000"}
+                error={err("moshPortRange")}
+                hint={hint("moshPortRange", state.moshPortRange !== "", () =>
+                  patch({ moshPortRange: "" }),
+                )}
+              />
+            </div>
           )}
 
-        <div className="grid grid-cols-2 gap-3">
-          <SelectField
-            label="Proxy jump (optional)"
-            value={state.proxyJumpHostId}
-            onChange={(v) => patch({ proxyJumpHostId: v })}
-            error={err("proxyJumpHostId")}
-            hint={hint("proxyJumpHostId", Boolean(state.proxyJumpHostId), () =>
-              patch({ proxyJumpHostId: "" }),
-            )}
-          >
-            <option value="">None</option>
-            {proxyOptions.map((h) => (
-              <option key={h.id} value={h.id}>
-                {h.name}
-              </option>
-            ))}
-          </SelectField>
-          <SelectField
-            label="Transport"
-            value={state.transport}
-            onChange={(v) => patch({ transport: v as TransportType })}
-            hint={hint("transport", state.transport !== "ssh", () => patch({ transport: "ssh" }))}
-          >
-            {TRANSPORT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </SelectField>
-        </div>
-
-        {state.transport !== "ssh" && (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <TextField
-              label="mosh-server path (optional)"
+              label="Startup command (optional)"
               mono
-              value={state.moshServerPath}
-              onChange={(v) => patch({ moshServerPath: v })}
-              placeholder={inheritedFor("moshServerPath")?.value || "mosh-server"}
-              error={err("moshServerPath")}
-              hint={hint("moshServerPath", state.moshServerPath !== "", () =>
-                patch({ moshServerPath: "" }),
+              value={state.startupCommand}
+              onChange={(v) => patch({ startupCommand: v })}
+              placeholder={inheritedFor("startupCommand")?.value || "tmux attach"}
+              hint={hint("startupCommand", state.startupCommand !== "", () =>
+                patch({ startupCommand: "" }),
               )}
             />
             <TextField
-              label="Mosh UDP port range (optional)"
+              label="Remote working directory (optional)"
               mono
-              value={state.moshPortRange}
-              onChange={(v) => patch({ moshPortRange: v })}
-              placeholder={inheritedFor("moshPortRange")?.value || "60000-61000"}
-              error={err("moshPortRange")}
-              hint={hint("moshPortRange", state.moshPortRange !== "", () =>
-                patch({ moshPortRange: "" }),
+              value={state.workingDirectory}
+              onChange={(v) => patch({ workingDirectory: v })}
+              placeholder={inheritedFor("workingDirectory")?.value || "/var/www"}
+              hint={hint("workingDirectory", state.workingDirectory !== "", () =>
+                patch({ workingDirectory: "" }),
               )}
             />
           </div>
-        )}
 
-        <div className="grid grid-cols-2 gap-3">
-          <TextField
-            label="Startup command (optional)"
-            mono
-            value={state.startupCommand}
-            onChange={(v) => patch({ startupCommand: v })}
-            placeholder={inheritedFor("startupCommand")?.value || "tmux attach"}
-            hint={hint("startupCommand", state.startupCommand !== "", () =>
-              patch({ startupCommand: "" }),
-            )}
+          <EnvironmentEditor
+            rows={state.env}
+            onChange={(env) => patch({ env })}
+            hint={
+              inheritedEnv.length > 0 ? (
+                <span className="text-[11px] text-muted/80">
+                  +{inheritedEnv.length} inherited ({inheritedEnv.join(", ")})
+                </span>
+              ) : undefined
+            }
           />
-          <TextField
-            label="Remote working directory (optional)"
-            mono
-            value={state.workingDirectory}
-            onChange={(v) => patch({ workingDirectory: v })}
-            placeholder={inheritedFor("workingDirectory")?.value || "/var/www"}
-            hint={hint("workingDirectory", state.workingDirectory !== "", () =>
-              patch({ workingDirectory: "" }),
-            )}
+
+          <TabColorField
+            value={state.tabColor}
+            onChange={(tabColor) => patch({ tabColor })}
+            hint={hint("tabColor", state.tabColor !== "", () => patch({ tabColor: "" }))}
           />
+
+          <CheckboxField
+            label="Favorite"
+            checked={state.favorite}
+            onChange={(v) => patch({ favorite: v })}
+          />
+
+          {backendError && (
+            <p className="text-xs text-danger">
+              {backendError.category === "invalid-input"
+                ? backendError.message
+                : `Could not save host: ${backendError.message}`}
+            </p>
+          )}
         </div>
-
-        <EnvironmentEditor
-          rows={state.env}
-          onChange={(env) => patch({ env })}
-          hint={
-            inheritedEnv.length > 0 ? (
-              <span className="text-[11px] text-muted/80">
-                +{inheritedEnv.length} inherited ({inheritedEnv.join(", ")})
-              </span>
-            ) : undefined
-          }
-        />
-
-        <TabColorField
-          value={state.tabColor}
-          onChange={(tabColor) => patch({ tabColor })}
-          hint={hint("tabColor", state.tabColor !== "", () => patch({ tabColor: "" }))}
-        />
-
-        <CheckboxField
-          label="Favorite"
-          checked={state.favorite}
-          onChange={(v) => patch({ favorite: v })}
-        />
-
-        {backendError && (
-          <p className="text-xs text-danger">
-            {backendError.category === "invalid-input"
-              ? backendError.message
-              : `Could not save host: ${backendError.message}`}
-          </p>
-        )}
-      </div>
-    </Modal>
+      </InspectorShell>
+    </div>
   );
 }

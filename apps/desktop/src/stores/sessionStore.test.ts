@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { setInvoke, invoke } from "../test/tauriMock";
+import { useUiStore } from "./uiStore";
 import { useSessionStore } from "./sessionStore";
 import { terminalManager } from "../features/terminal/terminalManager";
 import { createdTerminals } from "../test/xtermMock";
@@ -39,6 +40,7 @@ function latestSession() {
 }
 
 beforeEach(() => {
+  useUiStore.setState({ mainView: "hosts", newTabIds: [], activeNewTabId: null });
   useSessionStore.setState({
     sessions: [],
     tabs: [],
@@ -976,5 +978,36 @@ describe("openTemplate / host groups", () => {
     // Every leaf was spawned (2 original + 2 restored local panes).
     const spawnCalls = invoke.mock.calls.filter((call) => call[0] === "pty_spawn").length;
     expect(spawnCalls).toBe(4);
+  });
+});
+
+describe("closing the visible tab", () => {
+  it("closes the launcher instead of its underlying connection", async () => {
+    setInvoke((cmd) =>
+      cmd === "pty_spawn" ? { sessionId: "close-launcher", shellName: "bash" } : undefined,
+    );
+    await useSessionStore.getState().openLocalSession();
+    const id = useSessionStore.getState().activeSessionId;
+    useUiStore.getState().openNewTab();
+    useSessionStore.getState().closeActivePane();
+    expect(useSessionStore.getState().activeSessionId).toBe(id);
+    expect(useSessionStore.getState().sessions).toHaveLength(1);
+    expect(useUiStore.getState().activeNewTabId).toBeNull();
+    expect(useUiStore.getState().mainView).toBe("terminal");
+    useSessionStore.getState().closeActivePane();
+    expect(useSessionStore.getState().sessions).toHaveLength(0);
+    expect(useUiStore.getState().mainView).toBe("hosts");
+  });
+  it("keeps the visible launcher when a background terminal closes", async () => {
+    setInvoke((cmd) =>
+      cmd === "pty_spawn" ? { sessionId: "background-close", shellName: "bash" } : undefined,
+    );
+    await useSessionStore.getState().openLocalSession();
+    const id = useSessionStore.getState().activeSessionId!;
+    useUiStore.getState().openNewTab();
+    const launcher = useUiStore.getState().activeNewTabId;
+    useSessionStore.getState().closeSession(id);
+    expect(useUiStore.getState().mainView).toBe("terminal");
+    expect(useUiStore.getState().activeNewTabId).toBe(launcher);
   });
 });

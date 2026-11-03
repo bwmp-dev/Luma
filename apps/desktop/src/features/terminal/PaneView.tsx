@@ -90,6 +90,21 @@ export function PaneView({
   onFocus: () => void;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const isMobile = useCapabilityStore((state) => state.capabilities.isMobile);
+  const mainView = useUiStore((s) => s.mainView);
+  const activeNewTabId = useUiStore((s) => s.activeNewTabId);
+  useEffect(() => {
+    if (
+      !isMobile &&
+      focused &&
+      mainView === "terminal" &&
+      !activeNewTabId &&
+      session.status === "connected" &&
+      !document.querySelector('[role="dialog"]')
+    ) {
+      terminalManager.focus(session.id);
+    }
+  }, [isMobile, focused, mainView, activeNewTabId, session.id, session.status]);
   const restartSession = useSessionStore((s) => s.restartSession);
   const closeSession = useSessionStore((s) => s.closeSession);
   const replaceHostKey = useSessionStore((s) => s.replaceHostKey);
@@ -123,7 +138,6 @@ export function PaneView({
   const [forwardingConfirm, setForwardingConfirm] = useState(false);
   const [forwardingBusy, setForwardingBusy] = useState(false);
   const [forwardingError, setForwardingError] = useState<string | null>(null);
-  const isMobile = useCapabilityStore((state) => state.capabilities.isMobile);
   const selectMode = useUiStore((s) => s.terminalSelectMode) && isMobile;
   // The URL the context menu was opened over, resolved from the right-click
   // point when the menu opens.

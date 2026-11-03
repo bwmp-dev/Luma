@@ -77,7 +77,6 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
   const sessions = useSessionStore((s) => s.sessions);
   const invalidate = useInvalidateHosts();
   const queryClient = useQueryClient();
-  const showTerminal = useUiStore((s) => s.showTerminal);
   const openServerStats = useUiStore((s) => s.openServerStats);
   const openFleet = useUiStore((s) => s.openFleet);
   const openMultiplexer = useUiStore((s) => s.openMultiplexer);
@@ -145,7 +144,7 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
   // Port forwarding is a desktop-only capability; on mobile the tunnel commands
   // are not registered, so its per-host action and dialog are hidden entirely.
   const portForwardingEnabled = useCapabilityStore((s) => s.capabilities.features.portForwarding);
-  // The desktop editor is a two-column dialog; on a phone the same fields go in
+  // The desktop editor is a side panel; on a phone the same fields go in
   // a full-screen grouped form with pushed pickers instead.
   const isMobile = useCapabilityStore((s) => s.capabilities.isMobile);
   const tunnels = useTunnelStore((s) => s.tunnels);
@@ -203,7 +202,6 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
     // The backend records the recent connection on a successful spawn; refresh
     // the Recent list once the connection attempt settles.
     void openSshSession(host.id, host.name, host.hostname, false, host.tabColor).then(() => {
-      showTerminal();
       return queryClient.invalidateQueries({ queryKey: RECENT_HOSTS_KEY });
     });
   };
@@ -333,7 +331,14 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
   };
 
   return (
-    <div className="space-y-5">
+    <div
+      className={cn(
+        "mx-auto max-w-375 space-y-5",
+        !isMobile &&
+          editorOpen &&
+          "md:pr-90 [&_.host-grid]:md:grid-cols-1 [&_.host-grid]:xl:grid-cols-2 [&_.host-grid]:2xl:grid-cols-3",
+      )}
+    >
       <input
         type="search"
         value={query}
@@ -405,7 +410,7 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
       {!atVaultRoot && scopedHosts.length === 0 && scopedGroups.length === 0 ? (
         <EmptyHosts onAdd={() => openEditor(null)} onImport={() => setImportOpen(true)} />
       ) : searching ? (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="host-grid grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {filtered.length === 0 ? (
             <p className="px-1 py-2 text-xs text-muted">No matching hosts.</p>
           ) : (
@@ -501,7 +506,7 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
               {childGroups.length > 0 && (
                 <section>
                   <h2 className="mb-3 text-sm font-semibold">Folders</h2>
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <div className="host-grid grid gap-3 md:grid-cols-2 xl:grid-cols-3">
                     {childGroups.map((group) => (
                       <FolderCard
                         key={group.id}
@@ -682,7 +687,7 @@ function Section({
         {icon}
         {title}
       </div>
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{children}</div>
+      <div className="host-grid grid gap-3 md:grid-cols-2 xl:grid-cols-3">{children}</div>
     </div>
   );
 }
@@ -962,6 +967,7 @@ function HostRow({
         <button
           type="button"
           onClick={(event) => {
+            if (event.detail > 1) return;
             if (event.ctrlKey || event.metaKey) onSelect(host, true);
             else if (selectedHostIds.size > 0) onSelect(host, false);
             else onConnect(host);

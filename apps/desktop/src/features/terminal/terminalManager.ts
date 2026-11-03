@@ -9,7 +9,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { readText } from "@tauri-apps/plugin-clipboard-manager";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { openTerminalLink } from "./terminalLinks";
 import "@xterm/xterm/css/xterm.css";
 
 import {
@@ -1391,6 +1391,7 @@ export const terminalManager = {
         : descriptor;
     const term = new Terminal({
       allowProposedApi: true,
+      linkHandler: { activate: openTerminalLink },
       cursorBlink: true,
       fontFamily: config.fontFamily,
       fontSize: config.fontSize,
@@ -1401,11 +1402,7 @@ export const terminalManager = {
     const search = new SearchAddon();
     term.loadAddon(fit);
     term.loadAddon(search);
-    term.loadAddon(
-      new WebLinksAddon((_event, uri) => {
-        void openUrl(uri);
-      }),
-    );
+    term.loadAddon(new WebLinksAddon(openTerminalLink));
 
     const session: ManagedSession = {
       id: sessionId,
@@ -1951,6 +1948,7 @@ export const terminalManager = {
     if (sessions.has(sessionId)) return;
     const term = new Terminal({
       allowProposedApi: true,
+      linkHandler: { activate: openTerminalLink },
       cursorBlink: false,
       disableStdin: options.onInput === undefined,
       fontFamily: config.fontFamily,
@@ -1962,11 +1960,7 @@ export const terminalManager = {
     const search = new SearchAddon();
     term.loadAddon(fit);
     term.loadAddon(search);
-    term.loadAddon(
-      new WebLinksAddon((_event, uri) => {
-        void openUrl(uri);
-      }),
-    );
+    term.loadAddon(new WebLinksAddon(openTerminalLink));
 
     const session: ManagedSession = {
       id: sessionId,

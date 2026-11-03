@@ -677,7 +677,11 @@ async function launch(
  * workspace was the active main view, fall back to the Hosts screen rather than
  * showing the terminal empty state. */
 function fallbackToHostsIfEmpty(get: () => SessionState): void {
-  if (get().tabs.length === 0 && useUiStore.getState().mainView === "terminal") {
+  if (
+    get().tabs.length === 0 &&
+    useUiStore.getState().mainView === "terminal" &&
+    !useUiStore.getState().activeNewTabId
+  ) {
     useUiStore.getState().openSection("hosts");
   }
 }
@@ -1505,6 +1509,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   closeActivePane: () => {
+    const ui = useUiStore.getState();
+    if (ui.mainView !== "terminal") return;
+    if (ui.activeNewTabId) {
+      ui.closeNewTab(ui.activeNewTabId);
+      return;
+    }
     const state = get();
     if (!state.activeSessionId) return;
     get().closeSession(state.activeSessionId);
