@@ -11,7 +11,6 @@ import {
   Square,
   X,
 } from "lucide-react";
-import { useEffect, useRef } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useUiStore } from "../stores/uiStore";
 import { selectRunningCount, useTunnelStore } from "../stores/tunnelStore";
@@ -27,8 +26,6 @@ import { AgentInbox } from "../features/agentInbox/AgentInbox";
 const appWindow = getCurrentWindow();
 
 export function TitleBar() {
-  const windowFocused = useRef(false);
-  const focusedAt = useRef(0);
   const navOpen = useUiStore((s) => s.navOpen);
   const toggleNav = useUiStore((s) => s.toggleNav);
   const selectSection = useUiStore((s) => s.selectSection);
@@ -42,32 +39,6 @@ export function TitleBar() {
     .filter((config) => config.enabled)
     .map((config) => config.vaultId);
 
-  useEffect(() => {
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
-
-    void appWindow
-      .isFocused()
-      .then((focused) => {
-        if (!cancelled) windowFocused.current = focused;
-      })
-      .catch(() => {});
-    void appWindow
-      .onFocusChanged(({ payload: focused }) => {
-        windowFocused.current = focused;
-        if (focused) focusedAt.current = Date.now();
-      })
-      .then((cleanup) => {
-        if (cancelled) cleanup();
-        else unlisten = cleanup;
-      });
-
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, []);
-
   return (
     <header
       onMouseDown={(event) => {
@@ -77,13 +48,9 @@ export function TitleBar() {
         // from the bar itself, or startDragging() hands the gesture to the OS
         // and the menu never sees the click that would select an item.
         if (!event.currentTarget.contains(target)) return;
-        const wasJustFocused = Date.now() - focusedAt.current < 250;
-        if (
-          event.button === 0 &&
-          windowFocused.current &&
-          !wasJustFocused &&
-          !target.closest("button, [data-luma-tab-id]")
-        ) {
+        // No focus gate: like a native titlebar, the press that activates an
+        // inactive window must also be able to drag it.
+        if (event.button === 0 && !target.closest("button, [data-luma-tab-id]")) {
           void appWindow.startDragging();
         }
       }}

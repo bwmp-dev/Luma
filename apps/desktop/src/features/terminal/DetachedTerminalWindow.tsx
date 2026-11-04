@@ -89,8 +89,6 @@ export function DetachedTerminalWindow() {
   // getCurrentWindow() builds a fresh handle each call; memoize so it is a stable
   // effect dependency (the handle is just a label wrapper, not live state).
   const win = useMemo(() => getCurrentWindow(), []);
-  const windowFocused = useRef(false);
-  const focusedAt = useRef(0);
   const cachedMainRect = useRef<MainWindowRect | null>(null);
   const dragging = useRef(false);
   /** The window has actually moved since the drag began. WebView2 can deliver a
@@ -103,32 +101,6 @@ export function DetachedTerminalWindow() {
   const detachedTab = useSessionStore((state) => state.tabs[0] ?? null);
   const detachedSessions = useSessionStore((state) => state.sessions);
   const trafficLightInset = useTrafficLightInset(win);
-
-  useEffect(() => {
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
-
-    void win
-      .isFocused()
-      .then((focused) => {
-        if (!cancelled) windowFocused.current = focused;
-      })
-      .catch(() => {});
-    void win
-      .onFocusChanged(({ payload: focused }) => {
-        windowFocused.current = focused;
-        if (focused) focusedAt.current = Date.now();
-      })
-      .then((cleanup) => {
-        if (cancelled) cleanup();
-        else unlisten = cleanup;
-      });
-
-    return () => {
-      cancelled = true;
-      unlisten?.();
-    };
-  }, [win]);
 
   useEffect(() => {
     void mainWindowRect().then((rect) => {
@@ -353,13 +325,7 @@ export function DetachedTerminalWindow() {
           its identity (icon, accent, pane count) in the new window. */}
       <header
         onMouseDown={(event) => {
-          const wasJustFocused = Date.now() - focusedAt.current < 250;
-          if (
-            event.button === 0 &&
-            windowFocused.current &&
-            !wasJustFocused &&
-            !(event.target as Element).closest("button")
-          ) {
+          if (event.button === 0 && !(event.target as Element).closest("button")) {
             void mainWindowRect().then((rect) => {
               cachedMainRect.current = rect;
             });

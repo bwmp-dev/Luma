@@ -762,7 +762,9 @@ export function TabBar() {
             onWheel={scrollTabs}
             onKeyDown={onTabListKeyDown}
             // The strip clips overflow, so focus rings are drawn inside each control.
-            className="flex min-w-0 touch-pan-x items-center gap-1 overflow-x-auto overflow-y-hidden [&_:focus-visible]:-outline-offset-2"
+            // Tabs shrink to fit first; past their minimum the strip scrolls by
+            // wheel/touch without a scrollbar eating into the titlebar height.
+            className="flex min-w-0 touch-pan-x items-center gap-1 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&_:focus-visible]:-outline-offset-2"
           >
             {visibleTabs.map((tab, index) => {
               const session = activeSessionOf(tab);
@@ -835,7 +837,7 @@ export function TabBar() {
                     onPointerUp={finishTabDrag}
                     onPointerCancel={cancelTabDrag}
                     className={cn(
-                      "group flex h-7 min-w-32 max-w-52 shrink-0 touch-none cursor-grab items-center gap-1.5 rounded-lg px-2.5 text-xs transition-colors active:cursor-grabbing",
+                      "group flex h-7 w-52 min-w-20 max-w-52 touch-none cursor-grab items-center gap-1.5 rounded-lg px-2.5 text-xs transition-colors active:cursor-grabbing",
                       "luma-tab-enter",
                       closingTabIds.has(tab.id) && "luma-tab-exit pointer-events-none",
                       active
@@ -953,7 +955,7 @@ export function TabBar() {
                 role="presentation"
                 onDoubleClick={(event) => event.stopPropagation()}
                 className={cn(
-                  "luma-tab-enter group flex h-7 min-w-32 max-w-52 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs",
+                  "luma-tab-enter group flex h-7 w-52 min-w-20 max-w-52 items-center gap-1.5 rounded-lg px-2.5 text-xs",
                   tabId === activeNewTabId
                     ? "bg-raised font-medium text-foreground shadow-sm ring-1 ring-inset ring-border"
                     : "text-muted hover:bg-raised/60 hover:text-foreground",
@@ -1002,6 +1004,9 @@ export function TabBar() {
           >
             <Plus size={15} />
           </button>
+          {/* Guaranteed empty titlebar to grab: the strip shrinks before this does,
+              so a full row of tabs still leaves the window draggable. */}
+          <div aria-hidden="true" className="h-7 min-w-10 flex-1" />
         </div>
         {draggedTabId &&
           !tornDrag &&
