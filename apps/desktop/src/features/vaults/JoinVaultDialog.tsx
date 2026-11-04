@@ -20,6 +20,7 @@ import { useInvalidateVaults } from "../../hooks/useVaults";
 import { useInvalidateSyncConfig } from "../../hooks/useSync";
 import { useSyncStore } from "../../stores/syncStore";
 import { useCapabilityStore } from "../../stores/capabilityStore";
+import { CertificateFingerprintField } from "../sync/CertificateFingerprintField";
 import { cn } from "../../lib/utils";
 
 const PROVIDER_OPTIONS: { value: SyncProvider; label: string }[] = [
@@ -63,6 +64,7 @@ export function JoinVaultDialog({
   const [url, setUrl] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [certSha256, setCertSha256] = useState("");
   const [gistId, setGistId] = useState("");
   const [token, setToken] = useState("");
   const [cloudUrl, setCloudUrl] = useState(DEFAULT_LUMA_CLOUD_URL);
@@ -83,6 +85,7 @@ export function JoinVaultDialog({
     if (parsed.folderPath) setFolderPath(parsed.folderPath);
     if (parsed.url) setUrl(parsed.url);
     if (parsed.username) setUsername(parsed.username);
+    if (parsed.certSha256) setCertSha256(parsed.certSha256);
     if (parsed.gistId) setGistId(parsed.gistId);
     if (parsed.cloudUrl) setCloudUrl(parsed.cloudUrl);
     setInviteSecret(parsed.inviteSecret);
@@ -98,6 +101,7 @@ export function JoinVaultDialog({
     setUrl("");
     setUsername("");
     setPassword("");
+    setCertSha256("");
     setGistId("");
     setToken("");
     setCloudUrl(DEFAULT_LUMA_CLOUD_URL);
@@ -138,7 +142,13 @@ export function JoinVaultDialog({
     }
     if (provider === "webdav") {
       if (!url.trim() || !username.trim() || !password) return null;
-      return { provider: "webdav", url: url.trim(), username: username.trim(), password };
+      return {
+        provider: "webdav",
+        url: url.trim(),
+        username: username.trim(),
+        password,
+        certSha256: certSha256.trim() || null,
+      };
     }
     if (provider === "github-gist") {
       if (!token || !gistId.trim()) return null;
@@ -320,6 +330,7 @@ export function JoinVaultDialog({
             <Field label="Password">
               <TextInput value={password} onChange={setPassword} type="password" />
             </Field>
+            <CertificateFingerprintField url={url} value={certSha256} onChange={setCertSha256} />
           </>
         )}
 

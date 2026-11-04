@@ -39,6 +39,9 @@ russh = { version = "0.62.2", default-features = false, features = ["ring", "rsa
 async-trait = "0.1"
 chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# Already in the tree through reqwest; named directly so a WebDAV server with a
+# self-signed certificate can be trusted by its pinned fingerprint.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 sha2 = "0.10"
 zeroize = "1"
 ssh-key = { version = "0.6.7", default-features = false, features = [

@@ -206,6 +206,7 @@ function VaultRow({
         folderPath: syncConfig.folderPath,
         url: syncConfig.url,
         username: syncConfig.username,
+        certSha256: syncConfig.certSha256,
         gistId: syncConfig.gistId,
         cloudUrl: syncConfig.cloudUrl,
       });

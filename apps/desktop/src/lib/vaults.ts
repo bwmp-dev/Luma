@@ -142,6 +142,8 @@ export type VaultJoinLink = {
   /** webdav */
   url: string | null;
   username: string | null;
+  /** SHA-256 of a self-signed server certificate. Public, like the URL. */
+  certSha256: string | null;
   /** github-gist */
   gistId: string | null;
   /** luma-cloud */
@@ -173,6 +175,7 @@ export function buildVaultJoinLink(link: VaultJoinLink): string {
   }
   params.set(location[0], location[1]);
   if (link.provider === "webdav" && link.username) params.set("username", link.username);
+  if (link.provider === "webdav" && link.certSha256) params.set("cert", link.certSha256);
   if (link.inviteSecret) params.set("invite", link.inviteSecret);
   return `luma://vault?${params.toString()}`;
 }
@@ -200,6 +203,7 @@ export function parseVaultJoinLink(raw: string): VaultJoinLink | null {
     folderPath: url.searchParams.get("path"),
     url: url.searchParams.get("url"),
     username: url.searchParams.get("username"),
+    certSha256: url.searchParams.get("cert"),
     gistId: url.searchParams.get("gistId"),
     cloudUrl: url.searchParams.get("cloudUrl"),
   };

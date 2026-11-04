@@ -297,6 +297,7 @@ export const SYNC_CONFIG = {
   username: null,
   gistId: null,
   cloudUrl: null,
+  certSha256: null,
   cloudSignedIn: false,
   lastSyncAt: null,
   lastRemoteVersion: null,

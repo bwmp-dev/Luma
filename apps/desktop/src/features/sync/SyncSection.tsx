@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { normalizeDialogPath } from "../../lib/dialogPath";
+import { CertificateFingerprintField } from "./CertificateFingerprintField";
 import { PassphrasePrompt } from "./PassphrasePrompt";
 import { parseLumaError } from "../../lib/hosts";
 import {
@@ -105,6 +106,7 @@ function SyncSectionBody({ vault, config }: { vault: Vault; config: SyncConfig }
   const [url, setUrl] = useState(config.url ?? "");
   const [username, setUsername] = useState(config.username ?? "");
   const [password, setPassword] = useState("");
+  const [certSha256, setCertSha256] = useState(config.certSha256 ?? "");
   const [gistId, setGistId] = useState(config.gistId ?? "");
   const [token, setToken] = useState("");
   const [cloudUrl, setCloudUrl] = useState(config.cloudUrl ?? DEFAULT_LUMA_CLOUD_URL);
@@ -141,7 +143,13 @@ function SyncSectionBody({ vault, config }: { vault: Vault; config: SyncConfig }
     }
     if (provider === "webdav") {
       if (!url.trim() || !username.trim() || !password) return null;
-      return { provider: "webdav", url: url.trim(), username: username.trim(), password };
+      return {
+        provider: "webdav",
+        url: url.trim(),
+        username: username.trim(),
+        password,
+        certSha256: certSha256.trim() || null,
+      };
     }
     if (provider === "github-gist") {
       if (!token) return null;
@@ -284,6 +292,7 @@ function SyncSectionBody({ vault, config }: { vault: Vault; config: SyncConfig }
             <Field label="Password">
               <TextInput value={password} onChange={setPassword} type="password" />
             </Field>
+            <CertificateFingerprintField url={url} value={certSha256} onChange={setCertSha256} />
           </>
         )}
 

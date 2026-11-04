@@ -1,12 +1,17 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
 use base64::Engine;
 use fs2::FileExt;
 use reqwest::header::{ETAG, IF_MATCH, IF_NONE_MATCH};
+use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
+use rustls::crypto::WebPkiSupportedAlgorithms;
+use rustls::pki_types::{CertificateDer, ServerName, UnixTime};
+use rustls::{CertificateError, DigitallySignedStruct, SignatureScheme};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -522,11 +527,16 @@ impl WebDavProvider {
         username: String,
         password: String,
         vault_slot: Option<String>,
+        pinned_certificate: Option<CertFingerprint>,
     ) -> Result<Self> {
         validate_https_url(&url)?;
         let url = RemoteSlot::new(vault_slot).qualify_url(&url);
+        let client = match pinned_certificate {
+            Some(pin) => pinned_http_client(Arc::new(PinnedCertVerifier::new(Some(pin))))?,
+            None => http_client()?,
+        };
         Ok(Self {
-            client: http_client()?,
+            client,
             url,
             username,
             password,
@@ -798,6 +808,137 @@ pub(super) fn http_client() -> Result<reqwest::Client> {
         .map_err(|_| LumaError::SyncUnavailable("could not initialize the HTTP client".into()))
 }
 
+/// SHA-256 of a server's DER certificate.
+pub type CertFingerprint = [u8; 32];
+
+/// Accepts a fingerprint as servers and browsers print it: hex, in any case,
+/// optionally grouped with colons or spaces.
+pub(super) fn parse_cert_fingerprint(value: &str) -> Result<CertFingerprint> {
+    let invalid =
+        || LumaError::InvalidInput("certificate fingerprint must be a SHA-256 hex digest".into());
+    let hex: Vec<u8> = value
+        .bytes()
+        .filter(|byte| !matches!(byte, b':' | b' '))
+        .collect();
+    if hex.len() != 64 || !hex.iter().all(u8::is_ascii_hexdigit) {
+        return Err(invalid());
+    }
+    let mut fingerprint = [0u8; 32];
+    for (byte, pair) in fingerprint.iter_mut().zip(hex.chunks_exact(2)) {
+        let pair = std::str::from_utf8(pair).map_err(|_| invalid())?;
+        *byte = u8::from_str_radix(pair, 16).map_err(|_| invalid())?;
+    }
+    Ok(fingerprint)
+}
+
+pub(super) fn format_cert_fingerprint(fingerprint: &CertFingerprint) -> String {
+    fingerprint
+        .iter()
+        .map(|byte| format!("{byte:02X}"))
+        .collect::<Vec<_>>()
+        .join(":")
+}
+
+/// Trusts exactly one certificate, for a server whose certificate no public CA
+/// signed, such as a WebDAV server on a LAN address. The pin replaces chain,
+/// name and expiry checks, but the handshake signature is still verified, so
+/// only the holder of that certificate's private key can pass.
+///
+/// With no pin it rejects every server, after recording what it was shown;
+/// that is how the fingerprint is read for the user to confirm.
+#[derive(Debug)]
+struct PinnedCertVerifier {
+    pin: Option<CertFingerprint>,
+    presented: Mutex<Option<CertFingerprint>>,
+    algorithms: WebPkiSupportedAlgorithms,
+}
+
+impl PinnedCertVerifier {
+    fn new(pin: Option<CertFingerprint>) -> Self {
+        Self {
+            pin,
+            presented: Mutex::new(None),
+            algorithms: rustls::crypto::ring::default_provider().signature_verification_algorithms,
+        }
+    }
+}
+
+impl ServerCertVerifier for PinnedCertVerifier {
+    fn verify_server_cert(
+        &self,
+        end_entity: &CertificateDer<'_>,
+        _intermediates: &[CertificateDer<'_>],
+        _server_name: &ServerName<'_>,
+        _ocsp_response: &[u8],
+        _now: UnixTime,
+    ) -> std::result::Result<ServerCertVerified, rustls::Error> {
+        let presented: CertFingerprint = Sha256::digest(end_entity.as_ref()).into();
+        *self.presented.lock().unwrap() = Some(presented);
+        if self.pin == Some(presented) {
+            Ok(ServerCertVerified::assertion())
+        } else {
+            Err(rustls::Error::InvalidCertificate(
+                CertificateError::ApplicationVerificationFailure,
+            ))
+        }
+    }
+
+    fn verify_tls12_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls12_signature(message, cert, dss, &self.algorithms)
+    }
+
+    fn verify_tls13_signature(
+        &self,
+        message: &[u8],
+        cert: &CertificateDer<'_>,
+        dss: &DigitallySignedStruct,
+    ) -> std::result::Result<HandshakeSignatureValid, rustls::Error> {
+        rustls::crypto::verify_tls13_signature(message, cert, dss, &self.algorithms)
+    }
+
+    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+        self.algorithms.supported_schemes()
+    }
+}
+
+fn pinned_http_client(verifier: Arc<PinnedCertVerifier>) -> Result<reqwest::Client> {
+    let failed = || LumaError::SyncUnavailable("could not initialize the HTTP client".into());
+    let tls = rustls::ClientConfig::builder_with_provider(Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()
+    .map_err(|_| failed())?
+    .dangerous()
+    .with_custom_certificate_verifier(verifier)
+    .with_no_client_auth();
+    reqwest::Client::builder()
+        .use_preconfigured_tls(tls)
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|_| failed())
+}
+
+/// Read the fingerprint of the certificate an HTTPS server presents. The
+/// handshake is always refused, so nothing, credentials included, is sent.
+pub async fn read_server_cert_fingerprint(url: &str) -> Result<String> {
+    validate_https_url(url)?;
+    let verifier = Arc::new(PinnedCertVerifier::new(None));
+    let client = pinned_http_client(verifier.clone())?;
+    // The request is expected to fail once the certificate has been recorded.
+    let _ = client.head(url).send().await;
+    let presented = *verifier.presented.lock().unwrap();
+    presented
+        .map(|fingerprint| format_cert_fingerprint(&fingerprint))
+        .ok_or_else(|| {
+            LumaError::SyncUnavailable("could not read a certificate from that server".into())
+        })
+}
+
 pub(super) fn validate_https_url(value: &str) -> Result<()> {
     let url = reqwest::Url::parse(value)
         .map_err(|_| LumaError::InvalidInput("sync URL is invalid".into()))?;
@@ -847,8 +988,40 @@ fn sync_io(error: std::io::Error) -> LumaError {
     LumaError::SyncUnavailable(format!("local sync storage is unavailable: {error}"))
 }
 
-fn network_error(_: reqwest::Error) -> LumaError {
-    LumaError::SyncUnavailable("sync provider could not be reached".into())
+fn network_error(error: reqwest::Error) -> LumaError {
+    let message = match certificate_error(&error) {
+        Some(CertificateError::ApplicationVerificationFailure) => {
+            "the server's certificate does not match the trusted fingerprint"
+        }
+        Some(_) => {
+            "the server's certificate is not trusted; for a self-signed certificate, \
+             trust its fingerprint"
+        }
+        None => "sync provider could not be reached",
+    };
+    LumaError::SyncUnavailable(message.into())
+}
+
+/// rustls' error sits inside an `io::Error`, whose `source()` skips the error
+/// it wraps, so that layer is unwrapped by hand.
+fn certificate_error(error: &(dyn std::error::Error + 'static)) -> Option<CertificateError> {
+    let mut current = Some(error);
+    while let Some(error) = current {
+        if let Some(rustls::Error::InvalidCertificate(kind)) = error.downcast_ref::<rustls::Error>()
+        {
+            return Some(kind.clone());
+        }
+        if let Some(inner) = error
+            .downcast_ref::<std::io::Error>()
+            .and_then(std::io::Error::get_ref)
+        {
+            if let Some(kind) = certificate_error(inner) {
+                return Some(kind);
+            }
+        }
+        current = error.source();
+    }
+    None
 }
 
 fn check_auth_or_status(response: &reqwest::Response) -> Result<()> {
@@ -1078,5 +1251,67 @@ mod tests {
             hostile.qualify_url("https://dav.example.com/dir/"),
             format!("https://dav.example.com/dir{}", hostile.segment())
         );
+    }
+
+    #[test]
+    fn cert_fingerprint_accepts_common_spellings() {
+        let colons = "AB:".repeat(31) + "CD";
+        let pin = parse_cert_fingerprint(&colons).unwrap();
+        assert_eq!(pin[0], 0xAB);
+        assert_eq!(pin[31], 0xCD);
+        assert_eq!(parse_cert_fingerprint(&colons.to_lowercase()).unwrap(), pin);
+        assert_eq!(
+            parse_cert_fingerprint(&colons.replace(':', " ")).unwrap(),
+            pin
+        );
+        assert_eq!(
+            parse_cert_fingerprint(&colons.replace(':', "")).unwrap(),
+            pin
+        );
+        assert_eq!(format_cert_fingerprint(&pin), colons);
+    }
+
+    #[test]
+    fn cert_fingerprint_rejects_malformed_input() {
+        for bad in [
+            "",
+            "AB:CD",
+            &"AB".repeat(33),
+            &"ZZ".repeat(32),
+            &"+1".repeat(32),
+        ] {
+            assert!(parse_cert_fingerprint(bad).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn pinned_verifier_accepts_only_the_pinned_certificate() {
+        let cert = CertificateDer::from(b"luma test certificate".to_vec());
+        let other = CertificateDer::from(b"some other certificate".to_vec());
+        let pin: CertFingerprint = Sha256::digest(cert.as_ref()).into();
+        let name = ServerName::try_from("192.168.1.20").unwrap();
+        let verify = |verifier: &PinnedCertVerifier, cert: &CertificateDer<'_>| {
+            verifier.verify_server_cert(cert, &[], &name, &[], UnixTime::now())
+        };
+
+        let pinned = PinnedCertVerifier::new(Some(pin));
+        assert!(verify(&pinned, &cert).is_ok());
+        assert!(verify(&pinned, &other).is_err());
+
+        let probe = PinnedCertVerifier::new(None);
+        assert!(verify(&probe, &cert).is_err());
+        assert_eq!(*probe.presented.lock().unwrap(), Some(pin));
+    }
+
+    #[test]
+    fn pinned_certificate_mismatch_is_reported_as_such() {
+        let error = std::io::Error::other(rustls::Error::InvalidCertificate(
+            CertificateError::ApplicationVerificationFailure,
+        ));
+        assert_eq!(
+            certificate_error(&error),
+            Some(CertificateError::ApplicationVerificationFailure)
+        );
+        assert_eq!(certificate_error(&std::io::Error::other("refused")), None);
     }
 }
