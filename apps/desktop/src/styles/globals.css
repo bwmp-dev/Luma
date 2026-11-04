@@ -24,9 +24,15 @@
   --border: #2c3039;
   --foreground: #f2f3f5;
   --muted: #969ba6;
-  --accent: #7c6cf2;
-  --accent-foreground: #ffffff;
-  --glow: rgba(124, 108, 242, 0.24);
+  /* One violet identity across both themes (the website uses the same hue).
+     Dark pairs a light violet with near-black text: white on a violet fill
+     cannot reach 4.5:1 while the same violet also reads as text on --raised. */
+  --accent: #9d8ff7;
+  --accent-foreground: #0f0c24;
+  --glow: rgba(157, 143, 247, 0.24);
+  /* Neutral elevation for menus, dialogs and floating bars. The accent glow is
+     reserved for drop targets so floating surfaces don't all look selected. */
+  --overlay-shadow: 0 16px 40px -12px rgb(0 0 0 / 0.65), 0 2px 8px rgb(0 0 0 / 0.35);
   --danger: #f87171;
   --success: #4ade80;
   --warning: #fbbf24;
@@ -37,14 +43,15 @@
 :root[data-theme="light"] {
   --background: #f6f7fa;
   --surface: #ffffff;
-  --raised: #eef1f6;
+  --raised: #e6eaf1;
   --border: #dde3ec;
   --foreground: #1c2433;
-  --muted: #64708a;
-  --accent: #0e7ea8;
+  --muted: #5a6680;
+  --accent: #5b4bd0;
   --accent-foreground: #ffffff;
-  --glow: rgba(14, 126, 168, 0.18);
-  --danger: #dc2626;
+  --glow: rgba(91, 75, 208, 0.18);
+  --overlay-shadow: 0 16px 40px -12px rgb(28 36 51 / 0.25), 0 2px 8px rgb(28 36 51 / 0.08);
+  --danger: #b91c1c;
   --success: #166534;
   --warning: #92400e;
   --diff-add: #166534;
@@ -66,6 +73,7 @@
   --color-diff-add: var(--diff-add);
   --color-diff-remove: var(--diff-remove);
   --shadow-glow: 0 0 24px 0 var(--glow);
+  --shadow-overlay: var(--overlay-shadow);
   --font-sans: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
   --font-mono: "Cascadia Code", "JetBrains Mono", "SF Mono", Consolas, monospace;
 }
@@ -134,14 +142,33 @@ select,
 
 /*
  * Consistent keyboard focus ring across both themes. :focus-visible keeps this
- * off for mouse/touch interaction. Components that already draw their own
- * focus-visible ring use `focus:outline-none`, which wins on specificity, so
- * this acts as a fallback for anything that would otherwise show none.
+ * off for mouse/touch interaction. It lives in the base layer so it stays a
+ * fallback: unlayered CSS beats every Tailwind utility regardless of
+ * specificity, so out here components that draw their own focus treatment
+ * (`outline-none` plus a border or ring) got a second ring stacked on theirs.
  */
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 3px;
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Text fields conventionally swap the outline for `outline-none` plus an
+     accent border. Add a 1px accent ring on top so that border change reads as
+     a 2px focus indicator everywhere. A box-shadow survives `outline-none`;
+     borderless inputs embedded in a styled wrapper opt out with `shadow-none`.
+     xterm's hidden helper textarea is excluded: xterm owns terminal focus. */
+  input:not(
+    [type="checkbox"],
+    [type="radio"],
+    [type="range"],
+    [type="color"],
+    [type="file"]
+  ):focus-visible,
+  textarea:not(.xterm-helper-textarea):focus-visible,
+  select:focus-visible {
+    box-shadow: 0 0 0 1px var(--accent);
+  }
 }
 
 /* xterm.js owns focus/selection inside the terminal viewport; never draw the
@@ -237,7 +264,7 @@ select,
   padding: 0.5rem 0.875rem;
   font-size: 0.8125rem;
   color: var(--foreground);
-  box-shadow: var(--shadow-glow);
+  box-shadow: var(--shadow-overlay);
 }
 .skip-link:focus {
   transform: translateY(0);

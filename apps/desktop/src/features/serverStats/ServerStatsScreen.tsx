@@ -71,10 +71,10 @@ function StatsHostPicker() {
   return (
     <div className="h-full overflow-y-auto bg-background">
       <div className="mx-auto max-w-3xl px-8 py-8">
-        <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-accent/15 text-accent">
+        <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-accent/15 text-accent md:hidden">
           <Activity size={22} />
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight">Server stats</h1>
+        <h1 className="text-lg font-semibold tracking-tight md:text-xl">Server stats</h1>
         <p className="mt-1 text-sm text-muted">
           Pick a saved host to see CPU, memory, disk, network, processes and docker health over SSH
           — no agent required.

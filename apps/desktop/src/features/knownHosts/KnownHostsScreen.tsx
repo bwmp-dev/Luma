@@ -59,12 +59,12 @@ export function KnownHostsScreen() {
   return (
     <div className="h-full overflow-y-auto bg-background">
       <div className="mx-auto max-w-4xl px-4 py-5 md:px-8 md:py-8">
-        <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-accent/15 text-accent">
+        <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-accent/15 text-accent md:hidden">
           <ShieldCheck size={22} />
         </div>
         <div className="flex flex-wrap items-start gap-3">
           <div className="min-w-0 flex-1">
-            <h1 className="text-2xl font-semibold tracking-tight">Known hosts</h1>
+            <h1 className="text-lg font-semibold tracking-tight md:text-xl">Known hosts</h1>
             <p className="mt-1 text-sm text-muted">
               Server host keys Luma has trusted. Removing an entry makes Luma re-prompt to verify
               that host the next time you connect.
@@ -88,7 +88,7 @@ export function KnownHostsScreen() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Filter by host, key type, or fingerprint…"
             aria-label="Filter known hosts"
-            className="w-full bg-transparent py-2 text-sm text-foreground outline-none placeholder:text-muted"
+            className="w-full bg-transparent py-2 text-sm text-foreground shadow-none outline-none placeholder:text-muted"
           />
           {query && (
             <button

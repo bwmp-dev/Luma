@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Cable,
-  Clock3,
   FolderKanban,
   Layers,
   Loader2,
@@ -26,21 +25,32 @@ import { cn } from "../../lib/utils";
 import { looksLikeConnectionString } from "../../lib/connectionString";
 import { parseLumaError, quickConnectPrepare } from "../../lib/hosts";
 import type { ShellRef } from "../../lib/terminal";
+import { DistroIcon } from "../../components/DistroIcon";
 import { ShellIcon } from "./ShellIcon";
+import { terminalManager } from "./terminalManager";
+import { detachedTabIds } from "./detachedTabs";
 
 type LocalLauncher = {
   key: string;
   ref: ShellRef;
   name: string;
   hint: string | null;
-  icon: React.ReactNode;
+  icon: ReactNode;
 };
+
+type LauncherItem = { key: string; run: () => void };
+
+const sectionHeading = "px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted";
 
 export function NewTabLauncher({ tabId, active }: { tabId: string; active: boolean }) {
   const [query, setQuery] = useState("");
+  const [picked, setPicked] = useState<number | null>(null);
   const [quickError, setQuickError] = useState<string | null>(null);
   const [quickBusy, setQuickBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const idPrefix = useId();
   const browsingVaultId = useBrowsingVaultId();
   const { data: hosts = [] } = useHosts(browsingVaultId);
   const { data: recent = [] } = useRecentHosts();
@@ -57,22 +67,59 @@ export function NewTabLauncher({ tabId, active }: { tabId: string; active: boole
   const openSerialConnect = useUiStore((s) => s.openSerialConnect);
 
   useEffect(() => {
-    if (active) inputRef.current?.focus();
+    if (!active) return;
+    const previous = document.activeElement;
+    if (
+      previous instanceof HTMLElement &&
+      previous !== document.body &&
+      !rootRef.current?.contains(previous)
+    ) {
+      previousFocusRef.current = previous;
+    }
+    inputRef.current?.focus();
   }, [active]);
 
+  // Dismissing must not strand focus on <body>. The next launcher (if one becomes
+  // active) focuses its own input; otherwise the revealed terminal takes focus,
+  // and failing that, whatever held focus before this launcher opened. Deferred a
+  // frame so the workspace is unhidden before xterm is asked to focus.
+  const dismiss = () => {
+    closeNewTab(tabId);
+    requestAnimationFrame(() => {
+      const ui = useUiStore.getState();
+      if (ui.activeNewTabId) return;
+      const { activeTabId, activeSessionId } = useSessionStore.getState();
+      if (
+        ui.mainView === "terminal" &&
+        activeSessionId &&
+        activeTabId &&
+        !detachedTabIds().has(activeTabId)
+      ) {
+        terminalManager.focus(activeSessionId);
+        return;
+      }
+      const previous = previousFocusRef.current;
+      if (previous?.isConnected) previous.focus();
+    });
+  };
+  const dismissRef = useRef(dismiss);
+  dismissRef.current = dismiss;
+
   // Escape dismisses the launcher regardless of what currently holds focus (the
-  // search input, a host button, or nothing). Capture phase so it fires before
-  // any focused surface handles the key and can't be swallowed en route.
+  // search input, a template's delete button, or nothing). Capture phase so it
+  // fires before any focused surface handles the key and can't be swallowed.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!active || event.key !== "Escape") return;
+      // A dialog on top (the command palette, a confirm) owns its own Escape.
+      if (document.querySelector('[role="dialog"]')) return;
       event.preventDefault();
       event.stopPropagation();
-      closeNewTab(tabId);
+      dismissRef.current();
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [active, closeNewTab, tabId]);
+  }, [active]);
 
   const needle = query.trim().toLowerCase();
   const matchingHosts = useMemo(() => {
@@ -88,7 +135,12 @@ export function NewTabLauncher({ tabId, active }: { tabId: string; active: boole
         .some((value) => String(value).toLowerCase().includes(needle)),
     );
   }, [hosts, recent, needle, browsingVaultId]);
-  const matchingGroups = groups.filter((group) => group.name.toLowerCase().includes(needle));
+  const matchingGroups = groups
+    .filter((group) => group.name.toLowerCase().includes(needle))
+    .map((group) => ({
+      group,
+      count: hosts.filter((host) => host.groupId === group.id).length,
+    }));
   const matchingTemplates = templates.filter((template) =>
     template.name.toLowerCase().includes(needle),
   );
@@ -138,8 +190,8 @@ export function NewTabLauncher({ tabId, active }: { tabId: string; active: boole
       .catch((error) => setQuickError(parseLumaError(error).message))
       .finally(() => setQuickBusy(false));
   };
-  // A host group now opens as ONE grouped (split) tab reproducing an even
-  // layout of all its hosts, rather than a separate tab per host.
+  // A host group opens as ONE grouped (split) tab reproducing an even layout of
+  // all its hosts, rather than a separate tab per host.
   const openGroup = (groupId: string) => {
     const groupHosts = hosts.filter((host) => host.groupId === groupId);
     const root = buildHostGroupLayout(groupHosts);
@@ -149,21 +201,104 @@ export function NewTabLauncher({ tabId, active }: { tabId: string; active: boole
     }
   };
 
+  const items: LauncherItem[] = [];
+  if (isConnectionString) items.push({ key: "quick-connect", run: runQuickConnect });
+  if (!needle) {
+    items.push(
+      { key: "local", run: () => void openLocalSession() },
+      {
+        key: "serial",
+        run: () => {
+          closeNewTab();
+          openSerialConnect();
+        },
+      },
+    );
+  }
+  const firstHostIndex = items.length;
+  for (const host of matchingHosts)
+    items.push({ key: `host:${host.id}`, run: () => connect(host) });
+  for (const launcher of matchingLaunchers) {
+    items.push({
+      key: launcher.key,
+      run: () => void openLocalSession(launcher.ref, launcher.name),
+    });
+  }
+  for (const template of matchingTemplates) {
+    items.push({
+      key: `template:${template.id}`,
+      run: () => {
+        closeNewTab();
+        openTemplate(template.root);
+      },
+    });
+  }
+  for (const { group, count } of matchingGroups) {
+    if (count) items.push({ key: `group:${group.id}`, run: () => openGroup(group.id) });
+  }
+  const indexByKey = new Map(items.map((item, index) => [item.key, index]));
+
+  // With no explicit pick, Enter keeps its long-standing meaning: the first
+  // matching host, else quick connect for a connection string, else the first
+  // launcher — each of which is the first item when no host matches.
+  const defaultIndex = matchingHosts.length > 0 ? firstHostIndex : 0;
+  const activeIndex = items.length ? Math.min(picked ?? defaultIndex, items.length - 1) : -1;
+  const optionId = (index: number) => `${idPrefix}-option-${index}`;
+  const listboxId = `${idPrefix}-listbox`;
+
+  useEffect(() => {
+    if (picked === null || activeIndex < 0) return;
+    document
+      .getElementById(`${idPrefix}-option-${activeIndex}`)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [picked, activeIndex, idPrefix]);
+
+  const onInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.nativeEvent.isComposing || !items.length) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setPicked(Math.min(activeIndex + 1, items.length - 1));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setPicked(Math.max(activeIndex - 1, 0));
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      setPicked(0);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      setPicked(items.length - 1);
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      items[activeIndex]?.run();
+    }
+  };
+
+  const option = (key: string) => {
+    const index = indexByKey.get(key) ?? -1;
+    return {
+      id: optionId(index),
+      selected: index === activeIndex,
+      onHover: () => setPicked(index),
+      onSelect: items[index]?.run,
+    };
+  };
+
   return (
-    <div className={cn("absolute inset-0 z-20 flex flex-col bg-background", !active && "hidden")}>
-      <div className="flex shrink-0 items-center justify-between gap-2 px-4 pt-3">
-        <span className="pl-1 text-xs font-medium text-muted">New tab</span>
-        <button
-          type="button"
-          onClick={() => closeNewTab(tabId)}
-          aria-label={hasOpenTab ? "Close and return to terminal" : "Close"}
-          title="Close (Esc)"
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-raised hover:text-foreground"
-        >
-          <X size={16} />
-        </button>
-      </div>
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-10 pt-3">
+    <div
+      ref={rootRef}
+      data-new-tab-launcher={tabId}
+      className={cn("@container absolute inset-0 z-20 bg-background", !active && "hidden")}
+    >
+      <button
+        type="button"
+        onClick={dismiss}
+        aria-label={hasOpenTab ? "Close new tab and return to terminal" : "Close new tab"}
+        title="Close (Esc)"
+        className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-md text-muted hover:bg-raised hover:text-foreground"
+      >
+        <X size={16} />
+      </button>
+      <div className="h-full overflow-y-auto px-6 pb-10 pt-14 @4xl:pt-8">
         <div className="mx-auto w-full max-w-3xl">
           <div className="relative">
             <Search
@@ -173,41 +308,25 @@ export function NewTabLauncher({ tabId, active }: { tabId: string; active: boole
             <input
               ref={inputRef}
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter") return;
-                if (matchingHosts[0]) connect(matchingHosts[0]);
-                else if (isConnectionString) runQuickConnect();
-                else if (needle && matchingLaunchers[0]) {
-                  const launcher = matchingLaunchers[0];
-                  void openLocalSession(launcher.ref, launcher.name);
-                }
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setPicked(null);
               }}
+              onKeyDown={onInputKeyDown}
               placeholder="Search hosts, or type user@host to connect"
               aria-label="Search hosts, workspace templates, or a connection string"
-              className="h-11 w-full rounded-xl border border-border bg-surface pl-11 pr-16 text-sm outline-none transition focus:border-accent focus:shadow-glow"
+              role="combobox"
+              aria-expanded
+              aria-controls={listboxId}
+              aria-autocomplete="list"
+              aria-activedescendant={activeIndex >= 0 ? optionId(activeIndex) : undefined}
+              className="h-11 w-full rounded-xl border border-border bg-surface pl-11 pr-16 text-sm outline-none transition focus:border-accent focus:ring-1 focus:ring-accent motion-reduce:transition-none"
             />
-            <kbd className="absolute right-3 top-1/2 -translate-y-1/2 rounded border border-border bg-raised px-2 py-0.5 text-[10px] text-muted">
+            <kbd className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded border border-border bg-raised px-2 py-0.5 text-[10px] text-muted">
               ESC
             </kbd>
           </div>
 
-          {isConnectionString && (
-            <button
-              type="button"
-              onClick={runQuickConnect}
-              disabled={quickBusy}
-              className="mt-3 flex w-full items-center gap-3 rounded-xl border border-accent/50 bg-accent/10 px-4 py-3 text-left text-sm hover:bg-accent/15 disabled:opacity-60"
-            >
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/20 text-accent">
-                {quickBusy ? <Loader2 size={16} className="animate-spin" /> : <PlugZap size={16} />}
-              </span>
-              <span className="min-w-0">
-                <span className="block font-medium">Connect to {trimmedQuery}</span>
-                <span className="text-xs text-muted">Quick connect over SSH (not saved)</span>
-              </span>
-            </button>
-          )}
           {quickError && (
             <p
               role="alert"
@@ -217,174 +336,240 @@ export function NewTabLauncher({ tabId, active }: { tabId: string; active: boole
             </p>
           )}
 
-          {!needle && (
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => void openLocalSession()}
-                className="flex w-full items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3 text-left text-sm hover:border-accent hover:bg-raised"
-              >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent">
-                  <SquareTerminal size={16} />
-                </span>
-                <span className="min-w-0">
-                  <span className="block font-medium">Local terminal</span>
-                  <span className="text-xs text-muted">Open your default shell</span>
-                </span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  closeNewTab();
-                  openSerialConnect();
-                }}
-                className="flex w-full items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3 text-left text-sm hover:border-accent hover:bg-raised"
-              >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent">
-                  <Cable size={16} />
-                </span>
-                <span className="min-w-0">
-                  <span className="block font-medium">Serial terminal</span>
-                  <span className="text-xs text-muted">Connect to a serial port</span>
-                </span>
-              </button>
-            </div>
-          )}
-
-          {matchingLaunchers.length > 0 && (
-            <section className="mt-7 rounded-2xl border border-border bg-surface p-3">
-              <h2 className="flex items-center gap-2 px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-muted">
-                <SquareTerminal size={14} /> Local shells
-              </h2>
-              <div className="grid gap-1 sm:grid-cols-2">
-                {matchingLaunchers.map((launcher) => (
-                  <button
-                    key={launcher.key}
-                    type="button"
-                    onClick={() => void openLocalSession(launcher.ref, launcher.name)}
-                    className="group flex min-w-0 items-center gap-3 rounded-xl px-3 py-2 text-left text-sm hover:bg-raised"
-                  >
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-raised text-muted group-hover:text-accent">
-                      {launcher.icon}
-                    </span>
-                    <span className="min-w-0 truncate font-medium">{launcher.name}</span>
-                    {launcher.hint && (
-                      <span className="ml-auto shrink-0 text-xs text-muted">{launcher.hint}</span>
-                    )}
-                  </button>
-                ))}
+          <div id={listboxId} role="listbox" aria-label="New tab options">
+            {isConnectionString && (
+              <div className="mt-3">
+                <LauncherOption
+                  {...option("quick-connect")}
+                  disabled={quickBusy}
+                  emphasis
+                  icon={
+                    quickBusy ? (
+                      <Loader2 size={16} className="animate-spin motion-reduce:animate-none" />
+                    ) : (
+                      <PlugZap size={16} />
+                    )
+                  }
+                  title={`Connect to ${trimmedQuery}`}
+                  subtitle="Quick connect over SSH (not saved)"
+                />
               </div>
-            </section>
-          )}
+            )}
 
-          {(matchingTemplates.length > 0 || matchingGroups.length > 0) && (
-            <section className="mt-7 rounded-2xl border border-border bg-surface p-3">
-              <h2 className="flex items-center gap-2 px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-muted">
-                <FolderKanban size={14} /> Workspace templates
-              </h2>
-              <div className="space-y-1">
-                {matchingTemplates.map((template) => {
-                  const panes = countTemplatePanes(template.root);
-                  return (
-                    <div
-                      key={template.id}
-                      className="group flex items-center rounded-xl hover:bg-raised"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          closeNewTab();
-                          openTemplate(template.root);
-                        }}
-                        className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5 text-left text-sm"
-                      >
-                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent">
-                          <Layers size={15} />
-                        </span>
-                        <span className="min-w-0 truncate font-medium">{template.name}</span>
-                        <span className="ml-auto shrink-0 text-xs text-muted">
-                          {panes} pane{panes === 1 ? "" : "s"}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={`Delete template ${template.name}`}
-                        title="Delete template"
-                        onClick={() => void removeTemplate(template.id)}
-                        className="mr-2 shrink-0 rounded p-1 text-muted opacity-0 hover:bg-surface hover:text-danger group-hover:opacity-100 focus-visible:opacity-100"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                  );
-                })}
-                {matchingGroups.map((group) => {
-                  const count = hosts.filter((host) => host.groupId === group.id).length;
-                  return (
-                    <button
-                      key={group.id}
-                      type="button"
-                      disabled={!count}
-                      onClick={() => openGroup(group.id)}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm hover:bg-raised disabled:opacity-45"
-                    >
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-raised text-muted">
-                        <FolderKanban size={15} />
-                      </span>
-                      <span className="min-w-0">
-                        <span className="block truncate font-medium">{group.name}</span>
-                        <span className="block text-xs text-muted">Opens as one grouped tab</span>
-                      </span>
-                      <span className="ml-auto shrink-0 text-xs text-muted">
-                        {count} connection{count === 1 ? "" : "s"}
-                      </span>
-                    </button>
-                  );
-                })}
+            {!needle && (
+              <div className="mt-4 grid gap-1 sm:grid-cols-2">
+                <LauncherOption
+                  {...option("local")}
+                  accentIcon
+                  icon={<SquareTerminal size={16} />}
+                  title="Local terminal"
+                  subtitle="Open your default shell"
+                />
+                <LauncherOption
+                  {...option("serial")}
+                  accentIcon
+                  icon={<Cable size={16} />}
+                  title="Serial terminal"
+                  subtitle="Connect to a serial port"
+                />
               </div>
-            </section>
-          )}
+            )}
 
-          <section className="mt-5 rounded-2xl border border-border bg-surface p-3">
-            <h2 className="flex items-center gap-2 px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-muted">
-              {needle ? <Search size={14} /> : <Clock3 size={14} />}{" "}
-              {needle ? "Search results" : "Recent connections"}
-            </h2>
-            <div className="space-y-1">
+            <div role="group" aria-labelledby={`${idPrefix}-hosts`} className="mt-6">
+              <h2 id={`${idPrefix}-hosts`} className={sectionHeading}>
+                {needle ? "Search results" : "Recent connections"}
+              </h2>
               {matchingHosts.map((host) => (
-                <button
+                <LauncherOption
                   key={host.id}
-                  type="button"
-                  onClick={() => connect(host)}
-                  className="group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left hover:bg-raised"
-                >
-                  <span
-                    className={cn(
-                      "flex h-8 w-8 items-center justify-center rounded-lg bg-raised text-muted group-hover:text-accent",
-                      host.favorite && "text-amber-400",
-                    )}
-                  >
-                    {host.favorite ? <Star size={15} fill="currentColor" /> : <Server size={15} />}
-                  </span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-medium">{host.name}</span>
-                    <span className="block truncate text-xs text-muted">
-                      {host.username ? `${host.username}@` : ""}
-                      {host.hostname}:{host.port}
-                    </span>
-                  </span>
-                  <span className="ml-auto text-xs text-muted">SSH</span>
-                </button>
+                  {...option(`host:${host.id}`)}
+                  icon={
+                    host.osId && host.osId !== "unknown" ? (
+                      <DistroIcon
+                        osId={host.osId}
+                        size={16}
+                        label={host.osPrettyName ?? undefined}
+                      />
+                    ) : (
+                      <Server size={15} />
+                    )
+                  }
+                  title={
+                    <>
+                      <span className="truncate">{host.name}</span>
+                      {host.favorite && (
+                        <>
+                          <Star
+                            size={12}
+                            fill="currentColor"
+                            aria-hidden
+                            className="shrink-0 text-accent"
+                          />
+                          <span className="sr-only">(favorite)</span>
+                        </>
+                      )}
+                    </>
+                  }
+                  subtitle={`${host.username ? `${host.username}@` : ""}${host.hostname}:${host.port}`}
+                  meta="SSH"
+                />
               ))}
               {matchingHosts.length === 0 && (
-                <p className="px-3 py-8 text-center text-sm text-muted">
-                  No hosts match “{query}”.
+                <p className="px-3 py-4 text-sm text-muted">
+                  {needle ? `No hosts match “${query}”.` : "No saved hosts yet."}
                 </p>
               )}
             </div>
-          </section>
+
+            {matchingLaunchers.length > 0 && (
+              <div role="group" aria-labelledby={`${idPrefix}-shells`} className="mt-6">
+                <h2 id={`${idPrefix}-shells`} className={sectionHeading}>
+                  Local shells
+                </h2>
+                <div className="grid gap-x-1 sm:grid-cols-2">
+                  {matchingLaunchers.map((launcher) => (
+                    <LauncherOption
+                      key={launcher.key}
+                      {...option(launcher.key)}
+                      icon={launcher.icon}
+                      title={<span className="truncate">{launcher.name}</span>}
+                      meta={launcher.hint}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(matchingTemplates.length > 0 || matchingGroups.length > 0) && (
+              <div role="group" aria-labelledby={`${idPrefix}-templates`} className="mt-6">
+                <h2 id={`${idPrefix}-templates`} className={sectionHeading}>
+                  Workspace templates
+                </h2>
+                {matchingTemplates.map((template) => {
+                  const panes = countTemplatePanes(template.root);
+                  return (
+                    <LauncherOption
+                      key={template.id}
+                      {...option(`template:${template.id}`)}
+                      accentIcon
+                      icon={<Layers size={15} />}
+                      title={<span className="truncate">{template.name}</span>}
+                      meta={`${panes} pane${panes === 1 ? "" : "s"}`}
+                      action={
+                        <button
+                          type="button"
+                          aria-label={`Delete template ${template.name}`}
+                          title="Delete template"
+                          onClick={() => void removeTemplate(template.id)}
+                          className="mr-2 shrink-0 rounded p-1 text-muted opacity-0 hover:bg-surface hover:text-danger focus-visible:opacity-100 group-hover:opacity-100"
+                        >
+                          <X size={14} />
+                        </button>
+                      }
+                    />
+                  );
+                })}
+                {matchingGroups.map(({ group, count }) =>
+                  count ? (
+                    <LauncherOption
+                      key={group.id}
+                      {...option(`group:${group.id}`)}
+                      icon={<FolderKanban size={15} />}
+                      title={<span className="truncate">{group.name}</span>}
+                      subtitle="Opens as one grouped tab"
+                      meta={`${count} connection${count === 1 ? "" : "s"}`}
+                    />
+                  ) : (
+                    <LauncherOption
+                      key={group.id}
+                      disabled
+                      icon={<FolderKanban size={15} />}
+                      title={<span className="truncate">{group.name}</span>}
+                      subtitle="No connections in this group"
+                      meta="0 connections"
+                    />
+                  ),
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function LauncherOption({
+  id,
+  selected = false,
+  disabled = false,
+  emphasis = false,
+  accentIcon = false,
+  onHover,
+  onSelect,
+  icon,
+  title,
+  subtitle,
+  meta,
+  action,
+}: {
+  id?: string;
+  selected?: boolean;
+  disabled?: boolean;
+  emphasis?: boolean;
+  accentIcon?: boolean;
+  onHover?: () => void;
+  onSelect?: () => void;
+  icon: ReactNode;
+  title: ReactNode;
+  subtitle?: ReactNode;
+  meta?: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <div
+      onMouseMove={disabled ? undefined : onHover}
+      className={cn(
+        "group flex min-w-0 items-center rounded-lg",
+        emphasis && "border border-accent/50",
+        selected ? "bg-accent/10" : emphasis && "bg-accent/5",
+        disabled && "opacity-45",
+      )}
+    >
+      <button
+        type="button"
+        id={id}
+        role="option"
+        tabIndex={-1}
+        aria-selected={selected}
+        aria-disabled={disabled || undefined}
+        disabled={disabled}
+        onClick={onSelect}
+        className="flex min-h-11 min-w-0 flex-1 items-center gap-3 px-3 py-1 text-left text-sm"
+      >
+        <span
+          className={cn(
+            "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
+            accentIcon || emphasis ? "bg-accent/15 text-accent" : "bg-raised text-muted",
+            selected && !accentIcon && !emphasis && "text-accent",
+          )}
+        >
+          {icon}
+        </span>
+        <span className="min-w-0">
+          <span className="flex min-w-0 items-center gap-1.5 font-medium">{title}</span>
+          {subtitle && <span className="block truncate text-xs text-muted">{subtitle}</span>}
+        </span>
+        {(selected || meta) && (
+          <span className="ml-auto flex shrink-0 items-center gap-2 text-xs text-muted">
+            {selected && (
+              <kbd className="rounded border border-border px-1.5 py-0.5 text-[10px]">Enter</kbd>
+            )}
+            {meta}
+          </span>
+        )}
+      </button>
+      {action}
     </div>
   );
 }

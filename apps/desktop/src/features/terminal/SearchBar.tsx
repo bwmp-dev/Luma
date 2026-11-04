@@ -19,7 +19,7 @@ export function SearchBar({ sessionId }: { sessionId: string }) {
   };
 
   return (
-    <div className="absolute right-3 top-2 z-10 flex items-center gap-1 rounded-lg border border-border bg-raised px-2 py-1.5 shadow-glow">
+    <div className="absolute right-3 top-2 z-10 flex items-center gap-1 rounded-lg border border-border bg-raised px-2 py-1.5 shadow-overlay focus-within:border-accent">
       <input
         ref={inputRef}
         value={query}
@@ -39,7 +39,7 @@ export function SearchBar({ sessionId }: { sessionId: string }) {
           if (e.key === "Escape") close();
         }}
         placeholder="Search terminal…"
-        className="w-48 bg-transparent text-sm outline-none placeholder:text-muted"
+        className="w-48 bg-transparent text-sm shadow-none outline-none placeholder:text-muted"
       />
       <IconButton
         label="Previous match"

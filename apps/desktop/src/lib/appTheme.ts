@@ -40,15 +40,15 @@ const FALLBACK = {
   dark: {
     background: "#101217",
     foreground: "#f2f3f5",
-    accent: "#7c6cf2",
+    accent: "#9d8ff7",
     danger: "#f87171",
     glowAlpha: 0.24,
   },
   light: {
     background: "#f6f7fa",
     foreground: "#1c2433",
-    accent: "#0e7ea8",
-    danger: "#dc2626",
+    accent: "#5b4bd0",
+    danger: "#b91c1c",
     glowAlpha: 0.18,
   },
 } as const;
@@ -182,7 +182,9 @@ export function deriveAppTokens(theme: ITheme, kind: SchemeKind): AppTokens {
   const fgRgb = hexToRgb(foregroundHex) ?? { r: 255, g: 255, b: 255 };
   const accent = pickAccent(theme, kind, bgRgb, fgRgb);
   const accentRgb = hexToRgb(accent) ?? hexToRgb(defaults.accent)!;
-  const accentForeground = relativeLuminance(accentRgb) > 0.45 ? "#000000" : "#ffffff";
+  // Whichever of black or white contrasts more with the accent. The two ratios
+  // cross at a relative luminance of ~0.179, not at the visual midpoint.
+  const accentForeground = relativeLuminance(accentRgb) > 0.179 ? "#000000" : "#ffffff";
   const glow = `rgba(${clamp255(accentRgb.r)}, ${clamp255(accentRgb.g)}, ${clamp255(accentRgb.b)}, ${defaults.glowAlpha})`;
   const danger = firstHex(theme.brightRed, theme.red) ?? defaults.danger;
 

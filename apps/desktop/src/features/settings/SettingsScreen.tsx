@@ -14,7 +14,7 @@ import {
   ShieldCheck,
   Terminal as TerminalIcon,
   UserRound,
-  Vault as VaultIcon,
+  LibraryBig as VaultIcon,
   type LucideIcon,
 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -312,7 +312,9 @@ export function SettingsScreen() {
               aria-current={active === id ? "page" : undefined}
               className={cn(
                 "flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors",
-                active === id ? "bg-raised text-accent" : "text-muted hover:text-foreground",
+                active === id
+                  ? "bg-raised font-medium text-foreground [&>svg]:text-accent"
+                  : "text-muted hover:bg-raised/60 hover:text-foreground",
               )}
             >
               <Icon size={15} className="shrink-0" />
@@ -323,7 +325,7 @@ export function SettingsScreen() {
       </nav>
 
       <div className="min-w-0 flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-2xl px-8 py-8">
+        <div className="max-w-3xl px-10 py-8">
           <h2 className="text-lg font-semibold">{activeLabel}</h2>
           <div className="mt-4">{renderBody()}</div>
         </div>

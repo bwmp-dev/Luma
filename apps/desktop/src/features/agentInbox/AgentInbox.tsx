@@ -116,7 +116,7 @@ export function AgentInbox() {
         <DropdownMenu.Content
           align="end"
           sideOffset={4}
-          className="z-50 flex max-h-[70vh] w-80 flex-col overflow-hidden rounded-lg border border-border bg-raised text-sm shadow-glow"
+          className="z-50 flex max-h-[70vh] w-80 flex-col overflow-hidden rounded-lg border border-border bg-raised text-sm shadow-overlay"
         >
           <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
             <span className="font-medium text-foreground">Agent Inbox</span>

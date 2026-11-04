@@ -167,7 +167,7 @@ function ProfileField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className={`w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm outline-none placeholder:text-muted/60 focus:border-accent ${mono ? "font-mono" : ""}`}
+        className={`w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm outline-none placeholder:text-muted/80 focus:border-accent ${mono ? "font-mono" : ""}`}
       />
     </label>
   );

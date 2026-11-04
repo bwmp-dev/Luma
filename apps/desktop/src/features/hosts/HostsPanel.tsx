@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
@@ -21,7 +21,7 @@ import {
   Siren,
   Star,
   Trash2,
-  Vault as VaultIcon,
+  LibraryBig as VaultIcon,
 } from "lucide-react";
 import { useSessionStore } from "../../stores/sessionStore";
 import {
@@ -157,6 +157,15 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
     }
     return counts;
   }, [tunnels]);
+  const connectedHostIds = useMemo(
+    () =>
+      new Set(
+        sessions
+          .filter((session) => session.status === "connected" && session.hostId)
+          .map((session) => session.hostId as string),
+      ),
+    [sessions],
+  );
 
   const favoriteToggle = useMutation({
     mutationFn: (host: Host) =>
@@ -289,6 +298,8 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
     if (movable.length > 0) moveHosts.mutate({ ids: movable, groupId: targetGroupId });
   };
 
+  const searchRef = useRef<HTMLInputElement>(null);
+
   const rowProps = {
     onConnect: connect,
     onEdit: openEditor,
@@ -310,6 +321,7 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
     // already inside the workspace.
     onWorkspaces: (h: Host) => openMultiplexer(h.id, h.name),
     runningByHost,
+    connectedHostIds,
     selectedHostIds,
     onSelect: (host: Host, additive: boolean) =>
       setSelectedHostIds((previous) => {
@@ -330,8 +342,52 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
     },
   };
 
+  // Left/Right walk the host buttons in reading order; Up/Down move to the
+  // nearest button in the row above or below, so the keys follow the grid's
+  // columns. ArrowDown from search enters the results; leaving the first row
+  // upward returns to search. Tab still moves through each host's own controls.
+  const onListKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!["ArrowDown", "ArrowUp", "ArrowRight", "ArrowLeft"].includes(event.key)) return;
+    const target = event.target as HTMLElement;
+    const hostButtons = [
+      ...event.currentTarget.querySelectorAll<HTMLElement>("[data-host-button]"),
+    ];
+    if (target === searchRef.current) {
+      if (event.key !== "ArrowDown" || hostButtons.length === 0) return;
+      event.preventDefault();
+      hostButtons[0].focus();
+      return;
+    }
+    const index = hostButtons.indexOf(target);
+    if (index < 0) return;
+    event.preventDefault();
+    if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+      const step = event.key === "ArrowRight" ? 1 : -1;
+      hostButtons[Math.max(0, Math.min(hostButtons.length - 1, index + step))].focus();
+      return;
+    }
+    const down = event.key === "ArrowDown";
+    const from = target.getBoundingClientRect();
+    const fromX = from.left + from.width / 2;
+    let best: HTMLElement | null = null;
+    let bestScore = Infinity;
+    for (const candidate of hostButtons) {
+      const rect = candidate.getBoundingClientRect();
+      const rowGap = down ? rect.top - from.bottom : from.top - rect.bottom;
+      if (rowGap < -1) continue;
+      const score = rowGap * 1000 + Math.abs(rect.left + rect.width / 2 - fromX);
+      if (score < bestScore) {
+        bestScore = score;
+        best = candidate;
+      }
+    }
+    if (best) best.focus();
+    else if (!down) searchRef.current?.focus();
+  };
+
   return (
     <div
+      onKeyDown={onListKeyDown}
       className={cn(
         "mx-auto max-w-375 space-y-5",
         !isMobile &&
@@ -339,72 +395,80 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
           "md:pr-90 [&_.host-grid]:md:grid-cols-1 [&_.host-grid]:xl:grid-cols-2 [&_.host-grid]:2xl:grid-cols-3",
       )}
     >
-      <input
-        type="search"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search name, host, tag…"
-        aria-label="Search hosts"
-        className="h-11 w-full rounded-xl border border-border bg-raised px-4 text-sm outline-none placeholder:text-muted focus:border-accent"
-      />
-
-      <div className="flex items-center gap-2 border-b border-border pb-4">
-        <button
-          type="button"
-          onClick={() => openEditor(null)}
-          disabled={atVaultRoot}
-          title={atVaultRoot ? "Open a vault first — a host belongs to exactly one." : undefined}
-          className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground transition-colors hover:brightness-110 disabled:opacity-50 disabled:hover:brightness-100"
-        >
-          <Plus size={14} /> Add host
-        </button>
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger asChild>
-            <button
-              type="button"
-              aria-label="Host options"
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-surface text-muted hover:border-accent hover:text-accent"
-            >
-              <MoreHorizontal size={16} />
-            </button>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenu.Content
-              align="end"
-              sideOffset={4}
-              className="z-50 min-w-48 rounded-lg border border-border bg-raised p-1 text-sm shadow-glow"
-            >
-              <MenuItem
-                icon={<KeyRound size={14} />}
-                onSelect={() => (onOpenKeychain ? onOpenKeychain() : setIdentitiesOpen(true))}
+      <div className="flex flex-col gap-3 border-b border-border pb-4 md:flex-row md:items-center md:gap-2">
+        <input
+          ref={searchRef}
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && searching && filtered.length === 1) {
+              e.preventDefault();
+              connect(filtered[0]);
+            }
+          }}
+          placeholder="Search name, host, tag…"
+          aria-label="Search hosts"
+          className="h-11 w-full rounded-xl border border-border bg-raised px-4 text-sm outline-none placeholder:text-muted focus:border-accent focus:ring-1 focus:ring-accent md:h-9 md:min-w-0 md:flex-1 md:rounded-lg md:px-3"
+        />
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => openEditor(null)}
+            disabled={atVaultRoot}
+            title={atVaultRoot ? "Open a vault first — a host belongs to exactly one." : undefined}
+            className="flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground transition-colors hover:brightness-110 disabled:opacity-50 disabled:hover:brightness-100"
+          >
+            <Plus size={14} /> Add host
+          </button>
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <button
+                type="button"
+                aria-label="Host options"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-surface text-muted hover:border-accent hover:text-accent"
               >
-                Keychain
-              </MenuItem>
-              <MenuItem
-                icon={<FolderPlus size={14} />}
-                disabled={atVaultRoot}
-                onSelect={() => {
-                  setGroupDialogGroup(null);
-                  setGroupDialogOpen(true);
-                }}
+                <MoreHorizontal size={16} />
+              </button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                align="end"
+                sideOffset={4}
+                className="z-50 min-w-48 rounded-lg border border-border bg-raised p-1 text-sm shadow-overlay"
               >
-                New group
-              </MenuItem>
-              <MenuItem
-                icon={<DownloadCloud size={14} />}
-                disabled={atVaultRoot}
-                onSelect={() => setImportOpen(true)}
-              >
-                Import hosts…
-              </MenuItem>
-              {!isMobile && (
-                <MenuItem icon={<Siren size={14} />} onSelect={openFleet}>
-                  Fleet overview
+                <MenuItem
+                  icon={<KeyRound size={14} />}
+                  onSelect={() => (onOpenKeychain ? onOpenKeychain() : setIdentitiesOpen(true))}
+                >
+                  Keychain
                 </MenuItem>
-              )}
-            </DropdownMenu.Content>
-          </DropdownMenu.Portal>
-        </DropdownMenu.Root>
+                <MenuItem
+                  icon={<FolderPlus size={14} />}
+                  disabled={atVaultRoot}
+                  onSelect={() => {
+                    setGroupDialogGroup(null);
+                    setGroupDialogOpen(true);
+                  }}
+                >
+                  New group
+                </MenuItem>
+                <MenuItem
+                  icon={<DownloadCloud size={14} />}
+                  disabled={atVaultRoot}
+                  onSelect={() => setImportOpen(true)}
+                >
+                  Import hosts…
+                </MenuItem>
+                {!isMobile && (
+                  <MenuItem icon={<Siren size={14} />} onSelect={openFleet}>
+                    Fleet overview
+                  </MenuItem>
+                )}
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
+        </div>
       </div>
 
       {!atVaultRoot && scopedHosts.length === 0 && scopedGroups.length === 0 ? (
@@ -504,38 +568,35 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
           ) : (
             <>
               {childGroups.length > 0 && (
-                <section>
-                  <h2 className="mb-3 text-sm font-semibold">Folders</h2>
-                  <div className="host-grid grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {childGroups.map((group) => (
-                      <FolderCard
-                        key={group.id}
-                        group={group}
-                        groups={scopedGroups}
-                        hosts={scopedHosts}
-                        active={dropTargetId === group.id}
-                        onOpen={() => {
-                          setCurrentGroupId(group.id);
-                          setSelectedHostIds(new Set());
-                        }}
-                        onDragOver={(e) => {
-                          if (draggingHostIds.length) {
-                            e.preventDefault();
-                            e.dataTransfer.dropEffect = "move";
-                            setDropTargetId(group.id);
-                          }
-                        }}
-                        onDragLeave={() => setDropTargetId(undefined)}
-                        onDrop={(e) => dropHosts(e, group.id)}
-                        onRename={() => {
-                          setGroupDialogGroup(group);
-                          setGroupDialogOpen(true);
-                        }}
-                        onDelete={() => setDeletingGroup(group)}
-                      />
-                    ))}
-                  </div>
-                </section>
+                <Section title="Folders">
+                  {childGroups.map((group) => (
+                    <FolderCard
+                      key={group.id}
+                      group={group}
+                      groups={scopedGroups}
+                      hosts={scopedHosts}
+                      active={dropTargetId === group.id}
+                      onOpen={() => {
+                        setCurrentGroupId(group.id);
+                        setSelectedHostIds(new Set());
+                      }}
+                      onDragOver={(e) => {
+                        if (draggingHostIds.length) {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "move";
+                          setDropTargetId(group.id);
+                        }
+                      }}
+                      onDragLeave={() => setDropTargetId(undefined)}
+                      onDrop={(e) => dropHosts(e, group.id)}
+                      onRename={() => {
+                        setGroupDialogGroup(group);
+                        setGroupDialogOpen(true);
+                      }}
+                      onDelete={() => setDeletingGroup(group)}
+                    />
+                  ))}
+                </Section>
               )}
               <Section title={currentGroup ? "Hosts in this folder and subfolders" : "All hosts"}>
                 {visibleHosts.length ? (
@@ -683,10 +744,10 @@ function Section({
 }) {
   return (
     <div>
-      <div className="flex items-center gap-1.5 px-1 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted">
+      <h2 className="flex items-center gap-1.5 px-1 pb-2 text-[11px] font-semibold uppercase tracking-wider text-muted">
         {icon}
         {title}
-      </div>
+      </h2>
       <div className="host-grid grid gap-3 md:grid-cols-2 xl:grid-cols-3">{children}</div>
     </div>
   );
@@ -831,7 +892,7 @@ function FolderCard({
             <button
               type="button"
               aria-label={`${group.name} folder actions`}
-              className="invisible rounded p-1 text-muted hover:text-foreground group-hover/folder:visible"
+              className="invisible rounded p-1 text-muted hover:text-foreground group-focus-within/folder:visible group-hover/folder:visible data-[state=open]:visible"
             >
               <MoreHorizontal size={15} />
             </button>
@@ -840,7 +901,7 @@ function FolderCard({
             <DropdownMenu.Content
               align="end"
               sideOffset={4}
-              className="z-50 min-w-36 rounded-lg border border-border bg-raised p-1 text-sm shadow-glow"
+              className="z-50 min-w-36 rounded-lg border border-border bg-raised p-1 text-sm shadow-overlay"
             >
               <MenuItem icon={<Pencil size={14} />} onSelect={onRename}>
                 Rename
@@ -869,6 +930,7 @@ function HostRow({
   onDocker,
   onWorkspaces,
   runningByHost,
+  connectedHostIds,
   selectedHostIds,
   onSelect,
   onDragStart,
@@ -887,12 +949,15 @@ function HostRow({
   onDocker?: (host: Host) => void;
   onWorkspaces?: (host: Host) => void;
   runningByHost: Map<string, number>;
+  connectedHostIds: Set<string>;
   selectedHostIds: Set<string>;
   onSelect: (host: Host, additive: boolean) => void;
   onDragStart: (event: React.DragEvent, host: Host) => void;
   onDragEnd: () => void;
 }) {
   const runningTunnels = runningByHost.get(host.id) ?? 0;
+  const connected = connectedHostIds.has(host.id);
+  const address = `${host.username ? `${host.username}@` : ""}${host.hostname}${host.port !== 22 ? `:${host.port}` : ""}`;
   const selected = selectedHostIds.has(host.id);
   const fleetEntry = useFleetStore((state) => state.entries[host.id]);
   const hostActions: MenuAction[] = [
@@ -979,9 +1044,14 @@ function HostRow({
             }
           }}
           title={`${host.username ? `${host.username}@` : ""}${host.hostname}:${host.port}`}
+          aria-label={`${host.name}, ${address}${connected ? ", connected" : ""}${vaultName ? `, ${vaultName}` : ""}`}
+          data-host-button
           className="flex min-w-0 flex-1 items-center gap-3 text-left"
         >
-          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent">
+          <span
+            aria-hidden="true"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent"
+          >
             {host.osId && host.osId !== "unknown" ? (
               <DistroIcon osId={host.osId} size={22} label={host.osPrettyName ?? undefined} />
             ) : (
@@ -989,9 +1059,17 @@ function HostRow({
             )}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate font-semibold text-foreground">{host.name}</span>
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate font-semibold text-foreground">{host.name}</span>
+              {connected && (
+                <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-success">
+                  <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                  Connected
+                </span>
+              )}
+            </span>
             <span className="block truncate text-xs text-muted">
-              ssh, {host.username || host.hostname}
+              {address}
               {vaultName ? ` · ${vaultName}` : ""}
             </span>
           </span>
@@ -1000,7 +1078,7 @@ function HostRow({
         {runningTunnels > 0 && (
           <span
             title={`${runningTunnels} active tunnel${runningTunnels === 1 ? "" : "s"}`}
-            className="flex shrink-0 items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-[10px] text-green-400"
+            className="flex shrink-0 items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-[10px] text-success"
           >
             <Cable size={11} /> {runningTunnels}
           </span>
@@ -1018,8 +1096,8 @@ function HostRow({
               fleetEntry.status === "offline" || fleetEntry.health?.severity === "critical"
                 ? "bg-danger"
                 : fleetEntry.health?.severity === "warning"
-                  ? "bg-amber-400"
-                  : "bg-green-400",
+                  ? "bg-warning"
+                  : "bg-success",
             )}
           />
         )}
@@ -1032,7 +1110,7 @@ function HostRow({
             "shrink-0 rounded p-0.5",
             host.favorite
               ? "text-accent"
-              : "invisible text-muted hover:text-foreground group-hover/row:visible",
+              : "invisible text-muted hover:text-foreground group-focus-within/row:visible group-hover/row:visible",
           )}
         >
           <Star size={13} fill={host.favorite ? "currentColor" : "none"} />
@@ -1043,7 +1121,7 @@ function HostRow({
             <button
               type="button"
               aria-label={`${host.name} actions`}
-              className="invisible shrink-0 rounded p-0.5 text-muted hover:text-foreground group-hover/row:visible"
+              className="invisible shrink-0 rounded p-0.5 text-muted hover:text-foreground group-focus-within/row:visible group-hover/row:visible data-[state=open]:visible"
             >
               <MoreHorizontal size={14} />
             </button>
@@ -1052,7 +1130,7 @@ function HostRow({
             <DropdownMenu.Content
               align="end"
               sideOffset={4}
-              className="z-50 min-w-40 rounded-lg border border-border bg-raised p-1 text-sm shadow-glow"
+              className="z-50 min-w-40 rounded-lg border border-border bg-raised p-1 text-sm shadow-overlay"
             >
               <DropdownActionItems actions={hostActions} />
             </DropdownMenu.Content>

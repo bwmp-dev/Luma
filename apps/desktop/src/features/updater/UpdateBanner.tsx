@@ -34,7 +34,7 @@ export function UpdateBanner() {
     <div
       role="region"
       aria-label="Software update available"
-      className="fixed bottom-4 right-4 z-50 w-[calc(100vw-2rem)] max-w-sm rounded-xl border border-border bg-surface p-4 shadow-glow"
+      className="fixed bottom-4 right-4 z-50 w-[calc(100vw-2rem)] max-w-sm rounded-xl border border-border bg-surface p-4 shadow-overlay"
     >
       <div className="flex items-start gap-3">
         <span className="mt-0.5 shrink-0 text-accent">

@@ -11,7 +11,7 @@ export function EmptyState() {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-8 bg-[radial-gradient(circle_at_50%_45%,var(--glow),transparent_32%)]">
       <div className="text-center">
-        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-surface shadow-glow">
+        <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-border bg-surface">
           <Command size={28} className="text-accent" />
         </div>
         <h1 className="text-2xl font-semibold tracking-tight">
@@ -27,7 +27,7 @@ export function EmptyState() {
           <button
             type="button"
             onClick={() => void openLocalSession()}
-            className="flex items-center gap-2 rounded-l-xl border border-border bg-surface px-5 py-3 text-sm transition-all hover:border-accent hover:text-accent hover:shadow-glow"
+            className="flex items-center gap-2 rounded-l-xl border border-border bg-surface px-5 py-3 text-sm transition-all hover:border-accent hover:text-accent"
           >
             <SquareTerminal size={16} />
             New local terminal
@@ -45,7 +45,7 @@ export function EmptyState() {
         <button
           type="button"
           onClick={() => openSerialConnect()}
-          className="flex items-center gap-2 rounded-xl border border-border bg-surface px-5 py-3 text-sm transition-all hover:border-accent hover:text-accent hover:shadow-glow"
+          className="flex items-center gap-2 rounded-xl border border-border bg-surface px-5 py-3 text-sm transition-all hover:border-accent hover:text-accent"
         >
           <Cable size={16} />
           Serial terminal
@@ -53,7 +53,7 @@ export function EmptyState() {
         <button
           type="button"
           onClick={() => openSection("hosts")}
-          className="flex items-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm font-medium text-accent-foreground transition-all hover:brightness-110 hover:shadow-glow"
+          className="flex items-center gap-2 rounded-xl bg-accent px-5 py-3 text-sm font-medium text-accent-foreground transition-all hover:brightness-110"
         >
           <Server size={16} />
           Connect to host

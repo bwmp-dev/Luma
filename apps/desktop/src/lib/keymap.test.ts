@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   DEFAULT_KEYMAP,
+  KEYMAP_ACTIONS,
   canonicalizeChord,
   chordFromEvent,
   findConflict,
@@ -98,6 +99,14 @@ describe("chordFromEvent / canonicalizeChord", () => {
   });
 });
 
+describe("default keymap", () => {
+  it("binds every action to a distinct, bindable chord", () => {
+    const chords = KEYMAP_ACTIONS.map((action) => canonicalizeChord(action.defaultChord));
+    expect(chords.every((chord) => chord !== null && isBindableChord(chord))).toBe(true);
+    expect(new Set(chords).size).toBe(chords.length);
+  });
+});
+
 describe("resolveAction", () => {
   it("resolves the bound action for an event", () => {
     expect(resolveAction(DEFAULT_KEYMAP, ev("KeyT", { ctrlKey: true, shiftKey: true }))).toBe(
@@ -105,6 +114,27 @@ describe("resolveAction", () => {
     );
     expect(resolveAction(DEFAULT_KEYMAP, ev("ArrowUp", { ctrlKey: true, altKey: true }))).toBe(
       "terminal.jumpPreviousPrompt",
+    );
+  });
+
+  it("resolves tab jumps and directional pane focus", () => {
+    expect(resolveAction(DEFAULT_KEYMAP, ev("Digit1", { ctrlKey: true, shiftKey: true }))).toBe(
+      "workspace.goToTab1",
+    );
+    expect(resolveAction(DEFAULT_KEYMAP, ev("Digit8", { ctrlKey: true, shiftKey: true }))).toBe(
+      "workspace.goToTab8",
+    );
+    expect(resolveAction(DEFAULT_KEYMAP, ev("Digit9", { ctrlKey: true, shiftKey: true }))).toBe(
+      "workspace.goToLastTab",
+    );
+    // Plain Ctrl+digit stays with the shell (Ctrl+6 is vim's alternate file).
+    expect(resolveAction(DEFAULT_KEYMAP, ev("Digit6", { ctrlKey: true }))).toBeNull();
+    expect(resolveAction(DEFAULT_KEYMAP, ev("ArrowLeft", { altKey: true, shiftKey: true }))).toBe(
+      "workspace.focusPaneLeft",
+    );
+    // Ctrl+Alt+Up stays the prompt jump; only Alt+Shift moves between panes.
+    expect(resolveAction(DEFAULT_KEYMAP, ev("ArrowDown", { altKey: true, shiftKey: true }))).toBe(
+      "workspace.focusPaneDown",
     );
   });
 

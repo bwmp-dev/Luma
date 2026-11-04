@@ -59,7 +59,27 @@ export function CommandPalette() {
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" />
         <Dialog.Content
           aria-label="Command palette"
-          className="fixed left-1/2 top-[15%] z-50 w-[calc(100vw-2rem)] max-w-xl -translate-x-1/2 overflow-hidden rounded-xl border border-border bg-surface shadow-glow focus:outline-none"
+          onCloseAutoFocus={() => {
+            // Radix restores the element focused before opening. Opened by
+            // shortcut with nothing focused, that is <body>; hand focus to the
+            // terminal on screen instead so typing can resume.
+            requestAnimationFrame(() => {
+              if (document.activeElement !== document.body) return;
+              const { activeSessionId } = useSessionStore.getState();
+              const ui = useUiStore.getState();
+              if (ui.mainView !== "terminal") return;
+              if (ui.activeNewTabId) {
+                document
+                  .querySelector<HTMLElement>(
+                    `[data-new-tab-launcher="${ui.activeNewTabId}"] input`,
+                  )
+                  ?.focus();
+              } else if (activeSessionId) {
+                terminalManager.focus(activeSessionId);
+              }
+            });
+          }}
+          className="fixed left-1/2 top-[15%] z-50 w-[calc(100vw-2rem)] max-w-xl -translate-x-1/2 overflow-hidden rounded-xl border border-border bg-surface shadow-overlay focus:outline-none"
         >
           <Dialog.Title className="sr-only">Command palette</Dialog.Title>
           {open && <PaletteBody onClose={closePalette} />}
@@ -108,6 +128,8 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
     if (command) command.run();
   };
 
+  // Bound to the search input, not the whole body: from an ancestor this also
+  // swallowed Enter on the Close button and ran the highlighted command instead.
   const onKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === "ArrowDown") {
       event.preventDefault();
@@ -130,13 +152,14 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
   let lastGroup = "";
 
   return (
-    <div onKeyDown={onKeyDown}>
-      <div className="flex items-center gap-2 border-b border-border px-3.5 py-3">
+    <div>
+      <div className="flex items-center gap-2 border-b border-border px-3.5 py-3 focus-within:border-accent">
         <Search size={16} className="shrink-0 text-muted" />
         <input
           ref={inputRef}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={onKeyDown}
           placeholder="Type a command…"
           aria-label="Search commands"
           role="combobox"
@@ -144,7 +167,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
           aria-controls="command-palette-list"
           aria-autocomplete="list"
           aria-activedescendant={filtered.length > 0 ? `command-option-${active}` : undefined}
-          className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted"
+          className="min-w-0 flex-1 bg-transparent text-sm shadow-none outline-none placeholder:text-muted"
         />
         <button
           type="button"
@@ -188,6 +211,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
                 <button
                   type="button"
                   role="option"
+                  tabIndex={-1}
                   id={`command-option-${index}`}
                   aria-selected={index === active}
                   data-index={index}

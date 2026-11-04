@@ -238,7 +238,7 @@ function SyncSectionBody({ vault, config }: { vault: Vault; config: SyncConfig }
                 className={cn(
                   "flex-1 rounded-md px-3 py-1.5 text-sm transition-colors",
                   provider === option.value
-                    ? "bg-raised text-accent shadow-glow"
+                    ? "bg-raised text-accent"
                     : "text-muted hover:text-foreground",
                 )}
               >
@@ -255,7 +255,7 @@ function SyncSectionBody({ vault, config }: { vault: Vault; config: SyncConfig }
                 readOnly
                 value={folderPath}
                 placeholder="No folder selected"
-                className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground outline-none"
+                className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground outline-none focus:border-accent"
               />
               <button
                 type="button"
@@ -892,7 +892,7 @@ function TextInput({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       className={cn(
-        "w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none placeholder:text-muted/60 focus:border-accent",
+        "w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none placeholder:text-muted/80 focus:border-accent",
         mono && "font-mono text-xs",
       )}
     />

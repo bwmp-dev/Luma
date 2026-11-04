@@ -9,12 +9,15 @@ import {
   Server,
   ServerCog,
   SquareCode,
+  SquareTerminal,
   Trash2,
 } from "lucide-react";
 import { useSnippets, useSnippetMutations } from "../../hooks/useSnippets";
 import { useHosts } from "../../hooks/useHosts";
 import { useBrowsingVaultId, useCreationVaultId } from "../../stores/vaultStore";
 import { useSessionStore } from "../../stores/sessionStore";
+import { useUiStore } from "../../stores/uiStore";
+import { useCapabilityStore } from "../../stores/capabilityStore";
 import { useSnippetRunStore } from "../../stores/snippetRunStore";
 import type { Snippet, SnippetInput } from "../../lib/snippets";
 import { cn } from "../../lib/utils";
@@ -40,6 +43,8 @@ export function SnippetsScreen() {
   const { data: hosts } = useHosts(browsingVaultId);
   const { create, update, remove } = useSnippetMutations();
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
+  const openNewTab = useUiStore((s) => s.openNewTab);
+  const canOpenLocalTerminal = useCapabilityStore((s) => s.capabilities.features.localTerminal);
   const requestRun = useSnippetRunStore((s) => s.request);
 
   const [query, setQuery] = useState("");
@@ -83,10 +88,10 @@ export function SnippetsScreen() {
       <div className="mx-auto max-w-6xl px-4 py-4 md:px-8 md:py-8">
         <div className="mb-5 flex items-start justify-between gap-3 md:mb-6 md:gap-4">
           <div>
-            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-accent/15 text-accent">
+            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-accent/15 text-accent md:hidden">
               <SquareCode size={22} />
             </div>
-            <h1 className="text-lg font-semibold tracking-tight md:text-2xl">Snippets</h1>
+            <h1 className="text-lg font-semibold tracking-tight md:text-xl">Snippets</h1>
             <p className="mt-1 text-sm text-muted">
               Save reusable commands and insert or run them in the focused terminal.
             </p>
@@ -106,12 +111,21 @@ export function SnippetsScreen() {
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search name, command, tag…"
           aria-label="Search snippets"
-          className="mb-5 h-11 w-full rounded-xl border border-border bg-raised px-4 text-sm outline-none placeholder:text-muted focus:border-accent"
+          className="mb-5 h-11 w-full rounded-xl border border-border bg-raised px-4 text-sm outline-none placeholder:text-muted focus:border-accent md:h-9 md:rounded-lg md:px-3"
         />
 
         {!hasTerminal && (snippets?.length ?? 0) > 0 && (
-          <div className="mb-4 rounded-md border border-border bg-surface/60 px-3 py-2 text-xs text-muted">
-            Open a terminal to insert or run snippets.
+          <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted">
+            <span>Insert and Run need an open terminal.</span>
+            {canOpenLocalTerminal && (
+              <button
+                type="button"
+                onClick={openNewTab}
+                className="flex items-center gap-1.5 rounded-md px-1.5 py-0.5 font-medium text-accent hover:bg-accent/10"
+              >
+                <SquareTerminal size={14} /> Open a terminal
+              </button>
+            )}
           </div>
         )}
 
@@ -225,7 +239,7 @@ function SnippetCard({
               <DropdownMenu.Content
                 align="end"
                 sideOffset={4}
-                className="z-50 min-w-36 rounded-lg border border-border bg-raised p-1 text-sm shadow-glow"
+                className="z-50 min-w-36 rounded-lg border border-border bg-raised p-1 text-sm shadow-overlay"
               >
                 <MenuItem icon={<ServerCog size={14} />} onSelect={onRunHosts}>
                   Run on hosts…
@@ -241,7 +255,10 @@ function SnippetCard({
           </DropdownMenu.Root>
         </div>
 
-        <pre className="max-h-24 whitespace-pre-wrap break-words rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground/90 md:max-h-20 md:overflow-hidden md:whitespace-pre">
+        <pre
+          title={snippet.command}
+          className="max-h-24 whitespace-pre-wrap break-words rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground/90 md:max-h-20 md:overflow-hidden md:text-ellipsis md:whitespace-pre"
+        >
           {snippet.command}
         </pre>
 
@@ -273,7 +290,7 @@ function SnippetCard({
             onClick={onRun}
             disabled={!canRun}
             title={canRun ? "Insert and run" : "Open a terminal first"}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-accent px-2.5 py-1.5 text-xs font-medium text-accent-foreground hover:brightness-110 disabled:opacity-40"
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent bg-accent px-2.5 py-1.5 text-xs font-medium text-accent-foreground hover:brightness-110 disabled:border-border disabled:bg-transparent disabled:font-normal disabled:text-foreground disabled:opacity-40 disabled:hover:brightness-100"
           >
             <Play size={13} /> Run
           </button>

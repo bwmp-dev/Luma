@@ -105,10 +105,13 @@ describe("deriveAppTokens", () => {
     expect(deriveAppTokens(ONE_DARK, "dark")["--accent"]).toBe("#528bff");
   });
 
-  it("picks accent-foreground by accent luminance", () => {
-    // Bright cyan accent -> black text; deep blue accent -> white text.
+  it("picks the higher-contrast accent-foreground", () => {
     expect(deriveAppTokens(DRACULA, "dark")["--accent-foreground"]).toBe("#000000");
-    expect(deriveAppTokens(ONE_DARK, "dark")["--accent-foreground"]).toBe("#ffffff");
+    // One Dark's mid blue (#528bff) is 6.5:1 with black but only 3.2:1 with white.
+    expect(deriveAppTokens(ONE_DARK, "dark")["--accent-foreground"]).toBe("#000000");
+    expect(deriveAppTokens({ ...ONE_DARK, cursor: "#1d4ed8" }, "dark")["--accent-foreground"]).toBe(
+      "#ffffff",
+    );
   });
 
   it("prefers brightRed then red for danger", () => {
@@ -127,13 +130,13 @@ describe("deriveAppTokens", () => {
     const dark = deriveAppTokens({}, "dark");
     expect(dark["--background"]).toBe("#101217");
     expect(dark["--foreground"]).toBe("#f2f3f5");
-    expect(dark["--accent"]).toBe("#7c6cf2");
+    expect(dark["--accent"]).toBe("#9d8ff7");
     expect(dark["--danger"]).toBe("#f87171");
 
     const light = deriveAppTokens({}, "light");
     expect(light["--background"]).toBe("#f6f7fa");
-    expect(light["--accent"]).toBe("#0e7ea8");
-    expect(light["--danger"]).toBe("#dc2626");
+    expect(light["--accent"]).toBe("#5b4bd0");
+    expect(light["--danger"]).toBe("#b91c1c");
   });
 
   it("never crashes on non-hex background/foreground", () => {

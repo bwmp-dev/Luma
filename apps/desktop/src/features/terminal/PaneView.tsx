@@ -621,7 +621,7 @@ export function PaneView({
 
           {/* Resolved-path notice shown once logging starts. */}
           {logNotice && logEntry?.active && (
-            <div className="absolute inset-x-2 top-2 z-8 flex items-start gap-2 rounded-lg border border-border bg-surface/95 px-3 py-2 text-xs shadow-glow backdrop-blur">
+            <div className="absolute inset-x-2 top-2 z-8 flex items-start gap-2 rounded-lg border border-border bg-surface/95 px-3 py-2 text-xs shadow-overlay backdrop-blur">
               <ScrollText size={14} className="mt-0.5 shrink-0 text-accent" />
               <div className="min-w-0 flex-1">
                 <div className="font-medium text-foreground">
@@ -660,7 +660,7 @@ export function PaneView({
           {logError && (
             <div
               role="alert"
-              className="absolute inset-x-2 top-2 z-8 flex items-start gap-2 rounded-lg border border-danger/40 bg-surface/95 px-3 py-2 text-xs text-danger shadow-glow backdrop-blur"
+              className="absolute inset-x-2 top-2 z-8 flex items-start gap-2 rounded-lg border border-danger/40 bg-surface/95 px-3 py-2 text-xs text-danger shadow-overlay backdrop-blur"
             >
               <span className="min-w-0 flex-1">Could not start logging: {logError}</span>
               <button
@@ -677,7 +677,7 @@ export function PaneView({
           {forwardingError && (
             <div
               role="alert"
-              className="absolute inset-x-2 top-2 z-9 flex items-start gap-2 rounded-lg border border-danger/40 bg-surface/95 px-3 py-2 text-xs text-danger shadow-glow"
+              className="absolute inset-x-2 top-2 z-9 flex items-start gap-2 rounded-lg border border-danger/40 bg-surface/95 px-3 py-2 text-xs text-danger shadow-overlay"
             >
               <span className="min-w-0 flex-1">
                 Could not enable agent forwarding: {forwardingError}
@@ -692,7 +692,7 @@ export function PaneView({
           {session.transportNotice && (
             <div
               role="status"
-              className="absolute inset-x-2 top-2 z-8 flex items-start gap-2 rounded-lg border border-border bg-surface/95 px-3 py-2 text-xs shadow-glow backdrop-blur"
+              className="absolute inset-x-2 top-2 z-8 flex items-start gap-2 rounded-lg border border-border bg-surface/95 px-3 py-2 text-xs shadow-overlay backdrop-blur"
             >
               <ShieldCheck size={14} className="mt-0.5 shrink-0 text-accent" />
               <span className="min-w-0 flex-1 text-foreground">{session.transportNotice}</span>

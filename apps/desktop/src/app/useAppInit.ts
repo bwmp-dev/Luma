@@ -18,7 +18,7 @@ import { startLiveActivitySync } from "../features/mobile/liveActivity";
 import { SETTING_KEYS } from "../types";
 import { useKeymapStore } from "../stores/keymapStore";
 import { useTerminalStyleStore } from "../stores/terminalStyleStore";
-import { resolveAction, type KeymapActionId } from "../lib/keymap";
+import { CONDITIONAL_ACTIONS, resolveAction, type KeymapActionId } from "../lib/keymap";
 import { useUpdaterStore } from "../stores/updaterStore";
 import { useCapabilityStore } from "../stores/capabilityStore";
 import { useCollabStore } from "../stores/collabStore";
@@ -36,6 +36,28 @@ import { joinRoomByCapability } from "../features/collaboration/collabClient";
 import { parseVaultJoinLink } from "../lib/vaults";
 import { hasPlatformModifier } from "../lib/platform";
 import { endedSessionAction } from "../features/terminal/endedSessionShortcuts";
+import { detachedTabIds } from "../features/terminal/detachedTabs";
+import { findPaneInDirection, type PaneDirection } from "../features/terminal/paneTree";
+
+/** Tab-jump actions -> zero-based strip position; Infinity selects the last tab. */
+const TAB_JUMP_INDEX: Partial<Record<KeymapActionId, number>> = {
+  "workspace.goToTab1": 0,
+  "workspace.goToTab2": 1,
+  "workspace.goToTab3": 2,
+  "workspace.goToTab4": 3,
+  "workspace.goToTab5": 4,
+  "workspace.goToTab6": 5,
+  "workspace.goToTab7": 6,
+  "workspace.goToTab8": 7,
+  "workspace.goToLastTab": Number.POSITIVE_INFINITY,
+};
+
+const PANE_FOCUS_DIRECTION: Partial<Record<KeymapActionId, PaneDirection>> = {
+  "workspace.focusPaneLeft": "left",
+  "workspace.focusPaneRight": "right",
+  "workspace.focusPaneUp": "up",
+  "workspace.focusPaneDown": "down",
+};
 
 /**
  * Handle a `luma://join?t=…` capability deep link. Parses the token, verifies it
@@ -320,6 +342,32 @@ export function useAppInit(): void {
       setActiveTab(tabs[next].id);
     };
 
+    // Numbers follow the visible strip: docked session tabs (torn-off ones live
+    // in their own windows), then any open New tab launchers, as TabBar draws them.
+    const goToTab = (index: number): boolean => {
+      const { tabs, setActiveTab } = useSessionStore.getState();
+      const { newTabIds, selectNewTab } = useUiStore.getState();
+      const detached = detachedTabIds();
+      const strip = [
+        ...tabs.filter((tab) => !detached.has(tab.id)).map((tab) => () => setActiveTab(tab.id)),
+        ...newTabIds.map((id) => () => selectNewTab(id)),
+      ];
+      const select = Number.isFinite(index) ? strip[index] : strip[strip.length - 1];
+      if (!select) return false;
+      select();
+      return true;
+    };
+
+    const focusPaneInDirection = (direction: PaneDirection): boolean => {
+      const { tabs, activeTabId, focusPane } = useSessionStore.getState();
+      const tab = tabs.find((t) => t.id === activeTabId);
+      if (!tab) return false;
+      const paneId = findPaneInDirection(tab.root, tab.activePaneId, direction);
+      if (!paneId) return false;
+      focusPane(tab.id, paneId);
+      return true;
+    };
+
     // Requires focus inside the active pane so a dialog on top never triggers it.
     const endedSessionShortcut = (event: KeyboardEvent) => {
       const { sessions, activeSessionId } = useSessionStore.getState();
@@ -334,7 +382,23 @@ export function useAppInit(): void {
       return action ? { action, sessionId: activeSessionId } : null;
     };
 
-    const runAction = (action: KeymapActionId) => {
+    // Returns whether the action did anything, so conditional chords that had
+    // no target can still reach the focused terminal or text field.
+    const isEditableOutsideTerminal = (target: EventTarget | null): boolean =>
+      target instanceof HTMLElement &&
+      !target.closest(".xterm") &&
+      (target.isContentEditable || target.matches("input, textarea, select"));
+
+    const runAction = (action: KeymapActionId, event: KeyboardEvent): boolean => {
+      const tabIndex = TAB_JUMP_INDEX[action];
+      if (tabIndex !== undefined) return goToTab(tabIndex);
+      const paneDirection = PANE_FOCUS_DIRECTION[action];
+      if (paneDirection) {
+        // In an ordinary text field Alt+Shift+Arrow is word selection (Option on
+        // macOS); only the terminal's own input hands it to pane navigation.
+        if (isEditableOutsideTerminal(event.target)) return false;
+        return focusPaneInDirection(paneDirection);
+      }
       const session = useSessionStore.getState();
       switch (action) {
         case "workspace.newTab":
@@ -368,6 +432,7 @@ export function useAppInit(): void {
         default:
           break;
       }
+      return true;
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -394,9 +459,11 @@ export function useAppInit(): void {
       }
 
       const action = resolveAction(useKeymapStore.getState().keymap, event);
-      if (action) {
+      if (action && runAction(action, event)) {
         event.preventDefault();
-        runAction(action);
+        // Conditional chords are not in xterm's withheld set, so a handled one
+        // must not continue on to the terminal's own listener.
+        if (CONDITIONAL_ACTIONS.has(action)) event.stopPropagation();
       }
     };
     window.addEventListener("keydown", onKeyDown, true);

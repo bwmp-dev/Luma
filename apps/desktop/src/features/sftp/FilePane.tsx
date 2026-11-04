@@ -916,7 +916,7 @@ export function FilePane({
                       }}
                       style={{ height: ROW_HEIGHT }}
                       className={cn(
-                        "flex cursor-default items-center gap-2 px-3 text-xs outline-none",
+                        "flex cursor-default items-center gap-2 px-3 text-xs focus-visible:-outline-offset-2",
                         isSelected
                           ? "bg-accent/15 text-foreground"
                           : "text-foreground/90 hover:bg-raised focus-visible:bg-raised",
@@ -1208,7 +1208,7 @@ function RowMenu({ entry, actions }: { entry: SftpEntry; actions: MenuAction[] }
         <DropdownMenu.Content
           align="end"
           sideOffset={4}
-          className="z-50 min-w-36 rounded-lg border border-border bg-raised p-1 text-sm shadow-glow"
+          className="z-50 min-w-36 rounded-lg border border-border bg-raised p-1 text-sm shadow-overlay"
         >
           {actions.map((action, index) =>
             "separator" in action && action.separator ? (

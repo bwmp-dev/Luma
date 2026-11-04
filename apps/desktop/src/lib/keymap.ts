@@ -25,6 +25,19 @@ export type KeymapActionId =
   | "workspace.closePane"
   | "workspace.commandPalette"
   | "workspace.toggleBroadcast"
+  | "workspace.goToTab1"
+  | "workspace.goToTab2"
+  | "workspace.goToTab3"
+  | "workspace.goToTab4"
+  | "workspace.goToTab5"
+  | "workspace.goToTab6"
+  | "workspace.goToTab7"
+  | "workspace.goToTab8"
+  | "workspace.goToLastTab"
+  | "workspace.focusPaneLeft"
+  | "workspace.focusPaneRight"
+  | "workspace.focusPaneUp"
+  | "workspace.focusPaneDown"
   | "terminal.jumpPreviousPrompt"
   | "terminal.jumpNextPrompt";
 
@@ -34,6 +47,8 @@ export type KeymapActionDef = {
   group: KeymapGroup;
   defaultChord: string;
 };
+
+const TAB_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8] as const;
 
 /** Ordered registry of every rebindable global action. Order drives both the
  * settings editor listing and resolveAction()'s first-match precedence. */
@@ -68,6 +83,42 @@ export const KEYMAP_ACTIONS: readonly KeymapActionDef[] = [
     label: "Toggle broadcast input",
     group: "Workspace",
     defaultChord: "Ctrl+Shift+B",
+  },
+  ...TAB_NUMBERS.map((n) => ({
+    id: `workspace.goToTab${n}` as const,
+    label: `Go to tab ${n}`,
+    group: "Workspace" as const,
+    defaultChord: `Ctrl+Shift+${n}`,
+  })),
+  {
+    id: "workspace.goToLastTab",
+    label: "Go to last tab",
+    group: "Workspace",
+    defaultChord: "Ctrl+Shift+9",
+  },
+  {
+    id: "workspace.focusPaneLeft",
+    label: "Focus pane left",
+    group: "Workspace",
+    defaultChord: "Alt+Shift+Left",
+  },
+  {
+    id: "workspace.focusPaneRight",
+    label: "Focus pane right",
+    group: "Workspace",
+    defaultChord: "Alt+Shift+Right",
+  },
+  {
+    id: "workspace.focusPaneUp",
+    label: "Focus pane up",
+    group: "Workspace",
+    defaultChord: "Alt+Shift+Up",
+  },
+  {
+    id: "workspace.focusPaneDown",
+    label: "Focus pane down",
+    group: "Workspace",
+    defaultChord: "Alt+Shift+Down",
   },
   {
     id: "terminal.jumpPreviousPrompt",
@@ -259,10 +310,26 @@ export function mergeKeymap(stored: unknown): Keymap {
   return result;
 }
 
-/** All currently bound chord strings (for pushing the terminal pass-through set
- * to terminalManager). */
+/*
+ * Actions that only sometimes have something to do (there may be no tab 7, or
+ * no pane to the left). Their chords are not withheld from the shell up front;
+ * the window handler consumes one only when it actually acted, so in a
+ * single-pane tab Alt+Shift+Arrow still reaches tmux or the editor.
+ */
+export const CONDITIONAL_ACTIONS: ReadonlySet<KeymapActionId> = new Set<KeymapActionId>([
+  ...TAB_NUMBERS.map((n) => `workspace.goToTab${n}` as const),
+  "workspace.goToLastTab",
+  "workspace.focusPaneLeft",
+  "workspace.focusPaneRight",
+  "workspace.focusPaneUp",
+  "workspace.focusPaneDown",
+]);
+
+/** Chords xterm must never pass to the shell: every unconditional app action. */
 export function keymapChords(keymap: Keymap): string[] {
-  return KEYMAP_ACTIONS.map((action) => keymap[action.id]);
+  return KEYMAP_ACTIONS.filter((action) => !CONDITIONAL_ACTIONS.has(action.id)).map(
+    (action) => keymap[action.id],
+  );
 }
 
 /** Display form of a chord: canonical, with Meta shown as Cmd on macOS. */

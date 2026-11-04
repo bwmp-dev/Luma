@@ -13,7 +13,7 @@ import { cn } from "../../lib/utils";
 const ITEM_CLASS =
   "flex cursor-default items-center gap-2 rounded-md px-2.5 outline-none data-[highlighted]:bg-surface data-[highlighted]:text-accent";
 
-const CONTENT_CLASS = "z-50 rounded-lg border border-border bg-raised p-1 text-sm shadow-glow";
+const CONTENT_CLASS = "z-50 rounded-lg border border-border bg-raised p-1 text-sm shadow-overlay";
 
 /**
  * "Sort by" submenu plus a "Hidden files" toggle.

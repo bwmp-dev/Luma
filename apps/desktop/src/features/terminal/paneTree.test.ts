@@ -3,6 +3,7 @@ import type { PaneNode } from "../../types";
 import {
   collectLeaves,
   findLeaf,
+  findPaneInDirection,
   findLeafBySession,
   makeLeaf,
   removeLeaf,
@@ -185,5 +186,62 @@ describe("setLeafSession / setSplitSizes / lookups", () => {
     expect(findLeafBySession(root, "s-b")?.id).toBe("b");
     expect(findLeaf(root, "nope")).toBeNull();
     expect(findLeafBySession(root, "nope")).toBeNull();
+  });
+});
+
+describe("findPaneInDirection", () => {
+  const split = (
+    id: string,
+    direction: "row" | "column",
+    children: PaneNode[],
+    sizes = children.map(() => 100 / children.length),
+  ): PaneNode => ({ kind: "split", id, direction, children, sizes });
+
+  it("returns null for a lone pane or an unknown pane id", () => {
+    expect(findPaneInDirection(leaf("a"), "a", "right")).toBeNull();
+    expect(findPaneInDirection(split("r", "row", [leaf("a"), leaf("b")]), "zz", "left")).toBeNull();
+  });
+
+  it("moves between side-by-side panes and stops at the edge", () => {
+    const root = split("r", "row", [leaf("a"), leaf("b"), leaf("c")]);
+    expect(findPaneInDirection(root, "a", "right")).toBe("b");
+    expect(findPaneInDirection(root, "b", "right")).toBe("c");
+    expect(findPaneInDirection(root, "c", "left")).toBe("b");
+    expect(findPaneInDirection(root, "a", "left")).toBeNull();
+    expect(findPaneInDirection(root, "b", "up")).toBeNull();
+  });
+
+  it("crosses nested splits using geometry rather than tree order", () => {
+    // a | (b over c): from c, left is a and up is b; from a, right picks the
+    // topmost of the two equally-overlapping neighbours.
+    const root = split("r", "row", [leaf("a"), split("col", "column", [leaf("b"), leaf("c")])]);
+    expect(findPaneInDirection(root, "c", "left")).toBe("a");
+    expect(findPaneInDirection(root, "c", "up")).toBe("b");
+    expect(findPaneInDirection(root, "b", "down")).toBe("c");
+    expect(findPaneInDirection(root, "a", "right")).toBe("b");
+  });
+
+  it("prefers the neighbour with the larger overlap", () => {
+    // (a over b, 30/70) | c over d... from the right column, left goes to the
+    // pane covering more of the current pane's height.
+    const root = split("r", "row", [
+      split("left", "column", [leaf("a"), leaf("b")], [30, 70]),
+      leaf("c"),
+    ]);
+    expect(findPaneInDirection(root, "c", "left")).toBe("b");
+  });
+
+  it("skips panes that do not share an edge span", () => {
+    // Top row: a | b. Bottom: c spanning the full width. From a, right is b,
+    // and from b, down is c even though c starts under a.
+    const root = split("r", "column", [split("top", "row", [leaf("a"), leaf("b")]), leaf("c")]);
+    expect(findPaneInDirection(root, "b", "down")).toBe("c");
+    expect(findPaneInDirection(root, "c", "up")).toBe("a");
+    expect(findPaneInDirection(root, "a", "down")).toBe("c");
+  });
+
+  it("picks the nearest pane when several lie in the direction", () => {
+    const root = split("r", "row", [leaf("a"), leaf("b"), leaf("c")], [20, 20, 60]);
+    expect(findPaneInDirection(root, "a", "right")).toBe("b");
   });
 });

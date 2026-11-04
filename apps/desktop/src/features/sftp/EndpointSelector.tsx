@@ -65,7 +65,7 @@ export function EndpointSelector({
         <DropdownMenu.Content
           align="start"
           sideOffset={4}
-          className="z-50 max-h-80 min-w-56 overflow-y-auto rounded-lg border border-border bg-raised p-1 text-sm shadow-glow"
+          className="z-50 max-h-80 min-w-56 overflow-y-auto rounded-lg border border-border bg-raised p-1 text-sm shadow-overlay"
         >
           <DropdownMenu.Item
             disabled={otherIsLocal}

@@ -127,9 +127,9 @@ export function isSpawnAbandoned(error: unknown): boolean {
 export const DARK_THEME: ITheme = {
   background: "#0b0e14",
   foreground: "#e6eaf2",
-  cursor: "#4cc9f0",
+  cursor: "#9d8ff7",
   cursorAccent: "#0b0e14",
-  selectionBackground: "rgba(76, 201, 240, 0.30)",
+  selectionBackground: "rgba(157, 143, 247, 0.30)",
   black: "#1c2230",
   red: "#f87171",
   green: "#4ade80",
@@ -151,9 +151,9 @@ export const DARK_THEME: ITheme = {
 export const LIGHT_THEME: ITheme = {
   background: "#ffffff",
   foreground: "#1c2433",
-  cursor: "#0e7ea8",
+  cursor: "#5b4bd0",
   cursorAccent: "#ffffff",
-  selectionBackground: "rgba(14, 126, 168, 0.20)",
+  selectionBackground: "rgba(91, 75, 208, 0.20)",
   black: "#1c2433",
   red: "#b91c1c",
   green: "#15803d",
