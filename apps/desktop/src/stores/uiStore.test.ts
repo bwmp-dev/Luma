@@ -44,10 +44,10 @@ describe("new tab launchers", () => {
     expect(useUiStore.getState().activeNewTabId).toBeNull();
   });
 
-  it("returns to hosts when the last launcher is closed", () => {
+  it("stays on the terminal empty state when the last launcher is closed", () => {
     useUiStore.getState().openNewTab();
     useSessionStore.getState().closeActivePane();
     expect(useUiStore.getState().newTabIds).toEqual([]);
-    expect(useUiStore.getState().mainView).toBe("hosts");
+    expect(useUiStore.getState().mainView).toBe("terminal");
   });
 });

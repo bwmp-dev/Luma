@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { useSessionStore } from "./sessionStore";
 import type { SidebarSection } from "../types";
 import type { VaultJoinLink } from "../lib/vaults";
 
@@ -170,15 +169,7 @@ export const useUiStore = create<UiState>((set) => ({
             ? (newTabIds[Math.min(index, newTabIds.length - 1)] ?? null)
             : null
           : state.activeNewTabId;
-      return {
-        newTabIds,
-        activeNewTabId,
-        ...(state.mainView === "terminal" &&
-        !activeNewTabId &&
-        useSessionStore.getState().tabs.length === 0
-          ? { mainView: "hosts" as const }
-          : {}),
-      };
+      return { newTabIds, activeNewTabId };
     }),
   serialConnectOpen: false,
   openSerialConnect: () => set({ serialConnectOpen: true }),

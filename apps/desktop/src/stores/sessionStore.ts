@@ -673,19 +673,6 @@ async function launch(
   }
 }
 
-/** After a close operation, if the last terminal tab is gone and the terminal
- * workspace was the active main view, fall back to the Hosts screen rather than
- * showing the terminal empty state. */
-function fallbackToHostsIfEmpty(get: () => SessionState): void {
-  if (
-    get().tabs.length === 0 &&
-    useUiStore.getState().mainView === "terminal" &&
-    !useUiStore.getState().activeNewTabId
-  ) {
-    useUiStore.getState().openSection("hosts");
-  }
-}
-
 function newTab(sessionId: string): WorkspaceTab {
   const leaf = makeLeaf(sessionId);
   return { id: crypto.randomUUID(), root: leaf, activePaneId: leaf.id };
@@ -1070,7 +1057,6 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // Re-push the surviving membership (empty when the tab was removed or
     // dropped below two panes) so the manager's group matches the layout.
     syncBroadcast(get().tabs.find((t) => t.id === owningTabId));
-    fallbackToHostsIfEmpty(get);
   },
 
   closeTab: (tabId) => {
@@ -1102,7 +1088,6 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         activeSessionId: computeActiveSession(tabs, activeTabId),
       };
     });
-    fallbackToHostsIfEmpty(get);
   },
 
   setActiveTab: (tabId) => {

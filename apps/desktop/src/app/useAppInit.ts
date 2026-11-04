@@ -334,7 +334,10 @@ export function useAppInit(): void {
   // simply no-op without the relevant panes).
   useEffect(() => {
     const cycleTab = (direction: 1 | -1) => {
-      const { tabs, activeTabId, setActiveTab } = useSessionStore.getState();
+      const { activeTabId, setActiveTab } = useSessionStore.getState();
+      // Torn-off tabs live in their own windows and are not in this strip.
+      const detached = detachedTabIds();
+      const tabs = useSessionStore.getState().tabs.filter((tab) => !detached.has(tab.id));
       if (tabs.length < 2) return;
       const current = tabs.findIndex((tab) => tab.id === activeTabId);
       const base = current === -1 ? 0 : current;

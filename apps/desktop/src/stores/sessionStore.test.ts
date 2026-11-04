@@ -996,7 +996,7 @@ describe("closing the visible tab", () => {
     expect(useUiStore.getState().mainView).toBe("terminal");
     useSessionStore.getState().closeActivePane();
     expect(useSessionStore.getState().sessions).toHaveLength(0);
-    expect(useUiStore.getState().mainView).toBe("hosts");
+    expect(useUiStore.getState().mainView).toBe("terminal");
   });
   it("keeps the visible launcher when a background terminal closes", async () => {
     setInvoke((cmd) =>
