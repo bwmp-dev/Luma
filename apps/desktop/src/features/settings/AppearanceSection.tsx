@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { ITheme } from "@xterm/xterm";
 import { Check, Palette, Plus, Trash2 } from "lucide-react";
 import { Modal } from "../../components/Modal";
@@ -46,6 +46,7 @@ export function AppearanceSection() {
   const setFontFamily = useTerminalStyleStore((s) => s.setFontFamily);
   const setFontSize = useTerminalStyleStore((s) => s.setFontSize);
   const deleteCustomTheme = useTerminalStyleStore((s) => s.deleteCustomTheme);
+  const fieldId = useId();
 
   const [importOpen, setImportOpen] = useState(false);
 
@@ -66,7 +67,7 @@ export function AppearanceSection() {
           Recolors the whole app and terminals. Auto keeps Luma's native look and follows your
           system appearance.
         </p>
-        <div className="space-y-1.5">
+        <div className="grid gap-1.5 md:grid-cols-2">
           <SchemeRow
             name="Auto (follow system)"
             selected={schemeId === AUTO_SCHEME_ID}
@@ -96,25 +97,37 @@ export function AppearanceSection() {
 
       <div>
         <div className="mb-1.5 flex items-baseline justify-between">
-          <span className="text-sm font-medium">Font family</span>
-          <span className="text-xs text-muted">A CSS font stack; blank = default.</span>
+          <label htmlFor={`${fieldId}-family`} className="text-sm font-medium">
+            Font family
+          </label>
+          <span id={`${fieldId}-family-hint`} className="text-xs text-muted">
+            A CSS font stack; blank = default.
+          </span>
         </div>
         <input
+          id={`${fieldId}-family`}
+          aria-describedby={`${fieldId}-family-hint`}
           type="text"
           value={fontFamily}
           onChange={(e) => void setFontFamily(e.target.value)}
           placeholder={DEFAULT_TERMINAL_FONT_FAMILY}
           spellCheck={false}
-          className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-sm outline-none placeholder:truncate placeholder:text-muted/50 focus:border-accent"
+          className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-sm outline-none placeholder:truncate placeholder:text-muted/80 focus:border-accent focus:ring-1 focus:ring-accent"
         />
       </div>
 
       <div>
         <div className="mb-1.5 flex items-baseline justify-between">
-          <span className="text-sm font-medium">Font size</span>
-          <span className="text-xs text-muted">Applies to all open terminals.</span>
+          <label htmlFor={`${fieldId}-size`} className="text-sm font-medium">
+            Font size
+          </label>
+          <span id={`${fieldId}-size-hint`} className="text-xs text-muted">
+            Applies to all open terminals.
+          </span>
         </div>
         <input
+          id={`${fieldId}-size`}
+          aria-describedby={`${fieldId}-size-hint`}
           type="number"
           value={fontSize}
           min={MIN_FONT_SIZE}
@@ -125,7 +138,7 @@ export function AppearanceSection() {
               void setFontSize(next);
             }
           }}
-          className="w-32 rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-accent"
+          className="w-32 rounded-md border border-border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
         />
       </div>
 

@@ -46,7 +46,7 @@ export function HostKeyChangedAlert({
       }}
       className="absolute inset-0 z-20 flex items-start justify-center overflow-y-auto bg-background/95 p-3 backdrop-blur sm:p-6"
     >
-      <div className="my-auto w-full max-w-md rounded-xl border border-danger/50 bg-surface p-5 shadow-glow">
+      <div className="my-auto w-full max-w-md rounded-xl border border-danger/50 bg-surface p-5 shadow-overlay">
         <div className="flex items-center gap-2 text-danger">
           <ShieldAlert size={20} className="shrink-0" />
           <h2 id={titleId} className="text-sm font-semibold">

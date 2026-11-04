@@ -172,10 +172,10 @@ export function HostPicker({
   return (
     <div className="h-full overflow-y-auto bg-background">
       <div className="mx-auto max-w-3xl px-8 py-8">
-        <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-accent/15 text-accent">
+        <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-accent/15 text-accent md:hidden">
           <FolderOpen size={22} />
         </div>
-        <h1 className="text-2xl font-semibold tracking-tight">SFTP</h1>
+        <h1 className="text-lg font-semibold tracking-tight md:text-xl">SFTP</h1>
         <p className="mt-1 text-sm text-muted">
           Connect to a saved host to browse and transfer files.
         </p>

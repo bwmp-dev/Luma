@@ -143,3 +143,75 @@ export function setLeafSession(node: PaneNode, paneId: string, sessionId: string
     children: node.children.map((child) => setLeafSession(child, paneId, sessionId)),
   };
 }
+
+export type PaneDirection = "left" | "right" | "up" | "down";
+
+type PaneRect = { id: string; left: number; top: number; right: number; bottom: number };
+
+/** Each leaf's rectangle in a unit square, laid out from split directions and
+ * size weights ("row" splits side by side, "column" stacks). */
+function layoutLeaves(
+  node: PaneNode,
+  rect: Omit<PaneRect, "id"> = { left: 0, top: 0, right: 1, bottom: 1 },
+): PaneRect[] {
+  if (node.kind === "leaf") return [{ id: node.id, ...rect }];
+  const total = node.sizes.reduce((sum, size) => sum + size, 0);
+  const horizontal = node.direction === "row";
+  const start = horizontal ? rect.left : rect.top;
+  const span = horizontal ? rect.right - rect.left : rect.bottom - rect.top;
+  let offset = start;
+  return node.children.flatMap((child, i) => {
+    const share = total > 0 ? node.sizes[i] / total : 1 / node.children.length;
+    const from = offset;
+    offset += share * span;
+    const childRect = horizontal
+      ? { ...rect, left: from, right: offset }
+      : { ...rect, top: from, bottom: offset };
+    return layoutLeaves(child, childRect);
+  });
+}
+
+const EPSILON = 1e-6;
+
+/**
+ * The pane adjacent to `paneId` in `direction`, or null at the layout's edge.
+ * Among panes beyond that edge whose span overlaps the current pane's, the
+ * nearest wins; ties go to the larger overlap, then to the topmost/leftmost.
+ */
+export function findPaneInDirection(
+  root: PaneNode,
+  paneId: string,
+  direction: PaneDirection,
+): string | null {
+  const rects = layoutLeaves(root);
+  const current = rects.find((rect) => rect.id === paneId);
+  if (!current) return null;
+  const horizontal = direction === "left" || direction === "right";
+
+  let best: { id: string; distance: number; overlap: number; position: number } | null = null;
+  for (const rect of rects) {
+    if (rect.id === paneId) continue;
+    const distance =
+      direction === "left"
+        ? current.left - rect.right
+        : direction === "right"
+          ? rect.left - current.right
+          : direction === "up"
+            ? current.top - rect.bottom
+            : rect.top - current.bottom;
+    if (distance < -EPSILON) continue;
+    const overlap = horizontal
+      ? Math.min(current.bottom, rect.bottom) - Math.max(current.top, rect.top)
+      : Math.min(current.right, rect.right) - Math.max(current.left, rect.left);
+    if (overlap <= EPSILON) continue;
+    const position = horizontal ? rect.top : rect.left;
+    const better =
+      !best ||
+      distance < best.distance - EPSILON ||
+      (Math.abs(distance - best.distance) <= EPSILON &&
+        (overlap > best.overlap + EPSILON ||
+          (Math.abs(overlap - best.overlap) <= EPSILON && position < best.position)));
+    if (better) best = { id: rect.id, distance, overlap, position };
+  }
+  return best?.id ?? null;
+}

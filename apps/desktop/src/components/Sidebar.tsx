@@ -88,7 +88,7 @@ export function Sidebar() {
         className="flex w-19 flex-col items-center border-r border-border bg-surface py-3"
         aria-label="Primary"
       >
-        <div className="flex w-full flex-col gap-1 px-2">
+        <div className="flex w-full flex-col gap-1 px-1.5">
           {items.slice(0, lastIndex).map((item, index) => (
             <RailButton
               key={item.key}
@@ -102,7 +102,7 @@ export function Sidebar() {
           ))}
         </div>
         <div className="flex-1" />
-        <div className="w-full px-2">
+        <div className="w-full px-1.5">
           <RailButton
             item={items[lastIndex]}
             tabIndex={lastIndex === activeIndex ? 0 : -1}
@@ -141,14 +141,20 @@ function RailButton({
       onClick={onClick}
       onKeyDown={onKeyDown}
       className={cn(
-        "relative flex h-12 w-full flex-col items-center justify-center gap-0.5 rounded-lg text-[10px] transition-colors",
+        "relative flex h-13 w-full flex-col items-center justify-center gap-1 rounded-lg text-[11px] leading-none transition-colors",
         active
-          ? "bg-raised text-accent shadow-glow"
+          ? "bg-raised font-medium text-foreground"
           : "text-muted hover:bg-raised hover:text-foreground",
       )}
     >
-      <Icon size={18} strokeWidth={1.75} />
-      <span>{label}</span>
+      {active && (
+        <span
+          aria-hidden="true"
+          className="absolute inset-y-2.5 -left-1.5 w-0.75 rounded-r-full bg-accent"
+        />
+      )}
+      <Icon size={18} strokeWidth={1.75} className={active ? "text-accent" : undefined} />
+      <span className="whitespace-nowrap">{label}</span>
     </button>
   );
 }

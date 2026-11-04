@@ -20,6 +20,7 @@ import { useInvalidateVaults } from "../../hooks/useVaults";
 import { useInvalidateSyncConfig } from "../../hooks/useSync";
 import { useSyncStore } from "../../stores/syncStore";
 import { useCapabilityStore } from "../../stores/capabilityStore";
+import { CertificateFingerprintField } from "../sync/CertificateFingerprintField";
 import { cn } from "../../lib/utils";
 
 const PROVIDER_OPTIONS: { value: SyncProvider; label: string }[] = [
@@ -63,6 +64,7 @@ export function JoinVaultDialog({
   const [url, setUrl] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [certSha256, setCertSha256] = useState("");
   const [gistId, setGistId] = useState("");
   const [token, setToken] = useState("");
   const [cloudUrl, setCloudUrl] = useState(DEFAULT_LUMA_CLOUD_URL);
@@ -83,6 +85,7 @@ export function JoinVaultDialog({
     if (parsed.folderPath) setFolderPath(parsed.folderPath);
     if (parsed.url) setUrl(parsed.url);
     if (parsed.username) setUsername(parsed.username);
+    if (parsed.certSha256) setCertSha256(parsed.certSha256);
     if (parsed.gistId) setGistId(parsed.gistId);
     if (parsed.cloudUrl) setCloudUrl(parsed.cloudUrl);
     setInviteSecret(parsed.inviteSecret);
@@ -98,6 +101,7 @@ export function JoinVaultDialog({
     setUrl("");
     setUsername("");
     setPassword("");
+    setCertSha256("");
     setGistId("");
     setToken("");
     setCloudUrl(DEFAULT_LUMA_CLOUD_URL);
@@ -138,7 +142,13 @@ export function JoinVaultDialog({
     }
     if (provider === "webdav") {
       if (!url.trim() || !username.trim() || !password) return null;
-      return { provider: "webdav", url: url.trim(), username: username.trim(), password };
+      return {
+        provider: "webdav",
+        url: url.trim(),
+        username: username.trim(),
+        password,
+        certSha256: certSha256.trim() || null,
+      };
     }
     if (provider === "github-gist") {
       if (!token || !gistId.trim()) return null;
@@ -243,7 +253,7 @@ export function JoinVaultDialog({
             value={pastedLink}
             onChange={(e) => onPasteLink(e.target.value)}
             placeholder="luma://vault?…"
-            className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground outline-none placeholder:text-muted/60 focus:border-accent"
+            className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground outline-none placeholder:text-muted/80 focus:border-accent"
           />
         </Field>
         {linkError && (
@@ -273,7 +283,7 @@ export function JoinVaultDialog({
                   className={cn(
                     "flex-1 rounded-md px-3 py-1.5 text-sm transition-colors",
                     provider === option.value
-                      ? "bg-raised text-accent shadow-glow"
+                      ? "bg-raised text-accent shadow-overlay"
                       : "text-muted hover:text-foreground",
                   )}
                 >
@@ -291,7 +301,7 @@ export function JoinVaultDialog({
                 readOnly
                 value={folderPath}
                 placeholder="No folder selected"
-                className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground outline-none"
+                className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground outline-none focus:border-accent"
               />
               <button
                 type="button"
@@ -320,6 +330,7 @@ export function JoinVaultDialog({
             <Field label="Password">
               <TextInput value={password} onChange={setPassword} type="password" />
             </Field>
+            <CertificateFingerprintField url={url} value={certSha256} onChange={setCertSha256} />
           </>
         )}
 
@@ -420,7 +431,7 @@ function TextInput({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       className={cn(
-        "w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none placeholder:text-muted/60 focus:border-accent",
+        "w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none placeholder:text-muted/80 focus:border-accent",
         mono && "font-mono text-xs",
       )}
     />

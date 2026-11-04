@@ -250,14 +250,14 @@ export function KeychainScreen() {
       <div className="min-w-0 flex-1 overflow-y-auto">
         <div className="px-4 py-4 md:mx-auto md:max-w-375 md:px-7 md:mt-5 md:pb-0">
           <h1 className="mb-4 text-lg font-semibold md:hidden">Keys</h1>
-          <div className="keychain-mobile-search mb-5 flex h-11 items-center gap-2 rounded-xl border border-border bg-raised px-4 md:hidden">
+          <div className="keychain-mobile-search mb-5 flex h-11 items-center gap-2 rounded-xl border border-border bg-raised px-4 focus-within:border-accent md:hidden">
             <Search size={15} className="shrink-0 text-muted" />
             <input
               aria-label="Search keychain"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search keys and identities…"
-              className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted"
+              className="min-w-0 flex-1 bg-transparent text-sm text-foreground shadow-none outline-none placeholder:text-muted"
             />
             {query && (
               <button
@@ -294,7 +294,7 @@ export function KeychainScreen() {
                   <DropdownMenu.Content
                     align="start"
                     sideOffset={5}
-                    className="z-50 min-w-48 rounded-lg border border-border bg-raised p-1 text-sm shadow-glow"
+                    className="z-50 min-w-48 rounded-lg border border-border bg-raised p-1 text-sm shadow-overlay"
                   >
                     <DropdownMenu.Item
                       onSelect={() => {
@@ -356,7 +356,7 @@ export function KeychainScreen() {
                     if (e.key === "Escape") closeSearch();
                   }}
                   placeholder="Search…"
-                  className="w-44 bg-transparent py-1.5 text-xs text-foreground outline-none placeholder:text-muted"
+                  className="w-44 bg-transparent py-1.5 text-xs text-foreground shadow-none outline-none placeholder:text-muted"
                 />
                 <button
                   aria-label="Clear search"
@@ -589,7 +589,9 @@ function KeychainSection({
 }) {
   return (
     <section>
-      <h2 className="mb-3 text-sm font-semibold">{title}</h2>
+      <h2 className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-wider text-muted">
+        {title}
+      </h2>
       <div
         className={
           view === "list" ? "flex flex-col gap-2" : "grid gap-3 md:grid-cols-2 xl:grid-cols-3"
@@ -1074,7 +1076,7 @@ function DerivedPublicKeyView({
               aria-label="Derived public key (authorized_keys line)"
               value={derived.publicKey}
               rows={4}
-              className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 pr-10 font-mono text-xs text-foreground outline-none"
+              className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 pr-10 font-mono text-xs text-foreground outline-none focus:border-accent"
             />
             <button
               type="button"

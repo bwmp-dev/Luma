@@ -112,6 +112,13 @@ pub async fn sync_configure(
     .await
 }
 
+/// Fingerprint of the certificate a WebDAV server presents, for the user to
+/// compare with the server's own before trusting it.
+#[tauri::command]
+pub async fn sync_read_cert_fingerprint(url: String) -> Result<String> {
+    sync::read_server_cert_fingerprint(url.trim()).await
+}
+
 /// Replace this device's automatic sync schedule for one vault. The scheduler
 /// reads the row on its next tick, so there is nothing to restart.
 #[tauri::command]

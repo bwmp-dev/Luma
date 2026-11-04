@@ -232,7 +232,7 @@ function GeneratedKeyResult({ keyRef }: { keyRef: KeyReference }) {
               aria-label="Generated public key (authorized_keys line)"
               value={keyRef.publicKey}
               rows={4}
-              className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 pr-10 font-mono text-xs text-foreground outline-none"
+              className="w-full resize-y rounded-lg border border-border bg-background px-3 py-2 pr-10 font-mono text-xs text-foreground outline-none focus:border-accent"
             />
             <button
               type="button"

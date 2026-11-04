@@ -3320,6 +3320,7 @@ dependencies = [
  "rsa 0.9.10",
  "russh",
  "russh-sftp",
+ "rustls",
  "serde",
  "serde_json",
  "serde_yml",

@@ -31,7 +31,7 @@ export function ConnectionErrorAlert({
       aria-describedby="connection-error-message"
       className="absolute inset-0 z-20 flex items-center justify-center bg-background/95 p-6 backdrop-blur"
     >
-      <div className="w-full max-w-md rounded-xl border border-border bg-surface p-5 shadow-glow">
+      <div className="w-full max-w-md rounded-xl border border-border bg-surface p-5 shadow-overlay">
         <div className="flex items-center gap-2 text-accent">
           <ServerOff size={20} className="shrink-0" />
           <h2 id="connection-error-title" className="text-sm font-semibold text-foreground">

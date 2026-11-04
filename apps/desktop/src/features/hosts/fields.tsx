@@ -48,8 +48,10 @@ export function TextField({
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${id}-error` : undefined}
         className={cn(
-          "w-full rounded-md border bg-background px-2.5 py-1.5 text-sm outline-none placeholder:text-muted/60 focus:border-accent",
-          error ? "border-danger" : "border-border",
+          "w-full rounded-md border bg-background px-2.5 py-1.5 text-sm outline-none placeholder:text-muted/80 focus:ring-1",
+          error
+            ? "border-danger focus:border-danger focus:ring-danger"
+            : "border-border focus:border-accent focus:ring-accent",
           mono && "font-mono",
         )}
       />
@@ -102,8 +104,10 @@ export function TextAreaField({
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${id}-error` : undefined}
         className={cn(
-          "w-full resize-y rounded-md border bg-background px-2.5 py-1.5 text-sm outline-none placeholder:text-muted/60 focus:border-accent",
-          error ? "border-danger" : "border-border",
+          "w-full resize-y rounded-md border bg-background px-2.5 py-1.5 text-sm outline-none placeholder:text-muted/80 focus:ring-1",
+          error
+            ? "border-danger focus:border-danger focus:ring-danger"
+            : "border-border focus:border-accent focus:ring-accent",
           mono && "font-mono",
         )}
       />
@@ -150,8 +154,10 @@ export function SelectField({
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${id}-error` : undefined}
         className={cn(
-          "w-full rounded-md border bg-background px-2.5 py-1.5 text-sm outline-none focus:border-accent",
-          error ? "border-danger" : "border-border",
+          "w-full rounded-md border bg-background px-2.5 py-1.5 text-sm outline-none focus:ring-1",
+          error
+            ? "border-danger focus:border-danger focus:ring-danger"
+            : "border-border focus:border-accent focus:ring-accent",
         )}
       >
         {children}
@@ -276,14 +282,14 @@ export function EnvironmentEditor({
                 value={row.key}
                 onChange={(e) => update(index, { key: e.target.value })}
                 placeholder="KEY"
-                className="w-2/5 rounded-md border border-border bg-background px-2 py-1 font-mono text-sm outline-none focus:border-accent"
+                className="w-2/5 rounded-md border border-border bg-background px-2 py-1 font-mono text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
               />
               <input
                 aria-label={`Variable ${index + 1} value`}
                 value={row.value}
                 onChange={(e) => update(index, { value: e.target.value })}
                 placeholder="value"
-                className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 font-mono text-sm outline-none focus:border-accent"
+                className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 font-mono text-sm outline-none focus:border-accent focus:ring-1 focus:ring-accent"
               />
               <button
                 type="button"

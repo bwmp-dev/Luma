@@ -74,7 +74,7 @@ export function ContextMenu({
       <RadixContextMenu.Portal>
         <RadixContextMenu.Content
           className={cn(
-            "z-50 max-w-[calc(100vw-1.5rem)] rounded-lg border border-border bg-raised p-1 text-sm shadow-glow",
+            "z-50 max-w-[calc(100vw-1.5rem)] rounded-lg border border-border bg-raised p-1 text-sm shadow-overlay",
             minWidth,
           )}
         >

@@ -55,6 +55,7 @@ use crate::storage::host_groups::HostGroupDefaults;
 use crate::storage::vaults::PERSONAL_VAULT_ID;
 use crate::storage::{host_groups, hosts, identities, key_references, settings, snippets, vaults};
 
+pub use providers::read_server_cert_fingerprint;
 use providers::{
     GitHubGistProvider, LocalFolderProvider, LumaCloudProvider, SyncProvider, UploadResult,
     WebDavProvider,
@@ -471,6 +472,7 @@ pub struct SyncConfigureInput {
     pub gist_id: Option<String>,
     pub token: Option<String>,
     pub cloud_url: Option<String>,
+    pub cert_sha256: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -484,6 +486,9 @@ pub struct SyncConfig {
     pub username: Option<String>,
     pub gist_id: Option<String>,
     pub cloud_url: Option<String>,
+    /// The WebDAV server certificate trusted by fingerprint, when it has one no
+    /// public CA signed.
+    pub cert_sha256: Option<String>,
     pub cloud_signed_in: bool,
     pub last_sync_at: Option<i64>,
     pub last_remote_version: Option<String>,
@@ -511,6 +516,8 @@ struct StoredSyncState {
     username: Option<String>,
     gist_id: Option<String>,
     cloud_url: Option<String>,
+    #[serde(default)]
+    cert_sha256: Option<String>,
     last_remote_version: Option<String>,
     /// `local_change_stamp` as of the bundle this device last pushed. The
     /// automatic scheduler compares it against the current stamp to decide
@@ -746,6 +753,7 @@ async fn config_for_vault(
         username: stored.username,
         gist_id: stored.gist_id,
         cloud_url: stored.cloud_url,
+        cert_sha256: stored.cert_sha256,
         cloud_signed_in,
         last_sync_at: row.as_ref().and_then(|row| row.get("last_synced_at")),
         last_remote_version: stored.last_remote_version,
@@ -822,12 +830,23 @@ pub async fn configure(
             providers::validate_https_url(&url)?;
             let username = required_trimmed(input.username.take(), "username")?;
             let password = required_secret(input.password.take(), "password")?;
+            let cert_sha256 = input
+                .cert_sha256
+                .take()
+                .map(|value| value.trim().to_owned())
+                .filter(|value| !value.is_empty())
+                .map(|value| {
+                    providers::parse_cert_fingerprint(&value)
+                        .map(|pin| providers::format_cert_fingerprint(&pin))
+                })
+                .transpose()?;
             let account = vault_account(KEYCHAIN_WEBDAV_PASSWORD, vault_id);
             credential_set(pool, keystore_state, &account, &password).await?;
             clear_provider_credentials(pool, keystore_state, vault_id, &[KEYCHAIN_WEBDAV_PASSWORD])
                 .await?;
             stored.url = Some(url);
             stored.username = Some(username);
+            stored.cert_sha256 = cert_sha256;
         }
         "github-gist" => {
             let token = required_secret(input.token.take(), "token")?;
@@ -3943,6 +3962,11 @@ async fn create_provider(
             )
             .await?,
             slot,
+            stored
+                .cert_sha256
+                .as_deref()
+                .map(providers::parse_cert_fingerprint)
+                .transpose()?,
         )?)),
         "github-gist" => Ok(Box::new(GitHubGistProvider::new(
             credential_get(
@@ -5101,6 +5125,7 @@ mod tests {
             gist_id: None,
             token: None,
             cloud_url: None,
+            cert_sha256: None,
         }
     }
 
@@ -5262,6 +5287,7 @@ mod tests {
             gist_id: None,
             token: None,
             cloud_url: Some("https://sync.example.com".into()),
+            cert_sha256: None,
         };
 
         let error = configure(

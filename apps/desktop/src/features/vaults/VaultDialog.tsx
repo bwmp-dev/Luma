@@ -115,7 +115,7 @@ export function VaultDialog({
               if (e.key === "Enter") submit();
             }}
             placeholder="Infra"
-            className="mt-1 w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none placeholder:text-muted/60 focus:border-accent"
+            className="mt-1 w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none placeholder:text-muted/80 focus:border-accent"
           />
         </label>
 

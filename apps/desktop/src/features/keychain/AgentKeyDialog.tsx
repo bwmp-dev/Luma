@@ -65,7 +65,7 @@ export function AgentKeyDialog({
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/55" />
         <Dialog.Content
           aria-describedby={undefined}
-          className="fixed left-1/2 top-1/2 z-50 flex max-h-[80vh] w-[min(92vw,38rem)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border border-border bg-surface shadow-glow focus:outline-none"
+          className="fixed left-1/2 top-1/2 z-50 flex max-h-[80vh] w-[min(92vw,38rem)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border border-border bg-surface shadow-overlay focus:outline-none"
         >
           <header className="flex items-start gap-3 border-b border-border px-5 py-4">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent">

@@ -129,6 +129,8 @@ export type SyncConfig = {
   username: string | null;
   gistId: string | null;
   cloudUrl: string | null;
+  /** WebDAV server certificate trusted by its SHA-256 fingerprint. */
+  certSha256: string | null;
   cloudSignedIn: boolean;
   /** Unix seconds of the last successful sync, or null. */
   lastSyncAt: number | null;
@@ -141,7 +143,13 @@ export type SyncConfig = {
 
 export type SyncConfigureInput =
   | { provider: "local-folder"; folderPath: string }
-  | { provider: "webdav"; url: string; username: string; password: string }
+  | {
+      provider: "webdav";
+      url: string;
+      username: string;
+      password: string;
+      certSha256: string | null;
+    }
   | { provider: "github-gist"; token: string; gistId: string | null }
   | { provider: "luma-cloud"; cloudUrl: string };
 
@@ -243,6 +251,12 @@ export function syncListConfigs(): Promise<SyncConfig[]> {
 
 export function syncConfigure(vaultId: string, input: SyncConfigureInput): Promise<null> {
   return invoke<null>("sync_configure", { vaultId, input });
+}
+
+/** SHA-256 fingerprint of the certificate an HTTPS server presents. No
+ * credentials are sent: the connection is refused once it has been read. */
+export function syncReadCertFingerprint(url: string): Promise<string> {
+  return invoke<string>("sync_read_cert_fingerprint", { url });
 }
 
 /** Replace this device's automatic schedule for one vault. */

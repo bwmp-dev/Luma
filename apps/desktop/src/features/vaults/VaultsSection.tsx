@@ -7,7 +7,7 @@ import {
   Share2,
   ShieldAlert,
   Trash2,
-  Vault as VaultIcon,
+  LibraryBig as VaultIcon,
 } from "lucide-react";
 import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { parseLumaError } from "../../lib/hosts";
@@ -206,6 +206,7 @@ function VaultRow({
         folderPath: syncConfig.folderPath,
         url: syncConfig.url,
         username: syncConfig.username,
+        certSha256: syncConfig.certSha256,
         gistId: syncConfig.gistId,
         cloudUrl: syncConfig.cloudUrl,
       });

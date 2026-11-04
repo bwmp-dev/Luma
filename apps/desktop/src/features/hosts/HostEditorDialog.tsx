@@ -355,7 +355,14 @@ export function HostEditorDialog({
 
   const submit = () => {
     setShowErrors(true);
-    if (hasErrors) return;
+    if (hasErrors) {
+      // The errors render on the next commit; move focus to the first one so a
+      // keyboard user lands on what needs fixing instead of on the page body.
+      requestAnimationFrame(() => {
+        panelRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+      });
+      return;
+    }
     save.mutate(host ? toInput(state) : { ...toInput(state), vaultId });
   };
 
@@ -389,7 +396,7 @@ export function HostEditorDialog({
             <button
               type="button"
               onClick={submit}
-              disabled={save.isPending || (showErrors && hasErrors)}
+              disabled={save.isPending}
               className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground disabled:opacity-50"
             >
               {host ? "Save changes" : "Create host"}
@@ -418,14 +425,14 @@ export function HostEditorDialog({
               required
               value={state.name}
               onChange={(v) => patch({ name: v })}
-              placeholder="Production web"
+              placeholder="e.g. Production web"
               error={err("name")}
             />
             <TextField
               label="Tags"
               value={state.tags}
               onChange={(v) => patch({ tags: v })}
-              placeholder="prod, web (comma separated)"
+              placeholder="e.g. prod, web"
             />
           </div>
 
@@ -436,7 +443,7 @@ export function HostEditorDialog({
               mono
               value={state.hostname}
               onChange={(v) => patch({ hostname: v })}
-              placeholder="server.example.com"
+              placeholder="e.g. example.com"
               error={err("hostname")}
             />
             <TextField
@@ -456,7 +463,7 @@ export function HostEditorDialog({
                 mono
                 value={state.username}
                 onChange={(v) => patch({ username: v })}
-                placeholder={inheritedFor("username")?.value || "root"}
+                placeholder={inheritedFor("username")?.value || "e.g. root"}
                 error={err("username")}
                 hint={hint("username", state.username !== "", () => patch({ username: "" }))}
               />
@@ -590,7 +597,7 @@ export function HostEditorDialog({
               mono
               value={state.startupCommand}
               onChange={(v) => patch({ startupCommand: v })}
-              placeholder={inheritedFor("startupCommand")?.value || "tmux attach"}
+              placeholder={inheritedFor("startupCommand")?.value || "e.g. tmux attach"}
               hint={hint("startupCommand", state.startupCommand !== "", () =>
                 patch({ startupCommand: "" }),
               )}

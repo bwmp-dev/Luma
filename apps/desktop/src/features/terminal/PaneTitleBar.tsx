@@ -179,7 +179,7 @@ function PaneBarButton({
       onPointerDown={(event) => event.stopPropagation()}
       onClick={onClick}
       className={cn(
-        "rounded p-0.5 text-muted transition-colors hover:bg-raised",
+        "flex h-5 w-5 items-center justify-center rounded text-muted transition-colors hover:bg-raised",
         danger ? "hover:text-danger" : "hover:text-foreground",
       )}
     >

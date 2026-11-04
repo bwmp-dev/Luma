@@ -578,7 +578,7 @@ function TabButton({
       aria-pressed={active}
       className={cn(
         "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors",
-        active ? "bg-raised text-accent shadow-glow" : "text-muted hover:text-foreground",
+        active ? "bg-raised text-accent shadow-overlay" : "text-muted hover:text-foreground",
       )}
     >
       <Icon size={14} />

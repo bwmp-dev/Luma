@@ -59,6 +59,8 @@ import {
  * over this band re-docks as its own standalone tab; below it, over a pane, it
  * grafts into that pane. Mirrors the `h-10` header. */
 const DOCK_STRIP_HEIGHT = 40;
+// Matches the .luma-tab-exit transition in globals.css.
+const TAB_EXIT_MS = 140;
 
 /** A detached window reports its cursor as main-window client coordinates. */
 type DetachedDragPoint = { tabId: string; x: number; y: number };
@@ -308,7 +310,7 @@ export function TabBar() {
           next.delete(tabId);
           return next;
         });
-      }, 140),
+      }, TAB_EXIT_MS),
     );
   };
 
@@ -326,7 +328,7 @@ export function TabBar() {
           next.delete(timerKey);
           return next;
         });
-      }, 140),
+      }, TAB_EXIT_MS),
     );
   };
   // Workspace-action dialogs (Save template / Split with host). The tab whose
@@ -466,6 +468,61 @@ export function TabBar() {
       ?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
       ?.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [activeTabId, terminalActive, activeNewTabId]);
+
+  // Roving tabindex: the selected tab is the strip's single Tab stop, or the
+  // first tab when another screen (hosts, SFTP, …) is showing.
+  const hasSelectedTab =
+    (terminalActive && !activeNewTabId && visibleTabs.some((tab) => tab.id === activeTabId)) ||
+    (activeNewTabId !== null && newTabIds.includes(activeNewTabId));
+
+  // Manual-activation tablist: arrows/Home/End only move focus, so arrowing
+  // past tabs never switches (and resizes) terminals; Enter/Space activate via
+  // the button's click. Delete dismisses a focused New tab placeholder; it does
+  // not close live sessions, where one stray keypress would end a connection.
+  const onTabListKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    const current = event.target as HTMLElement;
+    if (current.getAttribute("role") !== "tab") return;
+    const tabElements = Array.from(
+      tabListRef.current?.querySelectorAll<HTMLElement>('[role="tab"]:not([data-closing])') ?? [],
+    );
+    const index = tabElements.indexOf(current);
+    if (index === -1) return;
+    let target: HTMLElement | undefined;
+    switch (event.key) {
+      case "ArrowRight":
+        target = tabElements[(index + 1) % tabElements.length];
+        break;
+      case "ArrowLeft":
+        target = tabElements[(index - 1 + tabElements.length) % tabElements.length];
+        break;
+      case "Home":
+        target = tabElements[0];
+        break;
+      case "End":
+        target = tabElements[tabElements.length - 1];
+        break;
+      case "Delete": {
+        const newTabId = current.dataset.newTabId;
+        if (!newTabId) return;
+        event.preventDefault();
+        const neighbour = tabElements[index + 1] ?? tabElements[index - 1];
+        neighbour?.focus();
+        closeNewTabWithAnimation(newTabId);
+        // Removing the launcher reveals a terminal, which claims focus once it
+        // is shown; hand focus back so arrowing through the strip can continue.
+        window.setTimeout(
+          () => requestAnimationFrame(() => neighbour?.isConnected && neighbour.focus()),
+          TAB_EXIT_MS + 20,
+        );
+        return;
+      }
+      default:
+        return;
+    }
+    event.preventDefault();
+    target?.focus();
+  };
 
   const scrollTabs = (event: React.WheelEvent<HTMLDivElement>) => {
     const tabList = event.currentTarget;
@@ -697,205 +754,245 @@ export function TabBar() {
   return (
     <>
       <div className="flex h-full min-w-0 flex-1 items-center gap-1">
-        <div
-          ref={tabListRef}
-          role="tablist"
-          aria-label="Terminal tabs"
-          onWheel={scrollTabs}
-          className="flex min-w-0 flex-1 touch-pan-x items-center gap-1 overflow-x-auto overflow-y-hidden"
-        >
-          {visibleTabs.map((tab, index) => {
-            const session = activeSessionOf(tab);
-            const active = tab.id === activeTabId && terminalActive && !activeNewTabId;
-            const title = session?.title ?? "Terminal";
-            // Best-effort cwd tooltip from shell integration (OSC 7 / OSC 1337).
-            // Read outside React; refreshed on any tab re-render.
-            const cwd = session ? terminalManager.getCwd(session.id) : null;
-            const tabTooltip = cwd ? `${title} — ${cwd}` : title;
-            const leaves = collectLeaves(tab.root);
-            const paneCount = leaves.length;
-            // Per-host tab accent, carried into session metadata at spawn time.
-            const tabColor = session?.tabColor ?? null;
-            const isLogging = leaves.some((l) => logs[l.sessionId]?.active);
-            const isDropTarget = dragOverTabId === tab.id;
-            const isDragging = draggedTabId === tab.id;
-            const tabActions = workspaceActions({
-              openNewTab,
-              splitActivePane,
-              closeActivePane,
-              closePaneChord,
-              openPalette,
-              hasTab: true,
-              hasSession: Boolean(session),
-              onCloseTab: () => closeTabWithAnimation(tab.id),
-              onSplitWithHost: () => setSplitHostOpen(true),
-              onSaveTemplate: () => setSaveTemplateTab(tab),
-              canSaveTemplate: tabHasRestorable(tab, sessions),
-              // Offer "Save host…" only for an unsaved quick-connect session.
-              onSaveHost:
-                session?.type === "ssh" && session.hostEphemeral && session.hostId
-                  ? () => setSaveHostSession(session)
-                  : undefined,
-              // Only offer merge when there is a previous tab to merge into.
-              onMergeIntoPrevious:
-                index > 0 ? () => mergeTabs(tab.id, visibleTabs[index - 1].id) : undefined,
-              onToggleAgentShare: session ? () => toggleAgentShare(session.id, title) : undefined,
-              sharedWithAgent: session ? sharedSessionIds.has(session.id) : false,
-            });
-            return (
-              <ContextMenu
-                key={tab.id}
-                actions={tabActions}
-                minWidth="min-w-52"
-                // Activating the tab first makes Split/Close pane target it,
-                // matching the toolbar buttons that act on the active tab.
-                onOpenChange={(open) => {
-                  if (open) setActiveTab(tab.id);
-                }}
-              >
-                <div
-                  role="presentation"
-                  data-luma-tab-id={tab.id}
-                  onDoubleClick={(event) => event.stopPropagation()}
-                  onPointerDown={(event) => startTabDrag(event, tab.id, title)}
-                  onPointerMove={moveTabDrag}
-                  onPointerUp={finishTabDrag}
-                  onPointerCancel={cancelTabDrag}
-                  className={cn(
-                    "group flex h-7 min-w-32 max-w-52 shrink-0 touch-none cursor-grab items-center gap-1.5 rounded-lg px-2.5 text-xs transition-colors active:cursor-grabbing",
-                    "luma-tab-enter",
-                    closingTabIds.has(tab.id) && "luma-tab-exit pointer-events-none",
-                    active
-                      ? "bg-raised text-foreground shadow-sm"
-                      : "bg-raised/45 text-muted hover:bg-raised/75 hover:text-foreground",
-                    isDropTarget && "bg-raised ring-2 ring-inset ring-accent",
-                    // While dragging, the ghost represents the tab; the original
-                    // dims in place, and collapses out of the strip once the tab
-                    // tears off into its own window, like Chrome. Width collapse
-                    // (not display:none / unmount) keeps pointer capture alive on
-                    // this element for the rest of the gesture. An external drag
-                    // (a detached window hovering the strip) keeps the dimmed
-                    // placeholder visible instead: it marks where the tab will land
-                    // and must not react to a pointer this window doesn't own.
-                    isDragging &&
-                      (tornDrag
-                        ? "pointer-events-none min-w-0 max-w-0 overflow-hidden border-0 px-0 opacity-0 transition-all duration-150"
-                        : externalDrag
-                          ? "pointer-events-none opacity-40 transition-all duration-150"
-                          : "opacity-40 transition-all duration-150"),
-                  )}
+        <div className="flex min-w-0 flex-1 items-center gap-1">
+          <div
+            ref={tabListRef}
+            role="tablist"
+            aria-label="Terminal tabs"
+            onWheel={scrollTabs}
+            onKeyDown={onTabListKeyDown}
+            // The strip clips overflow, so focus rings are drawn inside each control.
+            className="flex min-w-0 touch-pan-x items-center gap-1 overflow-x-auto overflow-y-hidden [&_:focus-visible]:-outline-offset-2"
+          >
+            {visibleTabs.map((tab, index) => {
+              const session = activeSessionOf(tab);
+              const active = tab.id === activeTabId && terminalActive && !activeNewTabId;
+              const title = session?.title ?? "Terminal";
+              // Best-effort cwd tooltip from shell integration (OSC 7 / OSC 1337).
+              // Read outside React; refreshed on any tab re-render.
+              const cwd = session ? terminalManager.getCwd(session.id) : null;
+              const tabTooltip = cwd ? `${title} — ${cwd}` : title;
+              const leaves = collectLeaves(tab.root);
+              const paneCount = leaves.length;
+              // Per-host tab accent, carried into session metadata at spawn time.
+              const tabColor = session?.tabColor ?? null;
+              const isLogging = leaves.some((l) => logs[l.sessionId]?.active);
+              const isDropTarget = dragOverTabId === tab.id;
+              const isDragging = draggedTabId === tab.id;
+              const sharedWithAgent = session ? sharedSessionIds.has(session.id) : false;
+              // Explicit name: the icon's distro label and the badge digits would
+              // otherwise read as "Debian GNU/Linux 12 db-primary 2".
+              const tabAccessibleName = [
+                title,
+                paneCount > 1 && `${paneCount} panes`,
+                session?.connectionState === "reconnecting" && "reconnecting",
+                session?.connectionState === "failed" && "reconnect failed",
+                isLogging && "logging",
+                sharedWithAgent && "shared with an agent",
+              ]
+                .filter(Boolean)
+                .join(", ");
+              const tabActions = workspaceActions({
+                openNewTab,
+                splitActivePane,
+                closeActivePane,
+                closePaneChord,
+                openPalette,
+                hasTab: true,
+                hasSession: Boolean(session),
+                onCloseTab: () => closeTabWithAnimation(tab.id),
+                onSplitWithHost: () => setSplitHostOpen(true),
+                onSaveTemplate: () => setSaveTemplateTab(tab),
+                canSaveTemplate: tabHasRestorable(tab, sessions),
+                // Offer "Save host…" only for an unsaved quick-connect session.
+                onSaveHost:
+                  session?.type === "ssh" && session.hostEphemeral && session.hostId
+                    ? () => setSaveHostSession(session)
+                    : undefined,
+                // Only offer merge when there is a previous tab to merge into.
+                onMergeIntoPrevious:
+                  index > 0 ? () => mergeTabs(tab.id, visibleTabs[index - 1].id) : undefined,
+                onToggleAgentShare: session ? () => toggleAgentShare(session.id, title) : undefined,
+                sharedWithAgent,
+              });
+              return (
+                <ContextMenu
+                  key={tab.id}
+                  actions={tabActions}
+                  minWidth="min-w-52"
+                  // Activating the tab first makes Split/Close pane target it,
+                  // matching the toolbar buttons that act on the active tab.
+                  onOpenChange={(open) => {
+                    if (open) setActiveTab(tab.id);
+                  }}
                 >
-                  {tabColor && (
-                    <span
-                      aria-hidden="true"
-                      className="h-4 w-0.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: tabColor }}
-                    />
-                  )}
-                  <button
-                    type="button"
-                    role="tab"
-                    title={tabTooltip}
-                    aria-selected={active}
-                    aria-current={active ? "page" : undefined}
-                    onClick={(event) => {
-                      if (suppressTabClick.current) {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        return;
-                      }
-                      setActiveTab(tab.id);
-                    }}
-                    className="flex min-w-0 flex-1 items-center gap-1.5 truncate py-1.5 text-left"
+                  <div
+                    role="presentation"
+                    data-luma-tab-id={tab.id}
+                    onDoubleClick={(event) => event.stopPropagation()}
+                    onPointerDown={(event) => startTabDrag(event, tab.id, title)}
+                    onPointerMove={moveTabDrag}
+                    onPointerUp={finishTabDrag}
+                    onPointerCancel={cancelTabDrag}
+                    className={cn(
+                      "group flex h-7 min-w-32 max-w-52 shrink-0 touch-none cursor-grab items-center gap-1.5 rounded-lg px-2.5 text-xs transition-colors active:cursor-grabbing",
+                      "luma-tab-enter",
+                      closingTabIds.has(tab.id) && "luma-tab-exit pointer-events-none",
+                      active
+                        ? "bg-raised font-medium text-foreground shadow-sm ring-1 ring-inset ring-border"
+                        : "text-muted hover:bg-raised/60 hover:text-foreground",
+                      isDropTarget && "bg-raised ring-2 ring-inset ring-accent",
+                      // While dragging, the ghost represents the tab; the original
+                      // dims in place, and collapses out of the strip once the tab
+                      // tears off into its own window, like Chrome. Width collapse
+                      // (not display:none / unmount) keeps pointer capture alive on
+                      // this element for the rest of the gesture. An external drag
+                      // (a detached window hovering the strip) keeps the dimmed
+                      // placeholder visible instead: it marks where the tab will land
+                      // and must not react to a pointer this window doesn't own.
+                      isDragging &&
+                        (tornDrag
+                          ? "pointer-events-none min-w-0 max-w-0 overflow-hidden border-0 px-0 opacity-0 transition-all duration-150"
+                          : externalDrag
+                            ? "pointer-events-none opacity-40 transition-all duration-150"
+                            : "opacity-40 transition-all duration-150"),
+                    )}
                   >
-                    <TabIcon session={session} />
-                    <span className="truncate">{title}</span>
-                    {session?.type === "ssh" &&
-                      session.status === "connected" &&
-                      typeof session.latencyMs === "number" && (
-                        <LatencyChip latencyMs={session.latencyMs} />
-                      )}
-                    {isLogging && (
+                    {tabColor && (
                       <span
-                        aria-label="Session logging active"
-                        title="Session logging active"
-                        className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-danger"
+                        aria-hidden="true"
+                        className="h-4 w-0.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: tabColor }}
                       />
                     )}
-                    {session && sharedSessionIds.has(session.id) && (
-                      <span
-                        aria-label="Shared with an agent"
-                        title="Shared with an agent"
-                        className="shrink-0 text-accent"
-                      >
-                        <Bot size={12} />
+                    <button
+                      type="button"
+                      role="tab"
+                      title={tabTooltip}
+                      aria-label={tabAccessibleName}
+                      aria-selected={active}
+                      aria-current={active ? "page" : undefined}
+                      tabIndex={active || (!hasSelectedTab && index === 0) ? 0 : -1}
+                      data-workspace-tab-id={tab.id}
+                      data-closing={closingTabIds.has(tab.id) || undefined}
+                      onClick={(event) => {
+                        if (suppressTabClick.current) {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          return;
+                        }
+                        setActiveTab(tab.id);
+                      }}
+                      className="flex min-w-0 flex-1 items-center gap-1.5 truncate py-1.5 text-left"
+                    >
+                      <span aria-hidden="true" className="flex shrink-0 items-center">
+                        <TabIcon session={session} />
                       </span>
-                    )}
-                    {isDropTarget && (
-                      <span className="flex shrink-0 items-center gap-1 rounded bg-accent px-1.5 text-[10px] font-semibold leading-4 text-white shadow-sm">
-                        <Combine size={10} /> Split
-                      </span>
-                    )}
-                    {paneCount > 1 && (
-                      <span
-                        aria-label={`${paneCount} panes`}
-                        title={`${paneCount} panes`}
-                        className="shrink-0 rounded bg-accent/15 px-1 text-[10px] font-medium leading-4 text-accent"
-                      >
-                        {paneCount}
-                      </span>
-                    )}
-                  </button>
-                  <button
-                    type="button"
-                    data-tab-close
-                    aria-label={`Close ${title}`}
-                    onClick={() => closeTabWithAnimation(tab.id)}
-                    className={cn(
-                      "shrink-0 rounded p-0.5 hover:bg-raised hover:text-danger",
-                      active ? "" : "invisible group-hover:visible",
-                    )}
-                  >
-                    <X size={13} />
-                  </button>
-                </div>
-              </ContextMenu>
-            );
-          })}
-          {newTabIds.map((tabId) => (
-            <div
-              key={tabId}
-              role="presentation"
-              onDoubleClick={(event) => event.stopPropagation()}
-              className={cn(
-                "luma-tab-enter group flex h-7 min-w-32 max-w-52 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs",
-                tabId === activeNewTabId
-                  ? "bg-raised text-foreground shadow-sm"
-                  : "bg-raised/45 text-muted hover:bg-raised/75 hover:text-foreground",
-                closingTabIds.has(`new:${tabId}`) && "luma-tab-exit pointer-events-none",
-              )}
-            >
-              <button
-                type="button"
-                role="tab"
-                aria-selected={tabId === activeNewTabId}
-                aria-current={tabId === activeNewTabId ? "page" : undefined}
-                onClick={() => selectNewTab(tabId)}
-                className="flex min-w-0 flex-1 items-center gap-1.5 truncate py-1.5 text-left"
+                      <span className="truncate">{title}</span>
+                      {session?.type === "ssh" &&
+                        session.status === "connected" &&
+                        typeof session.latencyMs === "number" && (
+                          <LatencyChip latencyMs={session.latencyMs} />
+                        )}
+                      {isLogging && (
+                        <span
+                          aria-label="Session logging active"
+                          title="Session logging active"
+                          className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-danger"
+                        />
+                      )}
+                      {sharedWithAgent && (
+                        <span
+                          aria-label="Shared with an agent"
+                          title="Shared with an agent"
+                          className="shrink-0 text-accent"
+                        >
+                          <Bot size={12} />
+                        </span>
+                      )}
+                      {isDropTarget && (
+                        <span className="flex shrink-0 items-center gap-1 rounded bg-accent px-1.5 text-[10px] font-semibold leading-4 text-accent-foreground shadow-sm">
+                          <Combine size={10} /> Split
+                        </span>
+                      )}
+                      {paneCount > 1 && (
+                        <span
+                          aria-hidden="true"
+                          title={`${paneCount} panes`}
+                          className="shrink-0 rounded bg-accent/15 px-1 text-[10px] font-medium leading-4 text-accent"
+                        >
+                          {paneCount}
+                        </span>
+                      )}
+                    </button>
+                    {/* Out of the Tab order so the strip stays one stop, but still
+                      exposed: voice control ("click Close …") and screen-reader
+                      users can reach it. Keyboard users have the context menu
+                      (Shift+F10) and the close-pane chord. */}
+                    <button
+                      type="button"
+                      data-tab-close
+                      tabIndex={-1}
+                      aria-label={`Close ${title}`}
+                      title={`Close ${title}`}
+                      onClick={() => closeTabWithAnimation(tab.id)}
+                      className={cn(
+                        "shrink-0 rounded p-0.5 hover:bg-raised hover:text-danger",
+                        active ? "" : "invisible group-focus-within:visible group-hover:visible",
+                      )}
+                    >
+                      <X size={13} />
+                    </button>
+                  </div>
+                </ContextMenu>
+              );
+            })}
+            {newTabIds.map((tabId, newTabIndex) => (
+              <div
+                key={tabId}
+                role="presentation"
+                onDoubleClick={(event) => event.stopPropagation()}
+                className={cn(
+                  "luma-tab-enter group flex h-7 min-w-32 max-w-52 shrink-0 items-center gap-1.5 rounded-lg px-2.5 text-xs",
+                  tabId === activeNewTabId
+                    ? "bg-raised font-medium text-foreground shadow-sm ring-1 ring-inset ring-border"
+                    : "text-muted hover:bg-raised/60 hover:text-foreground",
+                  closingTabIds.has(`new:${tabId}`) && "luma-tab-exit pointer-events-none",
+                )}
               >
-                <SquarePlus size={13} className="shrink-0 text-accent" />
-                <span className="truncate">New tab</span>
-              </button>
-              <button
-                type="button"
-                aria-label="Close New tab"
-                onClick={() => closeNewTabWithAnimation(tabId)}
-                className="shrink-0 rounded p-0.5 hover:bg-surface hover:text-danger"
-              >
-                <X size={13} />
-              </button>
-            </div>
-          ))}
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tabId === activeNewTabId}
+                  aria-current={tabId === activeNewTabId ? "page" : undefined}
+                  aria-keyshortcuts="Delete"
+                  tabIndex={
+                    tabId === activeNewTabId ||
+                    (!hasSelectedTab && visibleTabs.length === 0 && newTabIndex === 0)
+                      ? 0
+                      : -1
+                  }
+                  data-new-tab-id={tabId}
+                  data-closing={closingTabIds.has(`new:${tabId}`) || undefined}
+                  onClick={() => selectNewTab(tabId)}
+                  className="flex min-w-0 flex-1 items-center gap-1.5 truncate py-1.5 text-left"
+                >
+                  <SquarePlus size={13} aria-hidden="true" className="shrink-0 text-accent" />
+                  <span className="truncate">New tab</span>
+                </button>
+                <button
+                  type="button"
+                  tabIndex={-1}
+                  aria-label="Close New tab"
+                  title="Close New tab"
+                  onClick={() => closeNewTabWithAnimation(tabId)}
+                  className="shrink-0 rounded p-0.5 hover:bg-surface hover:text-danger"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
           <button
             type="button"
             aria-label="New tab"
@@ -1051,7 +1148,7 @@ function WorkspaceMenu({
         <DropdownMenu.Content
           align="end"
           sideOffset={4}
-          className="z-50 min-w-52 rounded-lg border border-border bg-raised p-1 text-sm shadow-glow"
+          className="z-50 min-w-52 rounded-lg border border-border bg-raised p-1 text-sm shadow-overlay"
         >
           {actions.map((action, index) =>
             "separator" in action && action.separator ? (
@@ -1195,7 +1292,7 @@ export function NewTerminalMenu({ children }: { children: React.ReactNode }) {
         <DropdownMenu.Content
           align="end"
           sideOffset={4}
-          className="z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-44 overflow-y-auto rounded-lg border border-border bg-raised p-1 text-sm shadow-glow"
+          className="z-50 max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-44 overflow-y-auto rounded-lg border border-border bg-raised p-1 text-sm shadow-overlay"
         >
           {nativeShells.map(shellItem)}
           {wslShells.length > 0 && (

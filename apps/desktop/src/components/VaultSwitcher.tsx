@@ -1,5 +1,5 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Check, ChevronDown, ShieldAlert, Vault as VaultIcon } from "lucide-react";
+import { Check, ChevronDown, ShieldAlert, LibraryBig as VaultIcon } from "lucide-react";
 import { useUiStore } from "../stores/uiStore";
 import { useVaultStore } from "../stores/vaultStore";
 import { useVaults } from "../hooks/useVaults";
@@ -70,7 +70,7 @@ export function VaultSwitcher() {
         <DropdownMenu.Content
           align="start"
           sideOffset={4}
-          className="z-50 min-w-52 rounded-lg border border-border bg-raised p-1 text-sm shadow-glow"
+          className="z-50 min-w-52 rounded-lg border border-border bg-raised p-1 text-sm shadow-overlay"
         >
           <Item selected={active === null} onSelect={() => select(null)}>
             All vaults

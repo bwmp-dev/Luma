@@ -70,7 +70,7 @@ export function CollaborationSection() {
               setServerDirty(true);
             }}
             placeholder="https://collab.luma.bwmp.dev"
-            className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground outline-none placeholder:text-muted/60 focus:border-accent"
+            className="min-w-0 flex-1 rounded-md border border-border bg-background px-2.5 py-1.5 font-mono text-xs text-foreground outline-none placeholder:text-muted/80 focus:border-accent"
           />
           <button
             type="button"
