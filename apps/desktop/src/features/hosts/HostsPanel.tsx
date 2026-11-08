@@ -629,7 +629,7 @@ export function HostsPanel({ onOpenKeychain }: { onOpenKeychain?: () => void } =
         return isMobile ? (
           <MobileHostEditor {...editorProps} />
         ) : (
-          <HostEditorDialog {...editorProps} />
+          <HostEditorDialog {...editorProps} onConnect={connect} />
         );
       })()}
       {!onOpenKeychain && <KeyReferencesDialog open={keysOpen} onOpenChange={setKeysOpen} />}

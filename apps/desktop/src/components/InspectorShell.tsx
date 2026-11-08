@@ -7,12 +7,15 @@ export function InspectorShell({
   subtitle,
   onClose,
   footer,
+  actions,
   children,
 }: {
   title: string;
   subtitle: string;
   onClose: () => void;
   footer: React.ReactNode;
+  /** Header controls shown before Close / Cancel. */
+  actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const compact = useMediaQuery("(max-width: 767px)");
@@ -45,6 +48,7 @@ export function InspectorShell({
                   <p className="truncate text-xs text-muted">{subtitle}</p>
                 </div>
               </Dialog.Title>
+              {actions}
               <Dialog.Close className="-mr-2 flex min-h-11 shrink-0 items-center rounded-lg px-3 text-sm text-muted active:bg-raised">
                 Cancel
               </Dialog.Close>
@@ -60,6 +64,7 @@ export function InspectorShell({
     <aside className="flex w-90 shrink-0 flex-col border-l border-border bg-surface">
       <header className="flex h-14 items-center border-b border-border px-4">
         {header}
+        {actions}
         <button
           onClick={onClose}
           aria-label="Close"

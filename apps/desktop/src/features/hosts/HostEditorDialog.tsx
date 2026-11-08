@@ -1,7 +1,24 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { KeyRound } from "lucide-react";
+import {
+  Cable,
+  Check,
+  ChevronDown,
+  Contact,
+  Folder,
+  FolderOpen,
+  KeyRound,
+  LockKeyhole,
+  Server,
+  SquareTerminal,
+  Tag,
+  UserRound,
+  Waypoints,
+  type LucideIcon,
+} from "lucide-react";
 import { InspectorShell } from "../../components/InspectorShell";
+import { DistroIcon } from "../../components/DistroIcon";
+import { cn } from "../../lib/utils";
 import {
   createHost,
   groupInheritedDefaults,
@@ -18,14 +35,7 @@ import {
   type TransportType,
 } from "../../lib/hosts";
 import { useInvalidateHosts } from "../../hooks/useHosts";
-import {
-  CheckboxField,
-  EnvironmentEditor,
-  SelectField,
-  TabColorField,
-  TextField,
-  type EnvRow,
-} from "./fields";
+import { CheckboxField, EnvironmentEditor, TabColorField, type EnvRow } from "./fields";
 
 /** Fields a group can supply when the host leaves them unset. Authentication
  * and key stay host-only: their stored default cannot be told apart from a
@@ -218,6 +228,143 @@ function groupLabel(group: HostGroup, groups: HostGroup[]): string {
   return parent ? `${parent.name} / ${group.name}` : group.name;
 }
 
+/** Connection options tucked under "Show more". A host that already uses any of
+ * them opens expanded, so editing never hides a setting that changes how it
+ * connects. Favorite and tab color are visible in the host list and tab strip. */
+function hasAdvancedSettings(state: FormState): boolean {
+  return Boolean(
+    state.proxyJumpHostId ||
+    state.transport !== "ssh" ||
+    state.startupCommand ||
+    state.workingDirectory ||
+    state.env.length > 0,
+  );
+}
+
+function EditorSection({ title, children }: { title?: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-2.5 rounded-lg bg-raised/60 p-3">
+      {title && <h3 className="text-xs font-semibold text-foreground">{title}</h3>}
+      {children}
+    </section>
+  );
+}
+
+const controlFrame =
+  "flex items-center gap-2 rounded-md border bg-background px-2.5 focus-within:ring-1";
+const controlTone = (error: string | undefined) =>
+  error
+    ? "border-danger focus-within:border-danger focus-within:ring-danger"
+    : "border-border focus-within:border-accent focus-within:ring-accent";
+
+function FieldMessages({
+  id,
+  error,
+  hint,
+}: {
+  id: string;
+  error?: string;
+  hint?: React.ReactNode;
+}) {
+  return (
+    <>
+      {hint && <div className="mt-1">{hint}</div>}
+      {error && (
+        <p id={`${id}-error`} className="mt-1 text-xs text-danger">
+          {error}
+        </p>
+      )}
+    </>
+  );
+}
+
+/** A single-line input whose placeholder doubles as its visible label; the
+ * label stays available to assistive tech through aria-label. */
+function IconInput({
+  label,
+  icon: Icon,
+  value,
+  onChange,
+  placeholder,
+  mono,
+  error,
+  hint,
+}: {
+  label: string;
+  icon?: LucideIcon;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  mono?: boolean;
+  error?: string;
+  hint?: React.ReactNode;
+}) {
+  const id = useId();
+  return (
+    <div>
+      <div className={cn(controlFrame, controlTone(error))}>
+        {Icon && <Icon size={14} aria-hidden="true" className="shrink-0 text-muted" />}
+        <input
+          id={id}
+          aria-label={label}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder ?? label}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${id}-error` : undefined}
+          className={cn(
+            "min-w-0 flex-1 bg-transparent py-2 text-sm outline-none placeholder:text-muted/80",
+            mono && "font-mono placeholder:font-sans",
+          )}
+        />
+      </div>
+      <FieldMessages id={id} error={error} hint={hint} />
+    </div>
+  );
+}
+
+function IconSelect({
+  label,
+  icon: Icon,
+  value,
+  onChange,
+  error,
+  hint,
+  children,
+}: {
+  label: string;
+  icon: LucideIcon;
+  value: string;
+  onChange: (value: string) => void;
+  error?: string;
+  hint?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const id = useId();
+  return (
+    <div>
+      <div className={cn(controlFrame, controlTone(error))}>
+        <Icon size={14} aria-hidden="true" className="shrink-0 text-muted" />
+        <select
+          id={id}
+          aria-label={label}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${id}-error` : undefined}
+          className={cn(
+            "min-w-0 flex-1 bg-transparent py-2 text-sm outline-none",
+            !value && "text-muted",
+          )}
+        >
+          {children}
+        </select>
+      </div>
+      <FieldMessages id={id} error={error} hint={hint} />
+    </div>
+  );
+}
+
 export function HostEditorDialog({
   open,
   onOpenChange,
@@ -227,6 +374,7 @@ export function HostEditorDialog({
   identities,
   hosts,
   onManageKeys,
+  onConnect,
   initialGroupId = null,
   vaultId,
   vaultName,
@@ -239,6 +387,8 @@ export function HostEditorDialog({
   identities: Identity[];
   hosts: Host[];
   onManageKeys: () => void;
+  /** Opens a session to the host once it has been saved. */
+  onConnect: (host: Host) => void;
   initialGroupId?: string | null;
   /** Vault a new host lands in; omitted means the backend's default (personal).
    * Ignored when editing — a host never changes vault. */
@@ -267,12 +417,15 @@ export function HostEditorDialog({
   const invalidate = useInvalidateHosts();
   const [state, setState] = useState<FormState>(() => initialState(host, initialGroupId));
   const [showErrors, setShowErrors] = useState(false);
+  const [showMore, setShowMore] = useState(false);
 
   // Re-seed the form whenever the dialog opens for a different host.
   useEffect(() => {
     if (open) {
-      setState(initialState(host, initialGroupId));
+      const seeded = initialState(host, initialGroupId);
+      setState(seeded);
       setShowErrors(false);
+      setShowMore(hasAdvancedSettings(seeded));
     }
   }, [open, host, initialGroupId]);
 
@@ -344,18 +497,24 @@ export function HostEditorDialog({
   const hasErrors = Object.keys(errors).length > 0;
 
   const save = useMutation({
-    mutationFn: (input: HostInput) => (host ? updateHost(host.id, input) : createHost(input)),
-    onSuccess: () => {
+    mutationFn: ({ input }: { input: HostInput; connect: boolean }) =>
+      host ? updateHost(host.id, input) : createHost(input),
+    onSuccess: (saved, { connect }) => {
       invalidate();
       onOpenChange(false);
+      if (connect) onConnect(saved);
     },
   });
 
   const patch = (partial: Partial<FormState>) => setState((prev) => ({ ...prev, ...partial }));
 
-  const submit = () => {
+  const submit = (connect: boolean) => {
     setShowErrors(true);
     if (hasErrors) {
+      // An invalid advanced field must not stay hidden behind "Show more".
+      if (errors.proxyJumpHostId || errors.moshServerPath || errors.moshPortRange) {
+        setShowMore(true);
+      }
       // The errors render on the next commit; move focus to the first one so a
       // keyboard user lands on what needs fixing instead of on the page body.
       requestAnimationFrame(() => {
@@ -363,7 +522,8 @@ export function HostEditorDialog({
       });
       return;
     }
-    save.mutate(host ? toInput(state) : { ...toInput(state), vaultId });
+    const input = host ? toInput(state) : { ...toInput(state), vaultId };
+    save.mutate({ input, connect });
   };
 
   const backendError = save.isError ? parseLumaError(save.error) : null;
@@ -372,104 +532,75 @@ export function HostEditorDialog({
 
   if (!open) return null;
 
+  const address = state.hostname.trim();
+  const osId = host?.osId && host.osId !== "unknown" ? host.osId : null;
+
   return (
     <div ref={panelRef} className="absolute inset-y-0 right-0 z-20 flex">
       <InspectorShell
         onClose={() => onOpenChange(false)}
-        title={host ? "Edit host" : "New host"}
-        subtitle={
-          vaultName
-            ? `${host ? host.name : "Save an SSH connection for quick access."} · ${vaultName}`
-            : host
-              ? host.name
-              : "Save an SSH connection for quick access."
+        title={host ? "Host details" : "New host"}
+        subtitle={vaultName ?? (host ? host.name : "Save an SSH connection for quick access.")}
+        actions={
+          <button
+            type="button"
+            onClick={() => submit(false)}
+            disabled={save.isPending}
+            aria-label={host ? "Save changes" : "Create host"}
+            title={host ? "Save changes" : "Create host"}
+            className="mr-1 rounded p-1 text-muted hover:bg-raised hover:text-foreground disabled:opacity-50"
+          >
+            <Check size={16} />
+          </button>
         }
         footer={
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              className="rounded-md border border-border px-3 py-1.5 text-sm text-muted hover:text-foreground"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={submit}
-              disabled={save.isPending}
-              className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-foreground disabled:opacity-50"
-            >
-              {host ? "Save changes" : "Create host"}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => submit(true)}
+            disabled={save.isPending}
+            className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-foreground hover:brightness-110 disabled:opacity-50"
+          >
+            {host ? "Save and connect" : "Create and connect"}
+          </button>
         }
       >
-        <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-3">
-            <SelectField
-              label="Identity (optional)"
-              value={state.identityId}
-              onChange={(v) => patch({ identityId: v })}
-              error={err("identityId")}
-              hint={hint("identityId", Boolean(state.identityId), () => patch({ identityId: "" }))}
-            >
-              <option value="">Host-specific credentials</option>
-              {identities.map((identity) => (
-                <option key={identity.id} value={identity.id}>
-                  {identity.name} ({identity.username})
-                </option>
-              ))}
-            </SelectField>
-            <TextField
+        <div className="space-y-3">
+          <EditorSection title="Address">
+            <div className="flex items-start gap-2.5">
+              <span
+                aria-hidden="true"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/15 text-accent"
+              >
+                {osId ? (
+                  <DistroIcon osId={osId} size={20} label={host?.osPrettyName ?? undefined} />
+                ) : (
+                  <Server size={17} />
+                )}
+              </span>
+              <div className="min-w-0 flex-1">
+                <IconInput
+                  label="Hostname or IP address"
+                  mono
+                  value={state.hostname}
+                  onChange={(v) => patch({ hostname: v })}
+                  placeholder="Hostname or IP, e.g. example.com"
+                  error={err("hostname")}
+                />
+              </div>
+            </div>
+          </EditorSection>
+
+          <EditorSection title="General">
+            <IconInput
               label="Name"
-              required
               value={state.name}
               onChange={(v) => patch({ name: v })}
-              placeholder="e.g. Production web"
+              placeholder={address ? `Name, e.g. ${address}` : "Name, e.g. Production web"}
               error={err("name")}
             />
-            <TextField
-              label="Tags"
-              value={state.tags}
-              onChange={(v) => patch({ tags: v })}
-              placeholder="e.g. prod, web"
-            />
-          </div>
-
-          <div className="grid grid-cols-[1fr_7rem] gap-3">
-            <TextField
-              label="Hostname"
-              required
-              mono
-              value={state.hostname}
-              onChange={(v) => patch({ hostname: v })}
-              placeholder="e.g. example.com"
-              error={err("hostname")}
-            />
-            <TextField
-              label="Port"
-              type="number"
-              value={state.port}
-              onChange={(v) => patch({ port: v })}
-              placeholder="22"
-              error={err("port")}
-            />
-          </div>
-
-          <div className="grid gap-3">
-            {!state.identityId && (
-              <TextField
-                label="Username"
-                mono
-                value={state.username}
-                onChange={(v) => patch({ username: v })}
-                placeholder={inheritedFor("username")?.value || "e.g. root"}
-                error={err("username")}
-                hint={hint("username", state.username !== "", () => patch({ username: "" }))}
-              />
-            )}
-            <SelectField
+            <IconSelect
               label="Group"
+              icon={Folder}
               value={state.groupId}
               onChange={(v) => patch({ groupId: v })}
               error={err("groupId")}
@@ -480,163 +611,249 @@ export function HostEditorDialog({
                   {groupLabel(g, groups)}
                 </option>
               ))}
-            </SelectField>
-          </div>
+            </IconSelect>
+            <IconInput
+              label="Tags"
+              icon={Tag}
+              value={state.tags}
+              onChange={(v) => patch({ tags: v })}
+              placeholder="Tags, comma separated"
+            />
+          </EditorSection>
 
-          {!state.identityId && (
-            <div className="grid grid-cols-1 gap-3">
-              <SelectField
-                label="Authentication"
-                value={state.authenticationType}
-                onChange={(v) => patch({ authenticationType: v as AuthenticationType })}
+          <EditorSection>
+            <div>
+              <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+                <span>SSH on</span>
+                <input
+                  aria-label="Port"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={state.port}
+                  onChange={(e) => patch({ port: e.target.value })}
+                  placeholder="22"
+                  aria-invalid={err("port") ? true : undefined}
+                  className={cn(
+                    "w-20 rounded-md border bg-background px-2 py-1 font-mono text-sm font-normal outline-none focus:ring-1",
+                    err("port")
+                      ? "border-danger focus:border-danger focus:ring-danger"
+                      : "border-border focus:border-accent focus:ring-accent",
+                  )}
+                />
+                <span>port</span>
+              </div>
+              {err("port") && <p className="mt-1 text-xs text-danger">{err("port")}</p>}
+            </div>
+
+            <div className="space-y-2.5 border-t border-border pt-3">
+              <h3 className="text-xs font-semibold text-foreground">Credentials</h3>
+              <IconSelect
+                label="Identity"
+                icon={Contact}
+                value={state.identityId}
+                onChange={(v) => patch({ identityId: v })}
+                error={err("identityId")}
+                hint={hint("identityId", Boolean(state.identityId), () =>
+                  patch({ identityId: "" }),
+                )}
               >
-                {AUTH_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
+                <option value="">Host-specific credentials</option>
+                {identities.map((identity) => (
+                  <option key={identity.id} value={identity.id}>
+                    {identity.name} ({identity.username})
                   </option>
                 ))}
-              </SelectField>
-              {state.authenticationType === "key" && (
-                <div>
-                  <SelectField
-                    label="Key reference"
-                    required
-                    value={state.keyId}
-                    onChange={(v) => patch({ keyId: v })}
-                    error={err("keyId")}
+              </IconSelect>
+              {!state.identityId && (
+                <>
+                  <IconInput
+                    label="Username"
+                    icon={UserRound}
+                    mono
+                    value={state.username}
+                    onChange={(v) => patch({ username: v })}
+                    placeholder={inheritedFor("username")?.value || "Username, e.g. root"}
+                    error={err("username")}
+                    hint={hint("username", state.username !== "", () => patch({ username: "" }))}
+                  />
+                  <IconSelect
+                    label="Authentication"
+                    icon={LockKeyhole}
+                    value={state.authenticationType}
+                    onChange={(v) => patch({ authenticationType: v as AuthenticationType })}
                   >
-                    <option value="">Select a key…</option>
-                    {keyReferences.map((k) => (
-                      <option key={k.id} value={k.id}>
-                        {k.name}
+                    {AUTH_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
                       </option>
                     ))}
-                  </SelectField>
-                  <button
-                    type="button"
-                    onClick={onManageKeys}
-                    className="mt-1 flex items-center gap-1 text-xs text-accent hover:underline"
+                  </IconSelect>
+                  {state.authenticationType === "key" && (
+                    <div>
+                      <IconSelect
+                        label="Key reference"
+                        icon={KeyRound}
+                        value={state.keyId}
+                        onChange={(v) => patch({ keyId: v })}
+                        error={err("keyId")}
+                      >
+                        <option value="">Select a key…</option>
+                        {keyReferences.map((k) => (
+                          <option key={k.id} value={k.id}>
+                            {k.name}
+                          </option>
+                        ))}
+                      </IconSelect>
+                      <button
+                        type="button"
+                        onClick={onManageKeys}
+                        className="mt-1.5 flex items-center gap-1 text-xs text-accent hover:underline"
+                      >
+                        <KeyRound size={11} /> Manage keys
+                      </button>
+                    </div>
+                  )}
+                  {(state.authenticationType === "password" ||
+                    state.authenticationType === "interactive") && (
+                    <p className="text-xs text-muted">
+                      You will be prompted for the password in the terminal. Luma does not store SSH
+                      passwords.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="border-t border-border pt-2">
+              <button
+                type="button"
+                onClick={() => setShowMore((v) => !v)}
+                aria-expanded={showMore}
+                className="flex items-center gap-1 rounded py-1 text-xs font-medium text-muted hover:text-foreground"
+              >
+                {showMore ? "Show less" : "Show more"}
+                <ChevronDown
+                  size={13}
+                  aria-hidden="true"
+                  className={cn("transition-transform", showMore && "rotate-180")}
+                />
+              </button>
+              {showMore && (
+                <div className="mt-2 space-y-2.5">
+                  <IconSelect
+                    label="Proxy jump"
+                    icon={Waypoints}
+                    value={state.proxyJumpHostId}
+                    onChange={(v) => patch({ proxyJumpHostId: v })}
+                    error={err("proxyJumpHostId")}
+                    hint={hint("proxyJumpHostId", Boolean(state.proxyJumpHostId), () =>
+                      patch({ proxyJumpHostId: "" }),
+                    )}
                   >
-                    <KeyRound size={11} /> Manage keys
-                  </button>
+                    <option value="">No proxy jump</option>
+                    {proxyOptions.map((h) => (
+                      <option key={h.id} value={h.id}>
+                        Jump via {h.name}
+                      </option>
+                    ))}
+                  </IconSelect>
+                  <IconSelect
+                    label="Transport"
+                    icon={Cable}
+                    value={state.transport}
+                    onChange={(v) => patch({ transport: v as TransportType })}
+                    hint={hint("transport", state.transport !== "ssh", () =>
+                      patch({ transport: "ssh" }),
+                    )}
+                  >
+                    {TRANSPORT_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </IconSelect>
+                  {state.transport !== "ssh" && (
+                    <>
+                      <IconInput
+                        label="mosh-server path"
+                        mono
+                        value={state.moshServerPath}
+                        onChange={(v) => patch({ moshServerPath: v })}
+                        placeholder={
+                          inheritedFor("moshServerPath")?.value || "mosh-server path (optional)"
+                        }
+                        error={err("moshServerPath")}
+                        hint={hint("moshServerPath", state.moshServerPath !== "", () =>
+                          patch({ moshServerPath: "" }),
+                        )}
+                      />
+                      <IconInput
+                        label="Mosh UDP port range"
+                        mono
+                        value={state.moshPortRange}
+                        onChange={(v) => patch({ moshPortRange: v })}
+                        placeholder={
+                          inheritedFor("moshPortRange")?.value || "Mosh UDP ports, e.g. 60000-61000"
+                        }
+                        error={err("moshPortRange")}
+                        hint={hint("moshPortRange", state.moshPortRange !== "", () =>
+                          patch({ moshPortRange: "" }),
+                        )}
+                      />
+                    </>
+                  )}
+                  <IconInput
+                    label="Startup command"
+                    icon={SquareTerminal}
+                    mono
+                    value={state.startupCommand}
+                    onChange={(v) => patch({ startupCommand: v })}
+                    placeholder={
+                      inheritedFor("startupCommand")?.value || "Startup command, e.g. tmux a"
+                    }
+                    hint={hint("startupCommand", state.startupCommand !== "", () =>
+                      patch({ startupCommand: "" }),
+                    )}
+                  />
+                  <IconInput
+                    label="Remote working directory"
+                    icon={FolderOpen}
+                    mono
+                    value={state.workingDirectory}
+                    onChange={(v) => patch({ workingDirectory: v })}
+                    placeholder={
+                      inheritedFor("workingDirectory")?.value || "Working directory, e.g. /var/www"
+                    }
+                    hint={hint("workingDirectory", state.workingDirectory !== "", () =>
+                      patch({ workingDirectory: "" }),
+                    )}
+                  />
+                  <EnvironmentEditor
+                    rows={state.env}
+                    onChange={(env) => patch({ env })}
+                    hint={
+                      inheritedEnv.length > 0 ? (
+                        <span className="text-[11px] text-muted/80">
+                          +{inheritedEnv.length} inherited ({inheritedEnv.join(", ")})
+                        </span>
+                      ) : undefined
+                    }
+                  />
+                  <TabColorField
+                    value={state.tabColor}
+                    onChange={(tabColor) => patch({ tabColor })}
+                    hint={hint("tabColor", state.tabColor !== "", () => patch({ tabColor: "" }))}
+                  />
+                  <CheckboxField
+                    label="Favorite"
+                    checked={state.favorite}
+                    onChange={(v) => patch({ favorite: v })}
+                  />
                 </div>
               )}
             </div>
-          )}
-
-          {!state.identityId &&
-            (state.authenticationType === "password" ||
-              state.authenticationType === "interactive") && (
-              <p className="rounded-md border border-border bg-background px-3 py-2 text-xs text-muted">
-                You will be prompted for the password in the terminal. Luma does not store SSH
-                passwords.
-              </p>
-            )}
-
-          <div className="grid grid-cols-1 gap-3">
-            <SelectField
-              label="Proxy jump (optional)"
-              value={state.proxyJumpHostId}
-              onChange={(v) => patch({ proxyJumpHostId: v })}
-              error={err("proxyJumpHostId")}
-              hint={hint("proxyJumpHostId", Boolean(state.proxyJumpHostId), () =>
-                patch({ proxyJumpHostId: "" }),
-              )}
-            >
-              <option value="">None</option>
-              {proxyOptions.map((h) => (
-                <option key={h.id} value={h.id}>
-                  {h.name}
-                </option>
-              ))}
-            </SelectField>
-            <SelectField
-              label="Transport"
-              value={state.transport}
-              onChange={(v) => patch({ transport: v as TransportType })}
-              hint={hint("transport", state.transport !== "ssh", () => patch({ transport: "ssh" }))}
-            >
-              {TRANSPORT_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </SelectField>
-          </div>
-
-          {state.transport !== "ssh" && (
-            <div className="grid grid-cols-1 gap-3">
-              <TextField
-                label="mosh-server path (optional)"
-                mono
-                value={state.moshServerPath}
-                onChange={(v) => patch({ moshServerPath: v })}
-                placeholder={inheritedFor("moshServerPath")?.value || "mosh-server"}
-                error={err("moshServerPath")}
-                hint={hint("moshServerPath", state.moshServerPath !== "", () =>
-                  patch({ moshServerPath: "" }),
-                )}
-              />
-              <TextField
-                label="Mosh UDP port range (optional)"
-                mono
-                value={state.moshPortRange}
-                onChange={(v) => patch({ moshPortRange: v })}
-                placeholder={inheritedFor("moshPortRange")?.value || "60000-61000"}
-                error={err("moshPortRange")}
-                hint={hint("moshPortRange", state.moshPortRange !== "", () =>
-                  patch({ moshPortRange: "" }),
-                )}
-              />
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 gap-3">
-            <TextField
-              label="Startup command (optional)"
-              mono
-              value={state.startupCommand}
-              onChange={(v) => patch({ startupCommand: v })}
-              placeholder={inheritedFor("startupCommand")?.value || "e.g. tmux attach"}
-              hint={hint("startupCommand", state.startupCommand !== "", () =>
-                patch({ startupCommand: "" }),
-              )}
-            />
-            <TextField
-              label="Remote working directory (optional)"
-              mono
-              value={state.workingDirectory}
-              onChange={(v) => patch({ workingDirectory: v })}
-              placeholder={inheritedFor("workingDirectory")?.value || "/var/www"}
-              hint={hint("workingDirectory", state.workingDirectory !== "", () =>
-                patch({ workingDirectory: "" }),
-              )}
-            />
-          </div>
-
-          <EnvironmentEditor
-            rows={state.env}
-            onChange={(env) => patch({ env })}
-            hint={
-              inheritedEnv.length > 0 ? (
-                <span className="text-[11px] text-muted/80">
-                  +{inheritedEnv.length} inherited ({inheritedEnv.join(", ")})
-                </span>
-              ) : undefined
-            }
-          />
-
-          <TabColorField
-            value={state.tabColor}
-            onChange={(tabColor) => patch({ tabColor })}
-            hint={hint("tabColor", state.tabColor !== "", () => patch({ tabColor: "" }))}
-          />
-
-          <CheckboxField
-            label="Favorite"
-            checked={state.favorite}
-            onChange={(v) => patch({ favorite: v })}
-          />
+          </EditorSection>
 
           {backendError && (
             <p className="text-xs text-danger">
