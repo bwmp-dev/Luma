@@ -529,8 +529,7 @@ impl WebDavProvider {
         vault_slot: Option<String>,
         pinned_certificate: Option<CertFingerprint>,
     ) -> Result<Self> {
-        validate_https_url(&url)?;
-        let url = RemoteSlot::new(vault_slot).qualify_url(&url);
+        let url = webdav_blob_url(&url, vault_slot)?;
         let client = match pinned_certificate {
             Some(pin) => pinned_http_client(Arc::new(PinnedCertVerifier::new(Some(pin))))?,
             None => http_client()?,
@@ -567,6 +566,11 @@ impl WebDavProvider {
                 "remote sync blob exceeds the size limit".into(),
             ));
         }
+        if !bytes.starts_with(super::MAGIC) {
+            return Err(LumaError::SyncUnavailable(
+                "the WebDAV URL returned something other than a Luma sync file; use a file URL or end a folder URL with / (existing remote data was not changed)".into(),
+            ));
+        }
         Ok(Some(RemoteBlob {
             version: etag
                 .map(|value| format!("etag:{value}"))
@@ -574,6 +578,21 @@ impl WebDavProvider {
             bytes,
         }))
     }
+}
+
+fn webdav_blob_url(value: &str, vault_slot: Option<String>) -> Result<String> {
+    validate_https_url(value)?;
+    let mut url = reqwest::Url::parse(value)
+        .map_err(|_| LumaError::InvalidInput("invalid WebDAV URL".into()))?;
+    // Shared vaults already used a slot-named file inside collections. Keep that
+    // location so an existing shared vault does not silently start a new blob.
+    if url.path().ends_with('/') && vault_slot.is_none() {
+        url.path_segments_mut()
+            .map_err(|_| LumaError::InvalidInput("invalid WebDAV URL".into()))?
+            .pop_if_empty()
+            .push(SYNC_FILE_NAME);
+    }
+    Ok(RemoteSlot::new(vault_slot).qualify_url(url.as_str()))
 }
 
 #[async_trait]
@@ -1189,6 +1208,128 @@ mod tests {
         assert!(validate_cloud_api_url("https://sync.example.com").is_ok());
         assert!(validate_cloud_api_url("https://sync.example.com?tenant=other").is_err());
         assert!(validate_cloud_api_url("https://sync.example.com/#fragment").is_err());
+    }
+
+    #[test]
+    fn webdav_folders_use_a_blob_without_changing_explicit_file_urls() {
+        assert_eq!(
+            webdav_blob_url("https://192.168.1.5/", None).unwrap(),
+            "https://192.168.1.5/luma-sync.bin"
+        );
+        assert_eq!(
+            webdav_blob_url("https://dav.example.com/folder%20one/?tenant=1", None).unwrap(),
+            "https://dav.example.com/folder%20one/luma-sync.bin?tenant=1"
+        );
+        assert_eq!(
+            webdav_blob_url("https://dav.example.com/custom-file?tenant=1", None).unwrap(),
+            "https://dav.example.com/custom-file?tenant=1"
+        );
+        let slot = RemoteSlot::new(Some("shared-vault".into()));
+        assert_eq!(
+            webdav_blob_url(
+                "https://dav.example.com/folder/",
+                Some("shared-vault".into())
+            )
+            .unwrap(),
+            format!("https://dav.example.com/folder{}", slot.segment())
+        );
+        assert!(webdav_blob_url("http://192.168.1.5/", None).is_err());
+        assert!(webdav_blob_url("https://user:secret@192.168.1.5/", None).is_err());
+    }
+
+    #[tokio::test]
+    async fn webdav_folder_blob_roundtrip_uses_conditional_upload() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let blob = b"LUMASYNCencrypted-test-data";
+        let server = tokio::spawn(async move {
+            for (method, status, response_body) in [
+                ("GET", "404 Not Found", &b""[..]),
+                ("PUT", "201 Created", &b""[..]),
+                ("GET", "200 OK", &blob[..]),
+            ] {
+                let (mut stream, _) = listener.accept().await.unwrap();
+                let mut request = Vec::new();
+                let mut buffer = [0; 4096];
+                let header_end = loop {
+                    let count = stream.read(&mut buffer).await.unwrap();
+                    assert_ne!(count, 0);
+                    request.extend_from_slice(&buffer[..count]);
+                    if let Some(end) = request.windows(4).position(|part| part == b"\r\n\r\n") {
+                        break end + 4;
+                    }
+                };
+                let headers = String::from_utf8_lossy(&request[..header_end]).to_lowercase();
+                assert!(headers
+                    .starts_with(&format!("{} /folder/luma-sync.bin ", method.to_lowercase())));
+                assert!(headers.contains("authorization: basic "));
+                if method == "PUT" {
+                    assert!(headers.contains("if-none-match: *"));
+                    while request.len() < header_end + blob.len() {
+                        let count = stream.read(&mut buffer).await.unwrap();
+                        assert_ne!(count, 0);
+                        request.extend_from_slice(&buffer[..count]);
+                    }
+                    assert_eq!(&request[header_end..], blob);
+                }
+                stream.write_all(format!(
+                    "HTTP/1.1 {status}\r\nContent-Length: {}\r\nETag: \"v1\"\r\nConnection: close\r\n\r\n", response_body.len()
+                ).as_bytes()).await.unwrap();
+                stream.write_all(response_body).await.unwrap();
+            }
+        });
+        let mut url = reqwest::Url::parse(
+            &webdav_blob_url(&format!("https://{addr}/folder/"), None).unwrap(),
+        )
+        .unwrap();
+        url.set_scheme("http").unwrap();
+        let provider = WebDavProvider {
+            client: http_client().unwrap(),
+            url: url.into(),
+            username: "test".into(),
+            password: "test".into(),
+        };
+        let uploaded = provider.upload(blob, None).await.unwrap();
+        assert_eq!(uploaded.version, "etag:\"v1\"");
+        let downloaded = provider.download().await.unwrap().unwrap();
+        assert_eq!(downloaded.bytes, blob);
+        assert_eq!(downloaded.version, uploaded.version);
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn webdav_refuses_to_overwrite_a_directory_listing() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut request = [0; 4096];
+            let count = stream.read(&mut request).await.unwrap();
+            assert!(String::from_utf8_lossy(&request[..count]).starts_with("GET /folder "));
+            let body = "<html>Directory listing</html>";
+            stream
+                .write_all(
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    )
+                    .as_bytes(),
+                )
+                .await
+                .unwrap();
+        });
+        // Only the test transport uses HTTP; production construction requires HTTPS.
+        let provider = WebDavProvider {
+            client: http_client().unwrap(),
+            url: format!("http://{addr}/folder"),
+            username: "test".into(),
+            password: "test".into(),
+        };
+        let error = provider.upload(b"LUMASYNCnew", None).await.unwrap_err();
+        assert!(error.to_string().contains("end a folder URL with /"));
+        server.await.unwrap();
     }
 
     #[test]

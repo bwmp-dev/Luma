@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
 import { Modal } from "../../components/Modal";
+import { useSyncKeystore } from "../../hooks/useSync";
+import { parseLumaError } from "../../lib/hosts";
+import { KeystoreGate } from "../keystore/KeystoreGate";
+import { useCapabilityStore } from "../../stores/capabilityStore";
 
 /**
  * Reusable passphrase prompt. Used for setting the sync passphrase, unlocking
@@ -37,6 +41,8 @@ export function PassphrasePrompt({
   const [passphrase, setPassphrase] = useState("");
   const [confirmValue, setConfirmValue] = useState("");
   const [remember, setRemember] = useState(rememberDefault);
+  const isMobile = useCapabilityStore((s) => s.capabilities.isMobile);
+  const keystore = useSyncKeystore(open && rememberOption && remember);
 
   // Clear the transient secret whenever the dialog is opened or closed.
   useEffect(() => {
@@ -47,7 +53,8 @@ export function PassphrasePrompt({
 
   const tooShort = passphrase.length < minLength;
   const mismatch = confirm && passphrase !== confirmValue;
-  const canSubmit = !tooShort && !mismatch && !busy;
+  const canSubmit =
+    !tooShort && !mismatch && !busy && (!keystore.required || keystore.data?.unlocked === true);
 
   const submit = () => {
     if (!canSubmit) return;
@@ -120,11 +127,24 @@ export function PassphrasePrompt({
             <span>
               Remember on this device
               <span className="block text-xs text-muted">
-                Stores the passphrase in your OS keychain so sync runs without prompting.
+                {isMobile
+                  ? "Stores the passphrase in your encrypted Luma keystore so sync runs without prompting while it is unlocked."
+                  : "Stores the passphrase in your OS keychain so sync runs without prompting."}
               </span>
             </span>
           </label>
         )}
+        {keystore.required &&
+          !keystore.data?.unlocked &&
+          (keystore.isError ? (
+            <p role="alert" className="text-xs text-danger">
+              {parseLumaError(keystore.error).message}
+            </p>
+          ) : keystore.data ? (
+            <KeystoreGate status={keystore.data} onReady={() => void keystore.refetch()} />
+          ) : (
+            <p className="text-xs text-muted">Checking keystore…</p>
+          ))}
         {mismatch && confirmValue.length > 0 && (
           <p className="text-xs text-danger">Passphrases do not match.</p>
         )}

@@ -1,7 +1,7 @@
 import { useSessionStore } from "../../stores/sessionStore";
 import { useTabDragStore } from "../../stores/tabDragStore";
 import { useUiStore } from "../../stores/uiStore";
-import { EmptyState } from "./EmptyState";
+import { HostsScreen } from "../hosts/HostsScreen";
 import { PaneTreeView } from "./PaneTreeView";
 import { SearchBar } from "./SearchBar";
 import { PageTabView } from "./pageTabs";
@@ -26,7 +26,7 @@ export function Workspace() {
 
   // The active tab can be one torn off into its own window (tearing off or
   // closing tabs, cycling). If a tab is still docked here, show it instead of
-  // the empty state; with none left the empty state is the intended screen.
+  // the host list; with none left, saved hosts remain available here.
   // Waits for a drag to end so a live tear-off can still be docked back.
   useLayoutEffect(() => {
     if (!showingNothing) return;
@@ -50,9 +50,9 @@ export function Workspace() {
               this tab's on switch, exactly matching the single-terminal flow. */}
             <PaneTreeView key={activeTab.id} tab={activeTab} sessions={sessions} />
           </>
-        ) : (
-          <EmptyState />
-        )}
+        ) : showingNothing ? (
+          <HostsScreen />
+        ) : null}
       </div>
       {pageTabs.map((tab) => (
         <PageTabView key={tab.id} tab={tab} active={tab.id === activePageTabId} />

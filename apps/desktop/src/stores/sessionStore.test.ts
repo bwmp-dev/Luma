@@ -982,6 +982,19 @@ describe("openTemplate / host groups", () => {
 });
 
 describe("closing the visible tab", () => {
+  it("closes settings without closing its underlying connection", async () => {
+    setInvoke((cmd) =>
+      cmd === "pty_spawn" ? { sessionId: "close-settings", shellName: "bash" } : undefined,
+    );
+    await useSessionStore.getState().openLocalSession();
+    const id = useSessionStore.getState().activeSessionId;
+    useUiStore.getState().openSettings();
+    useSessionStore.getState().closeActivePane();
+    expect(useSessionStore.getState().activeSessionId).toBe(id);
+    expect(useSessionStore.getState().sessions).toHaveLength(1);
+    expect(useUiStore.getState().pageTabs).toHaveLength(0);
+    expect(useUiStore.getState().mainView).toBe("terminal");
+  });
   it("closes the launcher instead of its underlying connection", async () => {
     setInvoke((cmd) =>
       cmd === "pty_spawn" ? { sessionId: "close-launcher", shellName: "bash" } : undefined,

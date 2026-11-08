@@ -37,7 +37,9 @@ import {
   useSetAutoSync,
   useSetSyncPassphrase,
   useSyncConfig,
+  useSyncKeystore,
 } from "../../hooks/useSync";
+import { KeystoreGate } from "../keystore/KeystoreGate";
 import { useUpdateVault } from "../../hooks/useVaults";
 import { PERSONAL_VAULT_ID, type Vault } from "../../lib/vaults";
 import { selectVault, useSyncStore } from "../../stores/syncStore";
@@ -63,6 +65,17 @@ const PROVIDER_LABELS: Record<SyncProvider, string> = {
 
 export function SyncSection({ vault }: { vault: Vault }) {
   const { data: config, isLoading } = useSyncConfig(vault.id);
+  const keystore = useSyncKeystore();
+
+  if (keystore.required) {
+    if (keystore.isError) {
+      return <p role="alert">{parseLumaError(keystore.error).message}</p>;
+    }
+    if (!keystore.data) return <p className="text-sm text-muted">Checking keystore…</p>;
+    if (!keystore.data.unlocked) {
+      return <KeystoreGate status={keystore.data} onReady={() => void keystore.refetch()} />;
+    }
+  }
 
   if (isLoading || !config) {
     return <p className="text-sm text-muted">Loading sync configuration…</p>;
@@ -278,11 +291,14 @@ function SyncSectionBody({ vault, config }: { vault: Vault; config: SyncConfig }
 
         {provider === "webdav" && (
           <>
-            <Field label="URL" hint="HTTPS required.">
+            <Field
+              label="URL"
+              hint="HTTPS required. Use a sync file URL, or end a folder URL with /."
+            >
               <TextInput
                 value={url}
                 onChange={setUrl}
-                placeholder="https://dav.example.com/luma"
+                placeholder="https://dav.example.com/luma-sync.bin"
                 mono
               />
             </Field>

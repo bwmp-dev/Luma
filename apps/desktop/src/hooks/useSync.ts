@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
+import { getKeystoreStatus } from "../lib/hosts";
+import { useCapabilityStore } from "../stores/capabilityStore";
 import {
   syncConfigure,
   syncDisable,
@@ -16,6 +18,18 @@ import {
  * so invalidating `SYNC_CONFIG_KEY` prefix-matches both.
  */
 export const SYNC_CONFIG_KEY = ["sync-config"];
+
+export function useSyncKeystore(required = true) {
+  const isMobile = useCapabilityStore((s) => s.capabilities.isMobile);
+  const enabled = isMobile && required;
+  const query = useQuery({
+    queryKey: ["sync-keystore-status"],
+    queryFn: getKeystoreStatus,
+    enabled,
+    staleTime: 0,
+  });
+  return { ...query, required: enabled };
+}
 
 export function syncConfigKey(vaultId: string) {
   return [...SYNC_CONFIG_KEY, vaultId];
