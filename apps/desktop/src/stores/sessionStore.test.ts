@@ -40,7 +40,7 @@ function latestSession() {
 }
 
 beforeEach(() => {
-  useUiStore.setState({ mainView: "hosts", newTabIds: [], activeNewTabId: null });
+  useUiStore.setState({ mainView: "hosts", pageTabs: [], activePageTabId: null });
   useSessionStore.setState({
     sessions: [],
     tabs: [],
@@ -992,7 +992,7 @@ describe("closing the visible tab", () => {
     useSessionStore.getState().closeActivePane();
     expect(useSessionStore.getState().activeSessionId).toBe(id);
     expect(useSessionStore.getState().sessions).toHaveLength(1);
-    expect(useUiStore.getState().activeNewTabId).toBeNull();
+    expect(useUiStore.getState().activePageTabId).toBeNull();
     expect(useUiStore.getState().mainView).toBe("terminal");
     useSessionStore.getState().closeActivePane();
     expect(useSessionStore.getState().sessions).toHaveLength(0);
@@ -1005,9 +1005,9 @@ describe("closing the visible tab", () => {
     await useSessionStore.getState().openLocalSession();
     const id = useSessionStore.getState().activeSessionId!;
     useUiStore.getState().openNewTab();
-    const launcher = useUiStore.getState().activeNewTabId;
+    const launcher = useUiStore.getState().activePageTabId;
     useSessionStore.getState().closeSession(id);
     expect(useUiStore.getState().mainView).toBe("terminal");
-    expect(useUiStore.getState().activeNewTabId).toBe(launcher);
+    expect(useUiStore.getState().activePageTabId).toBe(launcher);
   });
 });

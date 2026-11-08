@@ -21,6 +21,11 @@ export function Sidebar() {
   const mainView = useUiStore((s) => s.mainView);
   const selectSection = useUiStore((s) => s.selectSection);
   const openSettings = useUiStore((s) => s.openSettings);
+  const settingsTabActive = useUiStore(
+    (s) =>
+      s.mainView === "terminal" &&
+      s.pageTabs.some((tab) => tab.id === s.activePageTabId && tab.kind === "settings"),
+  );
   const openKeychain = useUiStore((s) => s.openKeychain);
   const openKnownHosts = useUiStore((s) => s.openKnownHosts);
 
@@ -57,7 +62,7 @@ export function Sidebar() {
       key: "settings",
       label: "Settings",
       icon: Settings,
-      active: mainView === "settings",
+      active: settingsTabActive,
       onClick: openSettings,
     },
   ];

@@ -92,19 +92,19 @@ export function PaneView({
   const hostRef = useRef<HTMLDivElement>(null);
   const isMobile = useCapabilityStore((state) => state.capabilities.isMobile);
   const mainView = useUiStore((s) => s.mainView);
-  const activeNewTabId = useUiStore((s) => s.activeNewTabId);
+  const activePageTabId = useUiStore((s) => s.activePageTabId);
   useEffect(() => {
     if (
       !isMobile &&
       focused &&
       mainView === "terminal" &&
-      !activeNewTabId &&
+      !activePageTabId &&
       session.status === "connected" &&
       !document.querySelector('[role="dialog"]')
     ) {
       terminalManager.focus(session.id);
     }
-  }, [isMobile, focused, mainView, activeNewTabId, session.id, session.status]);
+  }, [isMobile, focused, mainView, activePageTabId, session.id, session.status]);
   const restartSession = useSessionStore((s) => s.restartSession);
   const closeSession = useSessionStore((s) => s.closeSession);
   const replaceHostKey = useSessionStore((s) => s.replaceHostKey);

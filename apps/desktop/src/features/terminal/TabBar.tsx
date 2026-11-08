@@ -15,7 +15,6 @@ import {
   Save,
   ServerCog,
   SplitSquareHorizontal,
-  SquarePlus,
   SquareTerminal,
   Rows2,
   Server,
@@ -45,6 +44,7 @@ import { useTabDragStore } from "../../stores/tabDragStore";
 import type { SplitDirection, TerminalSession, WorkspaceTab } from "../../types";
 import type { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { resolvePaneTarget } from "./tabDrop";
+import { PAGE_TAB_META } from "./pageTabs";
 import {
   attachTab,
   detachTab,
@@ -245,10 +245,10 @@ export function TabBar() {
   const toggleBroadcast = useSessionStore((s) => s.toggleBroadcast);
   const openPalette = useUiStore((s) => s.openPalette);
   const openNewTab = useUiStore((s) => s.openNewTab);
-  const closeNewTab = useUiStore((s) => s.closeNewTab);
-  const selectNewTab = useUiStore((s) => s.selectNewTab);
-  const newTabIds = useUiStore((s) => s.newTabIds);
-  const activeNewTabId = useUiStore((s) => s.activeNewTabId);
+  const closePageTab = useUiStore((s) => s.closePageTab);
+  const selectPageTab = useUiStore((s) => s.selectPageTab);
+  const pageTabs = useUiStore((s) => s.pageTabs);
+  const activePageTabId = useUiStore((s) => s.activePageTabId);
   const openCollab = useUiStore((s) => s.openCollab);
   const collabMode = useCollabStore((s) =>
     s.runtimes.some((runtime) => runtime.ownerSessionId === activeSessionId)
@@ -314,15 +314,15 @@ export function TabBar() {
     );
   };
 
-  const closeNewTabWithAnimation = (tabId: string) => {
-    const timerKey = `new:${tabId}`;
+  const closePageTabWithAnimation = (tabId: string) => {
+    const timerKey = `page:${tabId}`;
     if (closeTimers.current.has(timerKey)) return;
     setClosingTabIds((current) => new Set(current).add(timerKey));
     closeTimers.current.set(
       timerKey,
       window.setTimeout(() => {
         closeTimers.current.delete(timerKey);
-        closeNewTab(tabId);
+        closePageTab(tabId);
         setClosingTabIds((current) => {
           const next = new Set(current);
           next.delete(timerKey);
@@ -467,13 +467,13 @@ export function TabBar() {
     tabListRef.current
       ?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
       ?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  }, [activeTabId, terminalActive, activeNewTabId]);
+  }, [activeTabId, terminalActive, activePageTabId]);
 
   // Roving tabindex: the selected tab is the strip's single Tab stop, or the
   // first tab when another screen (hosts, SFTP, …) is showing.
   const hasSelectedTab =
-    (terminalActive && !activeNewTabId && visibleTabs.some((tab) => tab.id === activeTabId)) ||
-    (activeNewTabId !== null && newTabIds.includes(activeNewTabId));
+    (terminalActive && !activePageTabId && visibleTabs.some((tab) => tab.id === activeTabId)) ||
+    (activePageTabId !== null && pageTabs.some((tab) => tab.id === activePageTabId));
 
   // Manual-activation tablist: arrows/Home/End only move focus, so arrowing
   // past tabs never switches (and resizes) terminals; Enter/Space activate via
@@ -508,7 +508,7 @@ export function TabBar() {
         event.preventDefault();
         const neighbour = tabElements[index + 1] ?? tabElements[index - 1];
         neighbour?.focus();
-        closeNewTabWithAnimation(newTabId);
+        closePageTabWithAnimation(newTabId);
         // Removing the launcher reveals a terminal, which claims focus once it
         // is shown; hand focus back so arrowing through the strip can continue.
         window.setTimeout(
@@ -758,7 +758,7 @@ export function TabBar() {
           <div
             ref={tabListRef}
             role="tablist"
-            aria-label="Terminal tabs"
+            aria-label="Tabs"
             onWheel={scrollTabs}
             onKeyDown={onTabListKeyDown}
             // The strip clips overflow, so focus rings are drawn inside each control.
@@ -768,7 +768,7 @@ export function TabBar() {
           >
             {visibleTabs.map((tab, index) => {
               const session = activeSessionOf(tab);
-              const active = tab.id === activeTabId && terminalActive && !activeNewTabId;
+              const active = tab.id === activeTabId && terminalActive && !activePageTabId;
               const title = session?.title ?? "Terminal";
               // Best-effort cwd tooltip from shell integration (OSC 7 / OSC 1337).
               // Read outside React; refreshed on any tab re-render.
@@ -949,51 +949,62 @@ export function TabBar() {
                 </ContextMenu>
               );
             })}
-            {newTabIds.map((tabId, newTabIndex) => (
-              <div
-                key={tabId}
-                role="presentation"
-                onDoubleClick={(event) => event.stopPropagation()}
-                className={cn(
-                  "luma-tab-enter group flex h-7 w-52 min-w-20 max-w-52 items-center gap-1.5 rounded-lg px-2.5 text-xs",
-                  tabId === activeNewTabId
-                    ? "bg-raised font-medium text-foreground shadow-sm ring-1 ring-inset ring-border"
-                    : "text-muted hover:bg-raised/60 hover:text-foreground",
-                  closingTabIds.has(`new:${tabId}`) && "luma-tab-exit pointer-events-none",
-                )}
-              >
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={tabId === activeNewTabId}
-                  aria-current={tabId === activeNewTabId ? "page" : undefined}
-                  aria-keyshortcuts="Delete"
-                  tabIndex={
-                    tabId === activeNewTabId ||
-                    (!hasSelectedTab && visibleTabs.length === 0 && newTabIndex === 0)
-                      ? 0
-                      : -1
-                  }
-                  data-new-tab-id={tabId}
-                  data-closing={closingTabIds.has(`new:${tabId}`) || undefined}
-                  onClick={() => selectNewTab(tabId)}
-                  className="flex min-w-0 flex-1 items-center gap-1.5 truncate py-1.5 text-left"
+            {pageTabs.map((pageTab, pageTabIndex) => {
+              const { title, icon: Icon } = PAGE_TAB_META[pageTab.kind];
+              const active = pageTab.id === activePageTabId;
+              const isLauncher = pageTab.kind === "new";
+              const closing = closingTabIds.has(`page:${pageTab.id}`);
+              return (
+                <div
+                  key={pageTab.id}
+                  role="presentation"
+                  onDoubleClick={(event) => event.stopPropagation()}
+                  className={cn(
+                    "luma-tab-enter group flex h-7 w-52 min-w-20 max-w-52 items-center gap-1.5 rounded-lg px-2.5 text-xs",
+                    active
+                      ? "bg-raised font-medium text-foreground shadow-sm ring-1 ring-inset ring-border"
+                      : "text-muted hover:bg-raised/60 hover:text-foreground",
+                    closing && "luma-tab-exit pointer-events-none",
+                  )}
                 >
-                  <SquarePlus size={13} aria-hidden="true" className="shrink-0 text-accent" />
-                  <span className="truncate">New tab</span>
-                </button>
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  aria-label="Close New tab"
-                  title="Close New tab"
-                  onClick={() => closeNewTabWithAnimation(tabId)}
-                  className="shrink-0 rounded p-0.5 hover:bg-surface hover:text-danger"
-                >
-                  <X size={13} />
-                </button>
-              </div>
-            ))}
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={active}
+                    aria-current={active ? "page" : undefined}
+                    // Only an empty launcher closes on Delete; a screen may hold
+                    // unsaved input that one stray keypress would throw away.
+                    aria-keyshortcuts={isLauncher ? "Delete" : undefined}
+                    tabIndex={
+                      active || (!hasSelectedTab && visibleTabs.length === 0 && pageTabIndex === 0)
+                        ? 0
+                        : -1
+                    }
+                    data-new-tab-id={isLauncher ? pageTab.id : undefined}
+                    data-closing={closing || undefined}
+                    onClick={() => selectPageTab(pageTab.id)}
+                    className="flex min-w-0 flex-1 items-center gap-1.5 truncate py-1.5 text-left"
+                  >
+                    <Icon
+                      size={13}
+                      aria-hidden="true"
+                      className={cn("shrink-0", isLauncher && "text-accent")}
+                    />
+                    <span className="truncate">{title}</span>
+                  </button>
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    aria-label={`Close ${title}`}
+                    title={`Close ${title}`}
+                    onClick={() => closePageTabWithAnimation(pageTab.id)}
+                    className="shrink-0 rounded p-0.5 hover:bg-surface hover:text-danger"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+              );
+            })}
           </div>
           <button
             type="button"

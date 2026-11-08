@@ -4,7 +4,7 @@ import { useUiStore } from "../../stores/uiStore";
 import { EmptyState } from "./EmptyState";
 import { PaneTreeView } from "./PaneTreeView";
 import { SearchBar } from "./SearchBar";
-import { NewTabLauncher } from "./NewTabLauncher";
+import { PageTabView } from "./pageTabs";
 import { useLayoutEffect, useSyncExternalStore } from "react";
 import { detachedTabIds, detachedTabsVersion, subscribeDetachedTabs } from "./detachedTabs";
 
@@ -16,13 +16,13 @@ export function Workspace() {
   const activeSessionId = useSessionStore((s) => s.activeSessionId);
   const setActiveTab = useSessionStore((s) => s.setActiveTab);
   const searchOpen = useUiStore((s) => s.terminalSearchOpen);
-  const newTabIds = useUiStore((s) => s.newTabIds);
-  const activeNewTabId = useUiStore((s) => s.activeNewTabId);
+  const pageTabs = useUiStore((s) => s.pageTabs);
+  const activePageTabId = useUiStore((s) => s.activePageTabId);
   const terminalShown = useUiStore((s) => s.mainView === "terminal");
   const tabDragActive = useTabDragStore((s) => s.sourceTabId !== null);
 
   const activeTab = tabs.find((t) => t.id === activeTabId && !detachedTabIds().has(t.id));
-  const showingNothing = terminalShown && !activeTab && !activeNewTabId && !tabDragActive;
+  const showingNothing = terminalShown && !activeTab && !activePageTabId && !tabDragActive;
 
   // The active tab can be one torn off into its own window (tearing off or
   // closing tabs, cycling). If a tab is still docked here, show it instead of
@@ -39,7 +39,10 @@ export function Workspace() {
     <div className="relative h-full min-w-0">
       {/* data-tab-drop-workspace carries the visible tab's id so a tab dragged
           from the strip into this area groups (splits) with it — see TabBar. */}
-      <div className={activeNewTabId ? "hidden" : "h-full"} data-tab-drop-workspace={activeTab?.id}>
+      <div
+        className={activePageTabId ? "hidden" : "h-full"}
+        data-tab-drop-workspace={activeTab?.id}
+      >
         {activeTab ? (
           <>
             {searchOpen && activeSessionId && <SearchBar sessionId={activeSessionId} />}
@@ -51,8 +54,8 @@ export function Workspace() {
           <EmptyState />
         )}
       </div>
-      {newTabIds.map((tabId) => (
-        <NewTabLauncher key={tabId} tabId={tabId} active={tabId === activeNewTabId} />
+      {pageTabs.map((tab) => (
+        <PageTabView key={tab.id} tab={tab} active={tab.id === activePageTabId} />
       ))}
     </div>
   );

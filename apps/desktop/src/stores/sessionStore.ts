@@ -701,7 +701,7 @@ async function openInNewTab(
   const tab = newTab(session.id);
   const background = options?.background === true;
   if (!background) {
-    useUiStore.getState().closeNewTab();
+    useUiStore.getState().consumeLauncher();
     useUiStore.getState().showTerminal();
   }
   set((state) => ({
@@ -1436,7 +1436,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       root: builtRoot,
       activePaneId: firstLeaf.id,
     };
-    useUiStore.getState().closeNewTab();
+    useUiStore.getState().consumeLauncher();
     useUiStore.getState().showTerminal();
     set((state) => {
       const tabs = [...state.tabs, tab];
@@ -1496,8 +1496,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   closeActivePane: () => {
     const ui = useUiStore.getState();
     if (ui.mainView !== "terminal") return;
-    if (ui.activeNewTabId) {
-      ui.closeNewTab(ui.activeNewTabId);
+    if (ui.activePageTabId) {
+      ui.closePageTab(ui.activePageTabId);
       return;
     }
     const state = get();

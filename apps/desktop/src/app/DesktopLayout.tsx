@@ -23,7 +23,7 @@ import { VoiceComposerDialog } from "../features/voiceComposer/VoiceComposerDial
 
 /*
  * Desktop application shell — the original Luma layout, unchanged. Heavier,
- * rarely-first-viewed surfaces (settings, SFTP, keychain) and the
+ * rarely-first-viewed surfaces (SFTP, keychain) and the
  * always-mounted-but-idle sync/updater dialogs are code-split behind Suspense so
  * they stay out of the initial main bundle. The terminal workspace and hosts
  * screen stay eager since one of them is always the first thing shown.
@@ -31,7 +31,6 @@ import { VoiceComposerDialog } from "../features/voiceComposer/VoiceComposerDial
 const named = <T extends string>(loader: () => Promise<Record<T, ComponentType>>, name: T) =>
   lazy(() => loader().then((m) => ({ default: m[name] })));
 
-const SettingsScreen = named(() => import("../features/settings/SettingsScreen"), "SettingsScreen");
 const KeychainScreen = named(() => import("../features/keychain/KeychainScreen"), "KeychainScreen");
 const SftpScreen = named(() => import("../features/sftp/SftpScreen"), "SftpScreen");
 const KnownHostsScreen = named(
@@ -105,11 +104,6 @@ export function DesktopLayout() {
               </Suspense>
             )}
             {mainView === "snippets" && <SnippetsScreen />}
-            {mainView === "settings" && (
-              <Suspense fallback={<ScreenFallback />}>
-                <SettingsScreen />
-              </Suspense>
-            )}
             {mainView === "keychain" && (
               <Suspense fallback={<ScreenFallback />}>
                 <KeychainScreen />

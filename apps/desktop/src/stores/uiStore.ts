@@ -3,20 +3,29 @@ import type { SidebarSection } from "../types";
 import type { VaultJoinLink } from "../lib/vaults";
 
 /**
- * What the main area shows. Decoupled from the sidebar rail: the terminal
- * workspace is driven by the top TabBar (`"terminal"`), the rail selects a
- * section screen, and settings/keychain are full-screen views. This is a single
- * source of truth so a terminal tab can be the active main view independently of
- * any sidebar section.
+ * What the main area shows. Decoupled from the sidebar rail: `"terminal"` is
+ * the tab area driven by the top TabBar (a terminal tab or a page tab), the rail
+ * selects a section screen, and keychain and the other tools are full-screen
+ * views. This is a single source of truth so a tab can be the active main view
+ * independently of any sidebar section.
  */
 export type MainView =
   | SidebarSection
   | "terminal"
-  | "settings"
   | "keychain"
   | "known-hosts"
   | "server-stats"
   | "fleet";
+
+/**
+ * A non-terminal tab in the top strip, drawn after the terminal tabs. Page tabs
+ * stay mounted while hidden, so a screen keeps its unsaved state when the user
+ * switches away. "new" is the launcher and can be open several times; every
+ * other kind has at most one tab.
+ */
+export type PageTabKind = "new" | "settings";
+
+export type PageTab = { id: string; kind: PageTabKind };
 
 type UiState = {
   /** What the main area shows to the right of the sidebar. */
@@ -30,7 +39,7 @@ type UiState = {
   openSection: (section: SidebarSection) => void;
   /** Show the terminal workspace in the main area (top-tab driven). */
   showTerminal: () => void;
-  /** Show the full-screen settings view. */
+  /** Open the Settings tab, or switch to it if it is already open. */
   openSettings: () => void;
   openKeychain: () => void;
   /** Show the known-hosts trust-store manager in the main area. */
@@ -45,11 +54,19 @@ type UiState = {
    * instead of driving the arrow-pad gesture. The two are exclusive. */
   terminalSelectMode: boolean;
   setTerminalSelectMode: (on: boolean) => void;
-  newTabIds: string[];
-  activeNewTabId: string | null;
+  pageTabs: PageTab[];
+  /** The page tab on screen; null means a terminal tab (or the empty state). */
+  activePageTabId: string | null;
+  /** Open a fresh New tab launcher. */
   openNewTab: () => void;
-  selectNewTab: (tabId: string) => void;
-  closeNewTab: (tabId?: string) => void;
+  /** Open a page tab of a single-instance kind, or switch to its existing tab. */
+  openPageTab: (kind: Exclude<PageTabKind, "new">) => void;
+  selectPageTab: (tabId: string) => void;
+  /** Close a page tab; with no id, the active one. */
+  closePageTab: (tabId?: string) => void;
+  /** A terminal opened from the active launcher replaces it. Leaves any other
+   * kind of page tab open. */
+  consumeLauncher: () => void;
   /** Serial-terminal connect dialog visibility. */
   serialConnectOpen: boolean;
   openSerialConnect: () => void;
@@ -123,6 +140,27 @@ export type CollabIntent = {
   error?: string;
 };
 
+/** Closing a tab by id (its close button) moves to the neighbouring page tab.
+ * Closing the active one implicitly (a terminal replacing its launcher, the
+ * close-pane chord) reveals the terminal underneath instead. */
+function removePageTab(
+  state: Pick<UiState, "pageTabs" | "activePageTabId">,
+  tabId?: string,
+): Partial<UiState> {
+  const closingId = tabId ?? state.activePageTabId;
+  if (!closingId) return {};
+  const index = state.pageTabs.findIndex((tab) => tab.id === closingId);
+  if (index < 0) return {};
+  const pageTabs = state.pageTabs.filter((tab) => tab.id !== closingId);
+  const activePageTabId =
+    state.activePageTabId === closingId
+      ? tabId
+        ? (pageTabs[Math.min(index, pageTabs.length - 1)]?.id ?? null)
+        : null
+      : state.activePageTabId;
+  return { pageTabs, activePageTabId };
+}
+
 export const useUiStore = create<UiState>((set) => ({
   // With no terminal tabs open on launch, the main area defaults to Hosts.
   mainView: "hosts",
@@ -131,8 +169,8 @@ export const useUiStore = create<UiState>((set) => ({
   openNav: () => set({ navOpen: true }),
   selectSection: (section) => set({ mainView: section }),
   openSection: (section) => set({ mainView: section }),
-  showTerminal: () => set({ mainView: "terminal", activeNewTabId: null }),
-  openSettings: () => set({ mainView: "settings" }),
+  showTerminal: () => set({ mainView: "terminal", activePageTabId: null }),
+  openSettings: () => useUiStore.getState().openPageTab("settings"),
   openKeychain: () => set({ mainView: "keychain" }),
   openKnownHosts: () => set({ mainView: "known-hosts" }),
   openServerStats: () => set({ mainView: "server-stats" }),
@@ -141,35 +179,39 @@ export const useUiStore = create<UiState>((set) => ({
   setTerminalSearchOpen: (open) => set({ terminalSearchOpen: open }),
   terminalSelectMode: false,
   setTerminalSelectMode: (on) => set({ terminalSelectMode: on }),
-  newTabIds: [],
-  activeNewTabId: null,
+  pageTabs: [],
+  activePageTabId: null,
   openNewTab: () =>
     set((state) => {
-      const tabId = crypto.randomUUID();
+      const tab: PageTab = { id: crypto.randomUUID(), kind: "new" };
       return {
         mainView: "terminal",
-        newTabIds: [...state.newTabIds, tabId],
-        activeNewTabId: tabId,
+        pageTabs: [...state.pageTabs, tab],
+        activePageTabId: tab.id,
       };
     }),
-  selectNewTab: (tabId) =>
-    set((state) =>
-      state.newTabIds.includes(tabId) ? { mainView: "terminal", activeNewTabId: tabId } : {},
-    ),
-  closeNewTab: (tabId) =>
+  openPageTab: (kind) =>
     set((state) => {
-      const closingId = tabId ?? state.activeNewTabId;
-      if (!closingId) return {};
-      const index = state.newTabIds.indexOf(closingId);
-      if (index < 0) return {};
-      const newTabIds = state.newTabIds.filter((id) => id !== closingId);
-      const activeNewTabId =
-        state.activeNewTabId === closingId
-          ? tabId
-            ? (newTabIds[Math.min(index, newTabIds.length - 1)] ?? null)
-            : null
-          : state.activeNewTabId;
-      return { newTabIds, activeNewTabId };
+      const existing = state.pageTabs.find((tab) => tab.kind === kind);
+      if (existing) return { mainView: "terminal", activePageTabId: existing.id };
+      const tab: PageTab = { id: crypto.randomUUID(), kind };
+      return {
+        mainView: "terminal",
+        pageTabs: [...state.pageTabs, tab],
+        activePageTabId: tab.id,
+      };
+    }),
+  selectPageTab: (tabId) =>
+    set((state) =>
+      state.pageTabs.some((tab) => tab.id === tabId)
+        ? { mainView: "terminal", activePageTabId: tabId }
+        : {},
+    ),
+  closePageTab: (tabId) => set((state) => removePageTab(state, tabId)),
+  consumeLauncher: () =>
+    set((state) => {
+      const active = state.pageTabs.find((tab) => tab.id === state.activePageTabId);
+      return active?.kind === "new" ? removePageTab(state) : {};
     }),
   serialConnectOpen: false,
   openSerialConnect: () => set({ serialConnectOpen: true }),

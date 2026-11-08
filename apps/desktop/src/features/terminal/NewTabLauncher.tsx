@@ -63,7 +63,8 @@ export function NewTabLauncher({ tabId, active }: { tabId: string; active: boole
   const openLocalSession = useSessionStore((s) => s.openLocalSession);
   const openTemplate = useSessionStore((s) => s.openTemplate);
   const hasOpenTab = useSessionStore((s) => s.tabs.length > 0);
-  const closeNewTab = useUiStore((s) => s.closeNewTab);
+  const closePageTab = useUiStore((s) => s.closePageTab);
+  const consumeLauncher = useUiStore((s) => s.consumeLauncher);
   const openSerialConnect = useUiStore((s) => s.openSerialConnect);
 
   useEffect(() => {
@@ -84,10 +85,10 @@ export function NewTabLauncher({ tabId, active }: { tabId: string; active: boole
   // and failing that, whatever held focus before this launcher opened. Deferred a
   // frame so the workspace is unhidden before xterm is asked to focus.
   const dismiss = () => {
-    closeNewTab(tabId);
+    closePageTab(tabId);
     requestAnimationFrame(() => {
       const ui = useUiStore.getState();
-      if (ui.activeNewTabId) return;
+      if (ui.activePageTabId) return;
       const { activeTabId, activeSessionId } = useSessionStore.getState();
       if (
         ui.mainView === "terminal" &&
@@ -184,7 +185,7 @@ export function NewTabLauncher({ tabId, active }: { tabId: string; active: boole
     setQuickBusy(true);
     quickConnectPrepare(trimmedQuery)
       .then((host) => {
-        closeNewTab();
+        consumeLauncher();
         void openSshSession(host.id, host.name, host.hostname, true);
       })
       .catch((error) => setQuickError(parseLumaError(error).message))
@@ -196,7 +197,7 @@ export function NewTabLauncher({ tabId, active }: { tabId: string; active: boole
     const groupHosts = hosts.filter((host) => host.groupId === groupId);
     const root = buildHostGroupLayout(groupHosts);
     if (root) {
-      closeNewTab();
+      consumeLauncher();
       openTemplate(root);
     }
   };
@@ -209,7 +210,7 @@ export function NewTabLauncher({ tabId, active }: { tabId: string; active: boole
       {
         key: "serial",
         run: () => {
-          closeNewTab();
+          consumeLauncher();
           openSerialConnect();
         },
       },
@@ -228,7 +229,7 @@ export function NewTabLauncher({ tabId, active }: { tabId: string; active: boole
     items.push({
       key: `template:${template.id}`,
       run: () => {
-        closeNewTab();
+        consumeLauncher();
         openTemplate(template.root);
       },
     });

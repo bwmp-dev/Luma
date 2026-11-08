@@ -68,10 +68,10 @@ export function CommandPalette() {
               const { activeSessionId } = useSessionStore.getState();
               const ui = useUiStore.getState();
               if (ui.mainView !== "terminal") return;
-              if (ui.activeNewTabId) {
+              if (ui.activePageTabId) {
                 document
                   .querySelector<HTMLElement>(
-                    `[data-new-tab-launcher="${ui.activeNewTabId}"] input`,
+                    `[data-new-tab-launcher="${ui.activePageTabId}"] input`,
                   )
                   ?.focus();
               } else if (activeSessionId) {

@@ -346,14 +346,14 @@ export function useAppInit(): void {
     };
 
     // Numbers follow the visible strip: docked session tabs (torn-off ones live
-    // in their own windows), then any open New tab launchers, as TabBar draws them.
+    // in their own windows), then any open page tabs, as TabBar draws them.
     const goToTab = (index: number): boolean => {
       const { tabs, setActiveTab } = useSessionStore.getState();
-      const { newTabIds, selectNewTab } = useUiStore.getState();
+      const { pageTabs, selectPageTab } = useUiStore.getState();
       const detached = detachedTabIds();
       const strip = [
         ...tabs.filter((tab) => !detached.has(tab.id)).map((tab) => () => setActiveTab(tab.id)),
-        ...newTabIds.map((id) => () => selectNewTab(id)),
+        ...pageTabs.map((tab) => () => selectPageTab(tab.id)),
       ];
       const select = Number.isFinite(index) ? strip[index] : strip[strip.length - 1];
       if (!select) return false;
