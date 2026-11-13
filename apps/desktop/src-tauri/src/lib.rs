@@ -2,6 +2,7 @@ mod agent_events;
 mod analytics;
 mod collaboration;
 mod commands;
+mod diagnostics;
 mod docker;
 mod errors;
 mod import;
@@ -54,6 +55,8 @@ pub struct AppState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let setup_started = std::time::Instant::now();
+    let setup_timestamp = chrono::Utc::now().to_rfc3339();
     let builder = tauri::Builder::default();
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
@@ -76,7 +79,7 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build());
 
-    let builder = builder.setup(|app| {
+    let builder = builder.setup(move |app| {
         let log_dir = app.path().app_log_dir()?;
         logging::init(&log_dir);
         tracing::info!("luma {} starting", env!("CARGO_PKG_VERSION"));
@@ -150,6 +153,10 @@ pub fn run() {
                 .and_then(serde_json::Value::as_str)
                 .map(str::to_string),
         ));
+        // Never initialize before loading preferences: early failures stay local.
+        diagnostics::install(diagnostics::initial_enabled(
+            stored_settings.get(diagnostics::CONSENT_SETTING_KEY),
+        ));
         analytics::install_panic_hook();
         app.manage(collaboration::CollaborationRuntimeState::default());
         #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -201,6 +208,7 @@ pub fn run() {
             commands::register_menu(app.handle());
         }
 
+        diagnostics::report_startup(setup_started, setup_timestamp.clone());
         Ok(())
     });
 
@@ -216,6 +224,8 @@ pub fn run() {
         commands::updater_check,
         commands::updater_download_and_install,
         commands::analytics_config,
+        commands::diagnostics_config,
+        commands::diagnostics_set_enabled,
         commands::analytics_set_enabled,
         commands::shells_detect,
         commands::profiles_list,
@@ -415,6 +425,8 @@ pub fn run() {
         commands::settings_set,
         commands::settings_delete,
         commands::analytics_config,
+        commands::diagnostics_config,
+        commands::diagnostics_set_enabled,
         commands::analytics_set_enabled,
         commands::vaults_list,
         commands::vault_get,

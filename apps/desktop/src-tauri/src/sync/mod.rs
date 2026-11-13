@@ -5082,6 +5082,9 @@ mod tests {
 
     #[test]
     fn analytics_consent_is_device_local() {
+        assert!(!is_safe_setting_key(
+            crate::diagnostics::CONSENT_SETTING_KEY
+        ));
         assert!(!is_safe_setting_key(crate::analytics::CONSENT_SETTING_KEY));
     }
 

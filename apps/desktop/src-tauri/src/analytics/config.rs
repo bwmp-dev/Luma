@@ -22,7 +22,7 @@ const DEFAULT_APP_KEY: &str = "A-SH-8606010133";
 /// Only self-hosted keys are accepted. See `DEFAULT_HOST`.
 const SELF_HOSTED_REGION: &str = "SH";
 
-pub(super) struct Config {
+pub(crate) struct Config {
     pub app_key: String,
     pub endpoint: reqwest::Url,
 }
@@ -31,7 +31,7 @@ impl Config {
     /// `None` when this build carries no analytics configuration, or when what
     /// it carries is malformed. Deliberately never panics: a bad host disables
     /// analytics rather than taking the app down at startup.
-    pub(super) fn from_build() -> Option<Self> {
+    pub(crate) fn from_build() -> Option<Self> {
         // An override is only honoured when it is non-empty, so an unset — or
         // empty — CI variable falls back to the shipped default rather than
         // silently producing an analytics-dead release. Setting an override to
