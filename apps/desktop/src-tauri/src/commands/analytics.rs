@@ -74,3 +74,41 @@ pub async fn analytics_set_enabled(app_state: State<'_, AppState>, enabled: bool
     }
     Ok(())
 }
+
+#[derive(Serialize)]
+pub struct DiagnosticsInfo {
+    configured: bool,
+    enabled: bool,
+}
+
+#[tauri::command]
+pub fn diagnostics_config() -> DiagnosticsInfo {
+    let client = crate::diagnostics::handle();
+    DiagnosticsInfo {
+        configured: client.is_some(),
+        enabled: client.is_some_and(|c| c.enabled()),
+    }
+}
+
+/// Persist and apply this separate device-local consent. Disable first so a
+/// failed database write never keeps sending during the current process.
+#[tauri::command]
+pub async fn diagnostics_set_enabled(app_state: State<'_, AppState>, enabled: bool) -> Result<()> {
+    static CONSENT_WRITE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    let _consent_write = CONSENT_WRITE.lock().await;
+    if let Some(client) = crate::diagnostics::handle() {
+        if !enabled {
+            client.set_enabled(false).await;
+        }
+        settings::set(
+            &app_state.pool,
+            crate::diagnostics::CONSENT_SETTING_KEY,
+            &Value::Bool(enabled),
+        )
+        .await?;
+        if enabled {
+            client.set_enabled(true).await;
+        }
+    }
+    Ok(())
+}

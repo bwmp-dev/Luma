@@ -298,7 +298,7 @@ export function MobilePrivacyScreen({ onBack }: { onBack: () => void }) {
           label="Share anonymous analytics"
           hint={
             analytics.configured
-              ? "App version, operating system, how long the app was open, and the kind of any failures — never their message. Turning this off deletes this install's id."
+              ? "App launches, how long the app stayed open, app version, operating system, build type, and approximate location. Turning this off deletes this install's id."
               : "Not available in this build."
           }
         >

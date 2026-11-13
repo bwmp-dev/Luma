@@ -1,4 +1,4 @@
-//! Anonymous product analytics: opt-out, app/version/platform only.
+//! Opt-in product analytics: launch, duration, app/version/platform only.
 //!
 //! # Invariants
 //!
@@ -15,21 +15,18 @@
 //!    back on starts a new identity.
 //! 2. The id is **device-local and never synced**, so it cannot be used to
 //!    join two of a user's devices together.
-//! 3. Events carry **no props naming a host, command, path or feature**. The
-//!    lifecycle events below carry a session duration; error events carry a
-//!    stable category and a count, never the error message, which interpolates
-//!    hostnames, usernames and paths. Panic events carry a source location,
-//!    never the panic message.
+//! 3. Events carry no host, command, path or feature data. Error and panic
+//!    diagnostics have their own separate consent in the diagnostics module.
 //! 4. Nothing is collected until the user has answered the consent prompt. An
 //!    absent `privacy.analytics` setting means undecided, which means off.
 //!
 //! Every entry point is infallible and non-blocking: no caller can be broken,
 //! slowed or panicked by analytics being unavailable.
 
-mod config;
+pub(crate) mod config;
 mod sys;
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -49,8 +46,6 @@ pub const INSTALL_ID_SETTING_KEY: &str = "privacy.analyticsInstallId";
 
 const EVENT_APP_LAUNCHED: &str = "app_launched";
 const EVENT_APP_EXITED: &str = "app_exited";
-const EVENT_APP_ERROR: &str = "app_error";
-const EVENT_APP_PANICKED: &str = "app_panicked";
 
 /// Bounded so an offline device cannot grow the queue without limit. Upstream's
 /// plugin has no cap.
@@ -61,9 +56,6 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 /// Bounds how long exit can wait on a flush.
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_millis(1500);
 const MAX_BACKOFF_SLOTS: u32 = 8;
-/// Categories are compile-time constants, so this is a backstop rather than a
-/// live constraint.
-const MAX_ERROR_CATEGORIES: usize = 64;
 
 #[cfg(debug_assertions)]
 const FLUSH_INTERVAL: Duration = Duration::from_secs(5);
@@ -90,27 +82,10 @@ struct Inner {
     notify: tokio::sync::Notify,
     /// Flush intervals to skip after a failure.
     backoff_slots: AtomicU32,
-    /// Per-category error counts for this process. Bounds how often a repeating
-    /// failure reports: see `track_error`.
-    error_counts: Mutex<HashMap<&'static str, u32>>,
 }
 
-/// Set once during setup so `LumaError::serialize` — which has no access to
-/// Tauri state — can report failures. `OnceLock` rather than a mutable static
-/// so there is no unsafe and no torn read.
+/// Shared lifecycle analytics handle, initialized once during setup.
 static GLOBAL: OnceLock<Analytics> = OnceLock::new();
-
-/// Reports a failed operation by its stable category.
-///
-/// Called from `LumaError::serialize`, which runs exactly when an error crosses
-/// to the frontend — i.e. when a user-visible operation actually failed, not
-/// for every internally-handled error. A no-op until `install` runs, and when
-/// the user has not opted in.
-pub fn report_error(category: &'static str) {
-    if let Some(analytics) = GLOBAL.get() {
-        analytics.track_error(category);
-    }
-}
 
 /// Publishes the handle. Idempotent; later calls are ignored, which keeps a
 /// second call in tests from replacing a live handle.
@@ -118,9 +93,7 @@ pub fn install(analytics: Analytics) {
     let _ = GLOBAL.set(analytics);
 }
 
-/// The installed handle, or an inert one before setup has run. Commands use
-/// this rather than `State<Analytics>` so they share the single instance
-/// `LumaError::serialize` reports through.
+/// The installed lifecycle analytics handle, or an inert one before setup.
 pub fn handle() -> &'static Analytics {
     static INERT: Analytics = Analytics { inner: None };
     GLOBAL.get().unwrap_or(&INERT)
@@ -128,23 +101,17 @@ pub fn handle() -> &'static Analytics {
 
 /// Chains a panic reporter onto the existing hook.
 ///
-/// Only the source location is sent — a panic message can interpolate
+/// Only a sanitized source basename/line is queued under diagnostics consent — a panic message can interpolate
 /// arbitrary runtime values (a path, a host, the contents of a variable), so
 /// it is never included. The previous hook still runs, so the existing log
 /// output is unchanged.
 pub fn install_panic_hook() {
     let previous = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
-        if let Some(analytics) = GLOBAL.get() {
-            let location = info
-                .location()
-                .map(|l| format!("{}:{}", l.file(), l.line()))
-                .unwrap_or_else(|| "unknown".into());
-            analytics.track_panic(&location);
-            // A panic usually means the process is going down without reaching
-            // RunEvent::Exit, so this is the last chance to send.
-            analytics.flush_outside_runtime();
+        if let Some(location) = info.location() {
+            crate::diagnostics::report_panic(location.file(), location.line());
         }
+
         previous(info);
     }));
 }
@@ -195,7 +162,6 @@ pub fn init(app_version: String, consent: Option<bool>, install_id: Option<Strin
             queue: Mutex::new(VecDeque::new()),
             notify: tokio::sync::Notify::new(),
             backoff_slots: AtomicU32::new(0),
-            error_counts: Mutex::new(HashMap::new()),
         })),
     };
 
@@ -259,73 +225,6 @@ impl Analytics {
             lock(&inner.queue).clear();
             tracing::info!("analytics disabled");
         }
-    }
-
-    /// Reports a failed operation by its stable category.
-    ///
-    /// Only the category is sent — never the error message, which carries
-    /// hostnames, usernames and paths. Categories are compile-time `&'static
-    /// str` constants from `LumaError::category`, so no user data can reach
-    /// this by construction.
-    ///
-    /// A repeating failure (a reconnect loop, an unreachable host retried every
-    /// few seconds) would otherwise flood the queue and evict everything else,
-    /// so a category reports on the 1st, 2nd, 4th, 8th … occurrence, carrying
-    /// the running count. That keeps "this install failed 512 times" visible
-    /// while costing ten events instead of five hundred.
-    pub fn track_error(&self, category: &'static str) {
-        let Some(inner) = self.inner.as_ref() else {
-            return;
-        };
-        if !inner.enabled.load(Ordering::Relaxed) {
-            return;
-        }
-        let count = {
-            let mut counts = lock(&inner.error_counts);
-            // Bounds memory if a caller ever passes unbounded categories.
-            if counts.len() >= MAX_ERROR_CATEGORIES && !counts.contains_key(category) {
-                return;
-            }
-            let count = counts.entry(category).or_insert(0);
-            *count += 1;
-            *count
-        };
-        if !count.is_power_of_two() {
-            return;
-        }
-        inner.track(
-            EVENT_APP_ERROR,
-            Some(json!({ "category": category, "count": count })),
-        );
-    }
-
-    /// Reports a panic's source location. Never the panic message: it can
-    /// interpolate arbitrary runtime values.
-    pub fn track_panic(&self, location: &str) {
-        let Some(inner) = self.inner.as_ref() else {
-            return;
-        };
-        inner.track(EVENT_APP_PANICKED, Some(json!({ "location": location })));
-    }
-
-    /// Best-effort flush from a context that may be anywhere — used by the
-    /// panic hook.
-    ///
-    /// Blocking on the runtime from inside one of its own worker threads
-    /// panics ("cannot block on a runtime from within a runtime"), which in a
-    /// panic hook would abort the process. So this only flushes when the
-    /// calling thread is outside the runtime; a panic on a worker thread
-    /// leaves the event queued for the exit flush, or drops it if the process
-    /// dies first. Losing a panic report is strictly better than turning a
-    /// recoverable panic into an abort.
-    fn flush_outside_runtime(&self) {
-        let Some(inner) = self.inner.as_ref() else {
-            return;
-        };
-        if cfg!(test) || tokio::runtime::Handle::try_current().is_ok() {
-            return;
-        }
-        inner.flush_with_deadline();
     }
 
     /// Queues the exit event and flushes with a hard deadline. Returns promptly
@@ -631,109 +530,6 @@ mod tests {
     #[test]
     fn install_ids_are_unique_per_install() {
         assert_ne!(new_install_id(), new_install_id());
-    }
-
-    #[test]
-    fn an_error_reports_its_category_and_count_but_never_a_message() {
-        let analytics = configured();
-        analytics.set_enabled(true);
-        let inner = analytics.inner.as_ref().unwrap();
-        lock(&inner.queue).clear();
-
-        analytics.track_error("ssh-error");
-
-        let queue = lock(&inner.queue);
-        assert_eq!(queue.len(), 1);
-        assert_eq!(queue[0]["eventName"], EVENT_APP_ERROR);
-        assert_eq!(queue[0]["props"]["category"], "ssh-error");
-        assert_eq!(queue[0]["props"]["count"], 1);
-        // Category, count and the install id — nothing else can ride along.
-        assert_eq!(queue[0]["props"].as_object().unwrap().len(), 3);
-    }
-
-    #[test]
-    fn a_repeating_failure_reports_on_powers_of_two() {
-        // A reconnect loop must not flood the queue and evict the launch event.
-        let analytics = configured();
-        analytics.set_enabled(true);
-        let inner = analytics.inner.as_ref().unwrap();
-        lock(&inner.queue).clear();
-
-        for _ in 0..100 {
-            analytics.track_error("timeout");
-        }
-
-        let queue = lock(&inner.queue);
-        let counts: Vec<u64> = queue
-            .iter()
-            .map(|event| event["props"]["count"].as_u64().unwrap())
-            .collect();
-        assert_eq!(counts, [1, 2, 4, 8, 16, 32, 64]);
-    }
-
-    #[test]
-    fn error_categories_are_counted_independently() {
-        let analytics = configured();
-        analytics.set_enabled(true);
-        let inner = analytics.inner.as_ref().unwrap();
-        lock(&inner.queue).clear();
-
-        analytics.track_error("timeout");
-        analytics.track_error("sftp-failed");
-
-        let queue = lock(&inner.queue);
-        assert_eq!(queue.len(), 2);
-        assert_eq!(queue[0]["props"]["category"], "timeout");
-        assert_eq!(queue[1]["props"]["category"], "sftp-failed");
-        assert_eq!(queue[1]["props"]["count"], 1);
-    }
-
-    #[test]
-    fn errors_are_not_collected_before_opt_in() {
-        let analytics = configured();
-        analytics.track_error("ssh-error");
-        let inner = analytics.inner.as_ref().unwrap();
-        assert!(lock(&inner.queue).is_empty());
-        // The count is not kept either, so opting in later starts clean rather
-        // than immediately reporting a backlog.
-        assert!(lock(&inner.error_counts).is_empty());
-    }
-
-    #[test]
-    fn report_error_is_a_no_op_before_setup_runs() {
-        // `LumaError::serialize` can run before analytics is installed — e.g.
-        // a migration failure during setup. It must not panic.
-        report_error("database");
-    }
-
-    #[test]
-    fn a_panic_reports_its_location_and_nothing_else() {
-        let analytics = configured();
-        analytics.set_enabled(true);
-        let inner = analytics.inner.as_ref().unwrap();
-        lock(&inner.queue).clear();
-
-        analytics.track_panic("src/sftp/mod.rs:268");
-
-        let queue = lock(&inner.queue);
-        assert_eq!(queue[0]["eventName"], EVENT_APP_PANICKED);
-        assert_eq!(queue[0]["props"]["location"], "src/sftp/mod.rs:268");
-        // Location and install id only — never the panic message, which can
-        // interpolate arbitrary runtime values.
-        assert_eq!(queue[0]["props"].as_object().unwrap().len(), 2);
-    }
-
-    #[test]
-    fn the_error_category_map_is_bounded() {
-        let analytics = configured();
-        analytics.set_enabled(true);
-        let inner = analytics.inner.as_ref().unwrap();
-        // Leaked deliberately: `track_error` takes &'static str, and this
-        // exercises the backstop against an unbounded caller.
-        for i in 0..(MAX_ERROR_CATEGORIES + 10) {
-            analytics.track_error(Box::leak(format!("category_{i}").into_boxed_str()));
-        }
-        assert_eq!(lock(&inner.error_counts).len(), MAX_ERROR_CATEGORIES);
     }
 
     #[test]

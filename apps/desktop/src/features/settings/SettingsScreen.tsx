@@ -33,6 +33,8 @@ import { VaultsSection } from "../vaults/VaultsSection";
 import { McpSection } from "../mcp/McpSection";
 import { UpdatesSection } from "../updater/UpdatesSection";
 import { AnalyticsDisclosure } from "../privacy/AnalyticsDisclosure";
+import { DiagnosticsDisclosure } from "../privacy/DiagnosticsDisclosure";
+import { useDiagnosticsConsent } from "../privacy/useDiagnosticsConsent";
 import { useAnalyticsConsent } from "../privacy/useAnalyticsConsent";
 import { detectSpeechSupport } from "../voiceComposer/speechProvider";
 
@@ -65,6 +67,7 @@ export function SettingsScreen() {
   const { data: shells } = useShells();
   const { data: profiles } = useProfiles();
   const analytics = useAnalyticsConsent();
+  const diagnostics = useDiagnosticsConsent();
 
   const [active, setActive] = useState<CategoryId>("appearance");
 
@@ -241,7 +244,7 @@ export function SettingsScreen() {
               label="Share anonymous analytics"
               hint={
                 analytics.configured
-                  ? "App version, operating system, how long the app was open, and the kind of any failures — never their message. Turning this off deletes this install's id."
+                  ? "App launches, how long the app stayed open, app version, operating system, build type, and approximate location. Turning this off deletes this install's id."
                   : "Not available in this build."
               }
             >
@@ -264,6 +267,40 @@ export function SettingsScreen() {
                 </p>
               </Subsection>
             )}
+            <Subsection title="Diagnostics">
+              <DiagnosticsDisclosure />
+              <Field
+                label="Share diagnostics"
+                hint={
+                  diagnostics.config.isPending
+                    ? "Checking availability..."
+                    : diagnostics.config.isError
+                      ? "Could not read this setting."
+                      : diagnostics.config.data?.configured === true
+                        ? undefined
+                        : "Not available in this build."
+                }
+              >
+                <Toggle
+                  checked={diagnostics.config.data?.enabled === true}
+                  label="Share diagnostics"
+                  describedBy="diagnostics-disclosure"
+                  disabled={
+                    diagnostics.config.isError ||
+                    diagnostics.config.data?.configured !== true ||
+                    diagnostics.choose.isPending
+                  }
+                  onClick={() =>
+                    diagnostics.choose.mutate(diagnostics.config.data?.enabled !== true)
+                  }
+                />
+              </Field>
+              {diagnostics.choose.isError && (
+                <p role="alert" className="text-sm text-muted">
+                  Luma could not save your diagnostics choice. Try again.
+                </p>
+              )}
+            </Subsection>
           </div>
         );
       case "updates":
@@ -396,11 +433,13 @@ function Toggle({
   checked,
   onClick,
   label,
+  describedBy,
   disabled = false,
 }: {
   checked: boolean;
   onClick: () => void;
   label: string;
+  describedBy?: string;
   disabled?: boolean;
 }) {
   return (
@@ -409,6 +448,7 @@ function Toggle({
       role="switch"
       aria-checked={checked}
       aria-label={label}
+      aria-describedby={describedBy}
       disabled={disabled}
       onClick={onClick}
       className={cn(

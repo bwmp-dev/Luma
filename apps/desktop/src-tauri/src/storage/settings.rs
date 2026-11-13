@@ -20,6 +20,7 @@ pub(crate) const SYNC_INCLUDE_PRIVATE_KEYS_KEY: &str = "sync.includePrivateKeys"
 /// in the frontend's `SETTING_KEYS`.
 pub(crate) const DEVICE_LOCAL_SETTING_KEYS: &[&str] = &[
     crate::analytics::CONSENT_SETTING_KEY,
+    crate::diagnostics::CONSENT_SETTING_KEY,
     // Syncing this would let two of a user's devices be joined together, which
     // is precisely what the install identifier must not enable.
     crate::analytics::INSTALL_ID_SETTING_KEY,

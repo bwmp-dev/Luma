@@ -91,7 +91,8 @@ impl Serialize for LumaError {
         // which makes this the one place that sees every user-visible failure
         // and nothing else. Only the category travels: `to_string` below
         // interpolates hostnames, usernames and paths, and must never be sent.
-        crate::analytics::report_error(self.category());
+
+        crate::diagnostics::report_error(self.category());
         let mut state = serializer.serialize_struct("LumaError", 2)?;
         state.serialize_field("category", self.category())?;
         state.serialize_field("message", &self.to_string())?;

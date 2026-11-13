@@ -110,6 +110,7 @@ export function createInvokeHandler(
   platform: ShowcasePlatform = "desktop",
 ): (cmd: string, args: InvokeArgs) => unknown {
   const settings = buildSettings(theme);
+  let diagnosticsEnabled = platform === "desktop";
   const sessions: Record<string, string> = {
     "h-web-01": isNarrowViewport(platform) ? UBUNTU_SESSION_MOBILE : UBUNTU_SESSION,
     "h-db-01": DEBIAN_SESSION,
@@ -167,6 +168,12 @@ export function createInvokeHandler(
       case "analytics_config":
         return { configured: true, enabled: false, installId: null };
       case "analytics_set_enabled":
+        return null;
+
+      case "diagnostics_config":
+        return { configured: true, enabled: diagnosticsEnabled };
+      case "diagnostics_set_enabled":
+        diagnosticsEnabled = args.enabled === true;
         return null;
 
       case "shells_detect":

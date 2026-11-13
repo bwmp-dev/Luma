@@ -98,11 +98,20 @@ pub async fn settings_get_all(state: State<'_, AppState>) -> Result<HashMap<Stri
 
 #[tauri::command]
 pub async fn settings_set(state: State<'_, AppState>, key: String, value: Value) -> Result<()> {
+    if key == crate::diagnostics::CONSENT_SETTING_KEY {
+        let enabled = value.as_bool().ok_or_else(|| {
+            crate::errors::LumaError::InvalidInput("diagnostics consent must be a boolean".into())
+        })?;
+        return diagnostics_set_enabled(state, enabled).await;
+    }
     settings::set(&state.pool, &key, &value).await
 }
 
 #[tauri::command]
 pub async fn settings_delete(state: State<'_, AppState>, key: String) -> Result<()> {
+    if key == crate::diagnostics::CONSENT_SETTING_KEY {
+        return diagnostics_set_enabled(state, false).await;
+    }
     settings::delete(&state.pool, &key).await
 }
 
