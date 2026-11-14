@@ -142,6 +142,11 @@ impl Diagnostics {
         self.enqueue("error", error_body(category, None));
     }
     async fn flush(&self) {
+        self.flush_with_clock(Instant::now).await;
+    }
+    // Production reads the monotonic clock at each comparison; tests can advance
+    // a supplied clock without inventing instants before the clock's epoch.
+    async fn flush_with_clock(&self, now: impl Fn() -> Instant) {
         let _sending = self.transport.lock().await;
         // No tight retry loop; transient failures wait until the next 5-second tick.
         for _ in 0..4 {
@@ -150,11 +155,7 @@ impl Diagnostics {
                 if !state.enabled {
                     return;
                 }
-                if state
-                    .queue
-                    .front()
-                    .is_some_and(|p| p.retry_at > Instant::now())
-                {
+                if state.queue.front().is_some_and(|p| p.retry_at > now()) {
                     return;
                 }
                 state.queue.pop_front()
@@ -162,7 +163,7 @@ impl Diagnostics {
             let Some(mut pending) = next else {
                 return;
             };
-            if pending.created.elapsed() > MAX_AGE {
+            if now().duration_since(pending.created) > MAX_AGE {
                 continue;
             }
             pending.attempts += 1;
@@ -183,9 +184,12 @@ impl Diagnostics {
                 Ok(r) => r.status().as_u16() == 429 || r.status().is_server_error(),
                 Err(_) => true,
             };
-            if retry && pending.attempts < MAX_ATTEMPTS && pending.created.elapsed() <= MAX_AGE {
-                pending.retry_at = Instant::now()
-                    + Duration::from_secs(retry_after.max(5 * (1 << (pending.attempts - 1))));
+            if retry
+                && pending.attempts < MAX_ATTEMPTS
+                && now().duration_since(pending.created) <= MAX_AGE
+            {
+                pending.retry_at =
+                    now() + Duration::from_secs(retry_after.max(5 * (1 << (pending.attempts - 1))));
                 let mut state = self.state();
                 if state.enabled && state.queue.len() < CAPACITY {
                     state.queue.push_front(pending);
@@ -464,8 +468,10 @@ mod transport_tests {
         assert!(client.state().queue.is_empty());
         assert_eq!(server.join().unwrap().len(), 3);
         client.error("timeout");
-        client.state().queue[0].created = Instant::now() - MAX_AGE - Duration::from_secs(1);
-        client.flush().await;
+        let created = client.state().queue[0].created;
+        let expired_at = created + MAX_AGE + Duration::from_secs(1);
+        assert_eq!(client.state().queue.len(), 1);
+        client.flush_with_clock(|| expired_at).await;
         assert!(client.state().queue.is_empty());
     }
 }
